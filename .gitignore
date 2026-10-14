@@ -39,3 +39,4 @@ Thumbs.db
 *.swp
 web/target*/
 target*/
+prod_seed.sql

@@ -33,6 +33,14 @@ docker compose --env-file .env.production -f docker-compose.yml -f docker-compos
 
 Caddy sert `https://blindallmusic.com` (TLS auto). Voir `.env.production` pour les variables requises.
 
+Données officielles (rooms, playlists, tracks enrichies) :
+
+```sh
+./tools/make_prod_seed.sh              # génère prod_seed.sql depuis la DB de dev
+psql "$DATABASE_URL" -f prod_seed.sql  # après les migrations, sur une base fraîche
+./tools/seed_storage.sh                # injecte les covers des rooms dans le volume storage
+```
+
 ## Note Windows (toolchain sans MSVC)
 
 Ce workspace se compile sous `x86_64-pc-windows-gnullvm` (rust-lld self-contained).
