@@ -29,7 +29,7 @@ fn validation(field: &str, msg: &str) -> Response {
         .into_response()
 }
 
-fn require_not_guest(user: &blindall_db::entities::User) -> Option<Response> {
+pub(crate) fn require_not_guest(user: &blindall_db::entities::User) -> Option<Response> {
     user.is_guest.then(|| {
         (StatusCode::FORBIDDEN, Json(json!({"error": "guest_forbidden"}))).into_response()
     })

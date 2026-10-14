@@ -144,6 +144,9 @@ pub async fn store(
     user: CurrentUser,
     Json(body): Json<CreateBody>,
 ) -> impl IntoResponse {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     let name = body.name.trim();
     if name.is_empty() || name.chars().count() > 50 {
         return err(StatusCode::UNPROCESSABLE_ENTITY, "invalid_name");
@@ -175,6 +178,9 @@ pub async fn update(
     Path(id): Path<i64>,
     Json(body): Json<UpdateBody>,
 ) -> impl IntoResponse {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     let p = match owned(&state.playlists, id, &user).await {
         Ok(p) => p,
         Err(r) => return r,
@@ -200,6 +206,9 @@ pub async fn destroy(
     user: CurrentUser,
     Path(id): Path<i64>,
 ) -> impl IntoResponse {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     let p = match owned(&state.playlists, id, &user).await {
         Ok(p) => p,
         Err(r) => return r,
@@ -268,6 +277,9 @@ pub async fn store_track(
     Path(id): Path<i64>,
     Json(b): Json<StoreTrackBody>,
 ) -> impl IntoResponse {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     if let Err(r) = editable(&state.playlists, id, &user).await {
         return r;
     }
@@ -326,6 +338,9 @@ pub async fn update_track(
     Path((id, track_id)): Path<(i64, i64)>,
     Json(b): Json<UpdateTrackBody>,
 ) -> impl IntoResponse {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     if let Err(r) = editable(&state.playlists, id, &user).await {
         return r;
     }
@@ -358,6 +373,9 @@ pub async fn delete_track(
     user: CurrentUser,
     Path((id, track_id)): Path<(i64, i64)>,
 ) -> impl IntoResponse {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     if let Err(r) = editable(&state.playlists, id, &user).await {
         return r;
     }
@@ -394,6 +412,9 @@ pub async fn clear_tracks(
     user: CurrentUser,
     Path(id): Path<i64>,
 ) -> impl IntoResponse {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     if let Err(r) = editable(&state.playlists, id, &user).await {
         return r;
     }
@@ -543,6 +564,9 @@ pub async fn store_answer(
     Path(track_id): Path<i64>,
     Json(b): Json<AnswerBody>,
 ) -> impl IntoResponse {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     if let Err(r) = editable_track(&state, track_id, &user).await {
         return r;
     }
@@ -586,6 +610,9 @@ pub async fn update_answer(
     Path((track_id, answer_id)): Path<(i64, i64)>,
     Json(b): Json<AnswerBody>,
 ) -> impl IntoResponse {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     if let Err(r) = editable_track(&state, track_id, &user).await {
         return r;
     }
@@ -631,6 +658,9 @@ pub async fn delete_answer(
     user: CurrentUser,
     Path((track_id, answer_id)): Path<(i64, i64)>,
 ) -> impl IntoResponse {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     if let Err(r) = editable_track(&state, track_id, &user).await {
         return r;
     }
@@ -658,6 +688,9 @@ pub async fn find_provider_playlist(
     Path(id): Path<i64>,
     Json(b): Json<ProviderPlaylistBody>,
 ) -> impl IntoResponse {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     if let Err(r) = editable(&state.playlists, id, &user).await {
         return r;
     }
@@ -702,6 +735,9 @@ pub async fn import_provider_playlist(
     Path(id): Path<i64>,
     Json(b): Json<ProviderPlaylistBody>,
 ) -> impl IntoResponse {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     if let Err(r) = editable(&state.playlists, id, &user).await {
         return r;
     }
@@ -796,6 +832,9 @@ pub async fn attach_playlist_moderator(
     user: CurrentUser,
     Json(body): Json<ModeratorBody>,
 ) -> axum::response::Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     if let Err(e) = load_owned_playlist(&state, id, &user).await {
         return e;
     }
@@ -814,6 +853,9 @@ pub async fn detach_playlist_moderator(
     user: CurrentUser,
     Json(body): Json<ModeratorBody>,
 ) -> axum::response::Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     if let Err(e) = load_owned_playlist(&state, id, &user).await {
         return e;
     }
@@ -838,6 +880,9 @@ pub async fn export(
     Path(id): Path<i64>,
     user: CurrentUser,
 ) -> axum::response::Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     let Some(p) = state.playlists.find(id).await.ok().flatten() else {
         return err(StatusCode::NOT_FOUND, "not_found");
     };
