@@ -57,7 +57,7 @@ mod tests {
 
     #[test]
     fn thresholds_match_php_code() {
-        // NOTE: the PHP code contradicts its own doc-comment — the loop
+        // NOTE: the PHP code contradicts its own doc-comment, the loop
         assert_eq!(level_from_total_xp(0).level, 1);
         assert_eq!(level_from_total_xp(99).level, 1);
         assert_eq!(level_from_total_xp(100).level, 2);

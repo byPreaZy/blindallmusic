@@ -75,7 +75,7 @@ pub fn DonationsPage() -> impl IntoView {
                         <div class="mb-8 rounded-xl border border-white/10 bg-surface-raised/60 p-6">
                             <div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
                                 <h2 class="text-lg font-semibold text-white">
-                                    {t("Monthly goal")} " — " {month_label(p["month_key"].as_str().unwrap_or(""))}
+                                    {t("Monthly goal")} " : " {month_label(p["month_key"].as_str().unwrap_or(""))}
                                 </h2>
                                 <span class=move || if goal_reached { "text-sm font-bold text-teal-400" } else { "text-sm text-white/50" }>
                                     {euros(carryover + raised)} " / " {euros(goal)}
@@ -97,7 +97,7 @@ pub fn DonationsPage() -> impl IntoView {
                                     {days} " " {t("days left this month")}
                                     {goal_reached.then(|| view! {
                                         <span class="ml-2 rounded bg-teal-500/20 px-2 py-0.5 text-xs text-teal-300">
-                                            {t("Goal reached — ads disabled!")}
+                                            {t("Goal reached : ads disabled!")}
                                         </span>
                                     })}
                                 </span>

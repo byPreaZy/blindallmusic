@@ -739,11 +739,11 @@ fn DonationGoalCard() -> impl IntoView {
                                         {reached.then(|| view! { <span class="donation-goal-badge">{t("Objectif tenu !")}</span> })}
                                     </div>
                                     <p class="font-semibold leading-snug text-white">
-                                        {if reached { t("Merci — objectif atteint !") } else { t("Offrez un café à Blind'All Music") }}
+                                        {if reached { t("Merci, objectif atteint !") } else { t("Offrez un café à Blind'All Music") }}
                                     </p>
                                     <p class="text-sm leading-snug text-white/70">
                                         {if reached {
-                                            t("Objectif tenu — merci à la communauté qui porte Blind'All Music ce mois-ci.").to_string()
+                                            t("Objectif tenu : merci à la communauté qui porte Blind'All Music ce mois-ci.").to_string()
                                         } else {
                                             format!("{} {} {}", t("Jours restants"), days, t("ce mois-ci"))
                                         }}
@@ -865,7 +865,7 @@ fn HomeSidebar(
                         </div>
                         <p class="text-sm font-bold leading-snug text-white">{t("Not on e-invoicing yet?")}</p>
                         <p class="mt-2 text-sm leading-relaxed text-white/70">
-                            {t("Ouvrage helps artisans and self-employed manage quotes, e-invoices and accounting in one place — free to get started.")}
+                            {t("Ouvrage helps artisans and self-employed manage quotes, e-invoices and accounting in one place, free to get started.")}
                         </p>
                         <span class="game-btn-play-join pointer-events-none mt-4 flex w-full">
                             {t("Discover Ouvrage")}

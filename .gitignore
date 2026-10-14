@@ -9,7 +9,7 @@ web/dist/
 web/.trunk/
 
 # Local toolchain (this dev machine: gnullvm + generated import libs + trunk binary)
-# See tools/gen_import_libs.py — regenerate `.libs/` with it if needed.
+# See tools/gen_import_libs.py : regenerate `.libs/` with it if needed.
 .cargo/
 .libs/
 .tools/

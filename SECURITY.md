@@ -18,11 +18,11 @@ Accusé de réception sous 72 h, correctif prioritaire selon la sévérité.
 
 ## Hors périmètre
 
-- Les services tiers (Spotify, Deezer, Brevo, Stripe) — remonter à l'éditeur concerné
+- Les services tiers (Spotify, Deezer, Brevo, Stripe), remonter à l'éditeur concerné
 - Le contenu généré par les utilisateurs (hors faille applicative)
 
 ## Bonnes pratiques du projet
 
-- Secrets uniquement via `.env` / `.env.production` — jamais commités
+- Secrets uniquement via `.env` / `.env.production`, jamais commités
 - Postgres et Redis non exposés publiquement (loopback / réseau interne)
 - Mots de passe bcrypt, sessions par jeton, OAuth Google/Discord

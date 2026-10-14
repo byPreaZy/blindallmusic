@@ -380,7 +380,7 @@ pub async fn guest(
     if let Some(seconds) = state.guest_throttle.retry_after(&key) {
         return (
             StatusCode::TOO_MANY_REQUESTS,
-            Json(json!({"message": format!("Guest creation throttle — retry in {seconds}s"), "retry_after": seconds})),
+            Json(json!({"message": format!("Guest creation throttle : retry in {seconds}s"), "retry_after": seconds})),
         )
             .into_response();
     }

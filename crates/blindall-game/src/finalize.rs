@@ -37,7 +37,7 @@ async fn finalize(
     photo_prefix: &str,
 ) -> crate::store::Result<()> {
     if store.round_has_standings(round_id).await? {
-        tracing::info!(round_id, "finalization skipped — standings exist");
+        tracing::info!(round_id, "finalization skipped : standings exist");
         return Ok(());
     }
 
@@ -99,7 +99,7 @@ async fn finalize(
 
     let round_row = store.round_row(round_id).await?.ok_or(StoreError::NotFound("round"))?;
     if round_row.finished_at.is_none() {
-        tracing::warn!(round_id, "finalization skipped — round not finished");
+        tracing::warn!(round_id, "finalization skipped : round not finished");
         return Ok(());
     }
     let total_tracks = round_row.tracks.len();

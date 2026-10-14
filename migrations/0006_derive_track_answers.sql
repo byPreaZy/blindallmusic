@@ -51,7 +51,7 @@ WHERE length(short_name) >= 2
       WHERE x.track_id = f.track_id AND x.answer_type_id = 5
         AND lower(btrim(x.value::text)) = lower(f.short_name));
 
--- 3) Réponse média — extrait les noms d'œuvres des parenthèses du titre.
+-- 3) Réponse média : extrait les noms d'œuvres des parenthèses du titre.
 WITH names AS (
     SELECT t.id AS tid, r.name::text AS n
     FROM tracks t

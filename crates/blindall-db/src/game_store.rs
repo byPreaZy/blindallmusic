@@ -372,7 +372,7 @@ impl GameStore for DbGameStore {
         for _ in 0..3 {
             match self.http.get(audio_url).send().await {
                 Ok(r) if r.status().is_success() => return true,
-                Ok(_) => return false, // responded but not 2xx — don't retry
+                Ok(_) => return false, // responded but not 2xx, don't retry
                 Err(_) => tokio::time::sleep(Duration::from_millis(100)).await,
             }
         }
@@ -549,7 +549,7 @@ impl GameStore for DbGameStore {
         .map_err(|e| StoreError::Other(e.into()))?;
         if exists > 0 {
             tx.rollback().await.ok();
-            return Ok(()); // already finalized — PHP early-returns
+            return Ok(()); // already finalized, PHP early-returns
         }
 
         let now = Utc::now();

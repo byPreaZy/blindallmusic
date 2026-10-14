@@ -28,12 +28,12 @@ services:
       STORAGE_UPSTREAM_URL: ${STORAGE_UPSTREAM_URL:-}
       APP_URL: ${APP_URL:-http://localhost:8080}
       APP_LOCALE: ${APP_LOCALE:-fr}
-      # Laravel APP_ENV — gates production-only side effects (Discord
+      # Laravel APP_ENV : gates production-only side effects (Discord
       # webhooks on track deletion). Set `production` on real deploys.
       APP_ENV: ${APP_ENV:-local}
-      # must equal Laravel's raw config('app.key') — signs reset/verify HMACs
+      # must equal Laravel's raw config('app.key'), signs reset/verify HMACs
       APP_KEY: ${APP_KEY:-base64:YmxpbmVzdC1sb2NhbC1kZXYta2V5LWRvLW5vdC11c2UtaW4tcHJvZA==}
-      # Laravel cache.prefix (Str::slug(APP_NAME).'_cache_') — shared keys
+      # Laravel cache.prefix (Str::slug(APP_NAME).'_cache_'), shared keys
       # like donation_goal_progress stay compatible if PHP co-runs.
       CACHE_PREFIX: ${CACHE_PREFIX:-blindall_cache_}
       # Local only: seed a playable demo room + tracks. Never set in prod.
@@ -116,9 +116,9 @@ services:
     volumes:
       - ./volumes/migration/mysql-to-pg.load:/mysql-to-pg.load:ro
     environment:
-      # dedicated account — root uses caching_sha2_password which QMYND can't do
+      # dedicated account : root uses caching_sha2_password which QMYND can't do
       MYSQL_URI: mysql://pgloader:pgloader@mysql:3306/${MYSQL_DATABASE:-blindall}
-      # supabase/postgres superuser is supabase_admin, not postgres — needed
+      # supabase/postgres superuser is supabase_admin, not postgres, needed
       # for session_replication_role (FK/trigger bypass during COPY).
       PG_URI: postgres://supabase_admin:${POSTGRES_PASSWORD:-your-super-secret-and-long-postgres-password}@db:5432/${POSTGRES_DB:-postgres}
     depends_on:
@@ -126,7 +126,7 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
-    # pgloader's command-file parser does NOT do env templating — render the
+    # pgloader's command-file parser does NOT do env templating, render the
     # .load file with sed first so secrets stay in .env, not in git.
     entrypoint:
       - /bin/sh

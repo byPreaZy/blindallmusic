@@ -769,7 +769,7 @@ pub async fn import_provider_playlist(
     Json(json!({ "imported": imported })).into_response()
 }
 
-// ---- moderators (owner/admin only — `PlaylistModeratorController`) -----------
+// ---- moderators (owner/admin only, `PlaylistModeratorController`) -----------
 
 #[derive(Deserialize)]
 pub struct ModeratorBody {

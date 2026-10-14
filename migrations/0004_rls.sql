@@ -37,6 +37,6 @@ EXCEPTION
     WHEN undefined_object THEN
         -- service_role doesn't exist (non-Supabase Postgres): RLS stays
         -- enabled; postgres/superuser access is unaffected.
-        RAISE NOTICE 'service_role role not found — RLS enabled without policies';
+        RAISE NOTICE 'service_role role not found, RLS enabled without policies';
 END;
 $$;

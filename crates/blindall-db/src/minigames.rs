@@ -355,7 +355,7 @@ fn anagram_list() -> &'static [(&'static str, &'static str)] {
                 .filter_map(|v| {
                     let artist = v.get("artist")?.as_str()?;
                     let anagram = v.get("anagram")?.as_str()?;
-                    // SAFETY-free: leak boxed copies — list built once.
+                    // SAFETY-free: leak boxed copies, list built once.
                     let artist: &'static str = Box::leak(artist.to_string().into_boxed_str());
                     let anagram: &'static str = Box::leak(anagram.to_string().into_boxed_str());
                     Some((artist, anagram))

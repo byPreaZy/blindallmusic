@@ -26,7 +26,7 @@ async fn main() -> anyhow::Result<()> {
     let pool = blindall_db::connect(&database_url).await?;
     let app_key = std::env::var("APP_KEY").unwrap_or_default();
     if app_key.is_empty() {
-        tracing::warn!("APP_KEY not set — reset tokens / signed URLs won't verify across stacks");
+        tracing::warn!("APP_KEY not set : reset tokens / signed URLs won't verify across stacks");
     }
     tracing::info!("postgres connected");
 

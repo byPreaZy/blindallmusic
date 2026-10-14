@@ -836,7 +836,7 @@ fn LikesTab(
                                 <div class="min-w-0 flex-1">
                                     <div class="truncate font-medium text-white">
                                         {r["artist"].as_str().unwrap_or("?").to_string()}
-                                        " — "
+                                        " : "
                                         {r["title"].as_str().unwrap_or("?").to_string()}
                                     </div>
                                 </div>

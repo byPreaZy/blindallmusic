@@ -3,7 +3,7 @@ name = "blindall-web"
 version = "0.1.0"
 edition = "2021"
 
-# Standalone workspace — wasm-only deps don't belong in the server
+# Standalone workspace : wasm-only deps don't belong in the server
 # workspace's `cargo check --workspace`.
 [workspace]
 

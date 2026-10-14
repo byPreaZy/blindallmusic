@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Generate prod_seed.sql — official content only (no users, rooms, scores…).
+# Generate prod_seed.sql : official content only (no users, rooms, scores…).
 # Run while the dev stack is up:
 #   ./tools/make_prod_seed.sh [container] [admin_email] [admin_name]
-# Output: ./prod_seed.sql  — apply AFTER migrations on a FRESH database:
+# Output: ./prod_seed.sql , apply AFTER migrations on a FRESH database:
 #   psql "$DATABASE_URL" -f prod_seed.sql
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -36,7 +36,7 @@ NEXT_USER_ID="$(psqlc -tAc "SELECT COALESCE(max(id),0)+1 FROM users WHERE id <> 
 NEXT_USER_ID=$(( NEXT_USER_ID > OFFICIAL_OWNER ? NEXT_USER_ID : OFFICIAL_OWNER + 1 ))
 
 {
-  echo "-- Blind'All Music — prod seed (official content). Apply on fresh schema."
+  echo "-- Blind'All Music : prod seed (official content). Apply on fresh schema."
   echo "SET session_replication_role = replica;"
   echo
 
@@ -81,5 +81,5 @@ DELETE FROM public.users WHERE email IN ('demo@blindall.test', 'e2e-admin@blinda
 SQL
 } > "$OUT"
 
-echo "prod_seed.sql written — admin: $ADMIN_EMAIL / password: $ADMIN_PASS"
-echo "(hash embedded; the plaintext above is shown once — save it now)"
+echo "prod_seed.sql written : admin: $ADMIN_EMAIL / password: $ADMIN_PASS"
+echo "(hash embedded; the plaintext above is shown once, save it now)"

@@ -26,7 +26,7 @@ fn slug_override(slug: &str, field: &str) -> Option<&'static str> {
         ("genre-musical", "intro") => "Sur Blind'All Music, retrouve :count salles officielles dédiées aux grands styles musicaux : :rooms. Chaque room propose des extraits sélectionnés pour tester ta culture musicale en multijoueur, en temps réel.",
         ("genre-musical", "intro_secondary") => "Que tu sois fan de variété française, de tubes internationaux ou de morceaux plus pointus, choisis la salle qui correspond à ton style et affronte d'autres joueurs. Gratuit, sans téléchargement, directement dans le navigateur.",
         ("genre-musical", "meta_description") => "Joue gratuitement à des blind tests par style musical sur Blind'All Music : Rap FR, Rock, Pop, Chanson française, Electro, Jazz, K-pop, Métal et plus. Multijoueur en direct.",
-        ("genre-musical", "meta_title") => "Blind test par genre musical — Rap, Rock, Pop, Jazz | Blind'All Music",
+        ("genre-musical", "meta_title") => "Blind test par genre musical, Rap, Rock, Pop, Jazz | Blind'All Music",
         ("genre-musical", "rooms_heading") => "Salles officielles par genre musical",
         ("genre-musical", "schema_name") => "Blind tests par genre musical sur Blind'All Music",
         ("les-decennies", "faq_a1") => "Tu peux jouer sur les Années 70, 80, 90, 2000, 2010, 2020, ainsi qu'une salle Time Machine pour les titres d'avant les années 70.",
@@ -39,7 +39,7 @@ fn slug_override(slug: &str, field: &str) -> Option<&'static str> {
         ("les-decennies", "intro") => "Replonge dans les tubes qui ont marqué chaque époque avec :count salles officielles : :rooms. Des années 70 aux hits actuels, teste ta mémoire musicale décennie par décennie.",
         ("les-decennies", "intro_secondary") => "Chaque salle est dédiée à une période précise, avec des playlists pensées pour retrouver les classiques, les one-hit wonders et les incontournables du moment. Idéal pour les soirées nostalgie entre amis.",
         ("les-decennies", "meta_description") => "Blind tests gratuits par décennie sur Blind'All Music : années 70, 80, 90, 2000, 2010, 2020 et plus. Retrouve les tubes qui ont marqué chaque époque.",
-        ("les-decennies", "meta_title") => "Blind test par décennie — années 70, 80, 90, 2000 | Blind'All Music",
+        ("les-decennies", "meta_title") => "Blind test par décennie : années 70, 80, 90, 2000 | Blind'All Music",
         ("les-decennies", "rooms_heading") => "Salles officielles par décennie",
         ("les-decennies", "schema_name") => "Blind tests par décennie sur Blind'All Music",
         ("les-speciales", "faq_a1") => "Certaines salles sont permanentes (comme Love), d'autres sont liées à une saison ou une fête : Noël, Halloween, Saint Patrick, Oktoberfest, été, etc.",
@@ -52,7 +52,7 @@ fn slug_override(slug: &str, field: &str) -> Option<&'static str> {
         ("les-speciales", "intro") => "Découvre :count salles officielles pour les occasions et fêtes : :rooms. Des playlists pensées pour animer une soirée, un apéro ou un événement à thème.",
         ("les-speciales", "intro_secondary") => "Ces éditions spéciales reviennent selon le calendrier et les événements. Rejoins la communauté Blind'All Music pour profiter de blind tests festifs en multijoueur.",
         ("les-speciales", "meta_description") => "Blind tests thématiques et événementiels sur Blind'All Music : Noël, Halloween, Saint Patrick, Oktoberfest, Love et éditions saisonnières.",
-        ("les-speciales", "meta_title") => "Blind test Noël, Halloween, été — éditions spéciales | Blind'All Music",
+        ("les-speciales", "meta_title") => "Blind test Noël, Halloween, été, éditions spéciales | Blind'All Music",
         ("les-speciales", "rooms_heading") => "Salles officielles événementielles",
         ("les-speciales", "schema_name") => "Blind tests événementiels sur Blind'All Music",
         ("sur-les-ecrans", "faq_a1") => "Les salles incluent notamment Disney, les films, les séries TV, l'anime/manga, les dessins animés, les jeux vidéo, l'Eurovision, les pubs TV, TikTok Hits et les youtubeurs.",
@@ -63,7 +63,7 @@ fn slug_override(slug: &str, field: &str) -> Option<&'static str> {
         ("sur-les-ecrans", "faq_q3") => "Puis-je jouer avec des amis ?",
         ("sur-les-ecrans", "heading") => "Blind test cinéma, séries et culture pop",
         ("sur-les-ecrans", "intro") => "Retrouve :count salles officielles autour des musiques des écrans et de la culture pop : :rooms. Bandes originales, génériques, tubes de films, séries, jeux vidéo et phénomènes internet.",
-        ("sur-les-ecrans", "intro_secondary") => "Parfait pour les fans de Disney, d'anime, de séries cultes ou de jeux vidéo. Rejoins une partie en cours ou lance une manche quand tu veux — gratuitement, sans inscription obligatoire.",
+        ("sur-les-ecrans", "intro_secondary") => "Parfait pour les fans de Disney, d'anime, de séries cultes ou de jeux vidéo. Rejoins une partie en cours ou lance une manche quand tu veux, gratuitement, sans inscription obligatoire.",
         ("sur-les-ecrans", "meta_description") => "Blind tests gratuits sur la culture pop : Disney, films, séries TV, anime, jeux vidéo, Eurovision, pubs TV et plus. Multijoueur sur Blind'All Music.",
         ("sur-les-ecrans", "meta_title") => "Blind test Disney, films, séries, jeux vidéo | Blind'All Music",
         ("sur-les-ecrans", "rooms_heading") => "Salles officielles culture pop",
@@ -80,14 +80,14 @@ fn fill(t: &str, category: &str, count: i64, rooms: &str) -> String {
 }
 
 pub fn content(slug: &str, category: &str, count: i64, rooms: &str) -> CategoryContent {
-    let title = fill(tpl("Blind test :category — quiz musical multijoueur gratuit | Blind'All Music", slug, "title"), category, count, rooms);
-    let meta_title = fill(tpl("Blind test :category — quiz musical multijoueur gratuit | Blind'All Music", slug, "meta_title"), category, count, rooms);
+    let title = fill(tpl("Blind test :category, quiz musical multijoueur gratuit | Blind'All Music", slug, "title"), category, count, rooms);
+    let meta_title = fill(tpl("Blind test :category, quiz musical multijoueur gratuit | Blind'All Music", slug, "meta_title"), category, count, rooms);
     let meta_description = fill(tpl("Joue gratuitement à des blind tests et quiz musicaux :category sur Blind'All Music. Salles officielles multijoueur en direct, sans téléchargement.", slug, "meta_description"), category, count, rooms);
     let heading = fill(tpl("Blind test :category en ligne", slug, "heading"), category, count, rooms);
-    let intro = fill(tpl("Découvre :count salles officielles de blind test :category sur Blind'All Music. Écoute l'extrait, trouve le titre ou l'artiste et affronte d'autres joueurs en temps réel — gratuitement dans ton navigateur.", slug, "intro"), category, count, rooms);
+    let intro = fill(tpl("Découvre :count salles officielles de blind test :category sur Blind'All Music. Écoute l'extrait, trouve le titre ou l'artiste et affronte d'autres joueurs en temps réel, gratuitement dans ton navigateur.", slug, "intro"), category, count, rooms);
     let intro_secondary = fill(tpl("Les rooms :category sont animées par l'équipe Blind'All Music et la communauté. Rejoins une partie en cours ou lance une nouvelle manche quand tu veux.", slug, "intro_secondary"), category, count, rooms);
     let rooms_heading = fill(tpl("Salles officielles :category", slug, "rooms_heading"), category, count, rooms);
-    let faq_title = fill(tpl("Questions fréquentes — blind test :category", slug, "faq_title"), category, count, rooms);
+    let faq_title = fill(tpl("Questions fréquentes : blind test :category", slug, "faq_title"), category, count, rooms);
     let faq = vec![
         (
             fill(tpl("Comment jouer à un blind test :category sur Blind'All Music ?", slug, "faq_q1"), category, count, rooms),

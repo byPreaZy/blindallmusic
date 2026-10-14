@@ -1,4 +1,4 @@
-# Blind'All Music — TLS terminator. Caddy auto-provisions Let's Encrypt
+# Blind'All Music : TLS terminator. Caddy auto-provisions Let's Encrypt
 # certificates as soon as the DNS A/AAAA records point at this host.
 
 blindallmusic.com {

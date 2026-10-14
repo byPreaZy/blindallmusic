@@ -192,8 +192,8 @@ pub fn RoomEditPage() -> impl IntoView {
                 room.set(Some(r.clone()));
             }
             Err(e) => err.set(Some(match e.status {
-                403 => "403 — This action is unauthorized.".into(),
-                404 => "404 — Page not found".into(),
+                403 => "403 : This action is unauthorized.".into(),
+                404 => "404 : Page not found".into(),
                 _ => e.message,
             })),
         }
@@ -496,7 +496,7 @@ pub fn RoomEditPage() -> impl IntoView {
                                 }/>
                                 <Show when=move || playlists.get().is_empty()>
                                     <div class="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-2 text-sm text-yellow-300">
-                                        {t("No playlist — the room won't start")}
+                                        {t("No playlist : the room won't start")}
                                     </div>
                                 </Show>
                             </div>

@@ -1,5 +1,5 @@
 -- Postgres: explicit-id inserts (seeds / imported MySQL data) don't advance
--- GENERATED ... AS IDENTITY sequences — resync every identity column to MAX(id).
+-- GENERATED ... AS IDENTITY sequences, resync every identity column to MAX(id).
 DO $$
 DECLARE
     r RECORD;

@@ -34,7 +34,7 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace", "compression-gzip", "fs"] }
 http = "1"
 
-# Database / cache — no TLS crates compiled: this machine has no C toolchain.
+# Database / cache : no TLS crates compiled: this machine has no C toolchain.
 # sqlx talks Postgres (self-hosted Supabase) without TLS; reqwest uses
 # native-tls (schannel FFI, no cc); fred without TLS features.
 # Revisit for production TLS (Linux target).
@@ -69,7 +69,7 @@ hex = "0.4"
 sha1 = "0.10"
 url = "2"
 
-# HTTP client — native-tls (schannel on Windows, no C compiler needed)
+# HTTP client : native-tls (schannel on Windows, no C compiler needed)
 reqwest = { version = "0.12", features = ["json", "native-tls", "multipart"], default-features = false }
 
 # Misc

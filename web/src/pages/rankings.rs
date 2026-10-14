@@ -461,7 +461,7 @@ fn TeamsBoard(payload: RwSignal<Value>, loading: RwSignal<bool>, page: RwSignal<
                     <div class="mb-4 flex items-center gap-4 rounded-xl border border-brand-accent/30 bg-brand-accent/10 px-4 py-3">
                         <span class="retro-title text-xl text-brand-accent-light">{format!("#{pos}")}</span>
                         <A href=format!("/teams/{team_id}") attr:class="text-white">
-                            {t("My team")} " — " {format!("{score:.1}")} " " {t("points")}
+                            {t("My team")} " : " {format!("{score:.1}")} " " {t("points")}
                         </A>
                     </div>
                 }

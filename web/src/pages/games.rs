@@ -151,7 +151,7 @@ pub fn GamePlayPage() -> impl IntoView {
     let (name, _desc) = game_meta(&game_type.get_untracked());
     let _ = name;
     let (title_key, desc_key) = match game_type.get_untracked().as_str() {
-        "quiz" => ("Quiz — 4 choices", "Quiz 4 choices meta description"),
+        "quiz" => ("Quiz : 4 choices", "Quiz 4 choices meta description"),
         "who_sang" => ("Who sang?", "Who sang meta description"),
         "anagram" => ("Anagram", "Anagram meta description"),
         "first_letter" => ("First letter", "First letter meta description"),

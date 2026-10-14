@@ -57,7 +57,7 @@
   "k-pop": {
    "fr": {
     "intro": "Blind test K-pop : idols, chorés et tubes coréens. Affronte d'autres fans en temps réel.",
-    "intro_secondary": "Salle officielle gratuite — idéale pour les soirées entre amis fans de K-pop."
+    "intro_secondary": "Salle officielle gratuite : idéale pour les soirées entre amis fans de K-pop."
    }
   },
   "metal": {
@@ -69,7 +69,7 @@
   "musique-classique": {
    "fr": {
     "intro": "Blind test Musique classique : compositeurs, œuvres et interprétations célèbres. Un défi pour les mélomanes.",
-    "intro_secondary": "Salle officielle Blind'All Music — gratuit, en ligne, multijoueur."
+    "intro_secondary": "Salle officielle Blind'All Music : gratuit, en ligne, multijoueur."
    }
   },
   "pop": {
@@ -81,13 +81,13 @@
   "quiz-general": {
    "fr": {
     "intro": "Quiz musical général : tous styles confondus pour un blind test varié et imprévisible.",
-    "intro_secondary": "Parfait pour tester une culture musicale large — en solo ou à plusieurs."
+    "intro_secondary": "Parfait pour tester une culture musicale large, en solo ou à plusieurs."
    }
   },
   "rap-rnb": {
    "fr": {
     "intro": "Blind test Rap & RnB : hip-hop, soul et rythmique urbaine internationale.",
-    "intro_secondary": "Salle officielle multijoueur — extraits sélectionnés par les modérateurs Blind'All Music."
+    "intro_secondary": "Salle officielle multijoueur : extraits sélectionnés par les modérateurs Blind'All Music."
    }
   },
   "rap-fr": {
@@ -111,7 +111,7 @@
   "annees-2010": {
    "fr": {
     "intro": "Blind test Années 2010 : EDM, pop mondiale et tubes qui ont marqué la décennie.",
-    "intro_secondary": "Joue en direct contre d'autres joueurs — gratuit et sans appli à installer."
+    "intro_secondary": "Joue en direct contre d'autres joueurs, gratuit et sans appli à installer."
    }
   },
   "annees-2020": {
@@ -123,7 +123,7 @@
   "annees-70": {
    "fr": {
     "intro": "Blind test Années 70 : disco, rock, funk et tubes légendaires.",
-    "intro_secondary": "Replonge dans la décennie qui a tout inventé — en multijoueur."
+    "intro_secondary": "Replonge dans la décennie qui a tout inventé, en multijoueur."
    }
   },
   "annees-80": {
@@ -135,7 +135,7 @@
   "annees-90": {
    "fr": {
     "intro": "Blind test Années 90 : grunge, hip-hop, dance et pop des nineties.",
-    "intro_secondary": "Salle officielle — parties en direct 24h/24 selon l'activité communautaire."
+    "intro_secondary": "Salle officielle : parties en direct 24h/24 selon l'activité communautaire."
    }
   },
   "old-songss": {
@@ -153,7 +153,7 @@
   "halloween": {
    "fr": {
     "intro": "Blind test Halloween : ambiances sombres, BO de films d'horreur et tubes festifs.",
-    "intro_secondary": "Édition spéciale Blind'All Music — multijoueur gratuit."
+    "intro_secondary": "Édition spéciale Blind'All Music : multijoueur gratuit."
    }
   },
   "love": {
@@ -171,7 +171,7 @@
   "saint-patrick": {
    "fr": {
     "intro": "Blind test Saint Patrick : folk irlandais, celtique et ambiance pub.",
-    "intro_secondary": "Édition saisonnière officielle — à partager entre amis."
+    "intro_secondary": "Édition saisonnière officielle : à partager entre amis."
    }
   },
   "summer": {
@@ -183,7 +183,7 @@
   "anime-manga": {
    "fr": {
     "intro": "Blind test Anime & Manga : génériques, OST et culture japonaise.",
-    "intro_secondary": "Salle officielle « Sur les écrans » — multijoueur en direct."
+    "intro_secondary": "Salle officielle « Sur les écrans », multijoueur en direct."
    }
   },
   "dessin-anime-0": {
@@ -195,19 +195,19 @@
   "disney": {
    "fr": {
     "intro": "Blind test Disney : princesses, Pixar, classiques et nouveautés du studio.",
-    "intro_secondary": "L'une des salles les plus jouées sur Blind'All Music — gratuit et multijoueur."
+    "intro_secondary": "L'une des salles les plus jouées sur Blind'All Music, gratuit et multijoueur."
    }
   },
   "eurovision": {
    "fr": {
     "intro": "Blind test Eurovision : hits du concours, entries cultes et moments iconiques.",
-    "intro_secondary": "Parfait avant ou après la finale — en ligne avec des amis."
+    "intro_secondary": "Parfait avant ou après la finale, en ligne avec des amis."
    }
   },
   "films": {
    "fr": {
     "intro": "Blind test Films : bandes originales, thèmes et musiques de cinéma.",
-    "intro_secondary": "De blockbusters à films cultes — devine le morceau le plus vite."
+    "intro_secondary": "De blockbusters à films cultes, devine le morceau le plus vite."
    }
   },
   "jeux-video": {
@@ -219,13 +219,13 @@
   "pubs-tv": {
    "fr": {
     "intro": "Blind test Pubs TV : jingles, musiques de publicités et souvenirs télé.",
-    "intro_secondary": "Culture pop et mémoire collective — en multijoueur."
+    "intro_secondary": "Culture pop et mémoire collective, en multijoueur."
    }
   },
   "series-tv": {
    "fr": {
     "intro": "Blind test Séries TV : génériques et musiques de séries cultes.",
-    "intro_secondary": "De la sitcom au drame — retrouve les titres emblématiques."
+    "intro_secondary": "De la sitcom au drame, retrouve les titres emblématiques."
    }
   },
   "tiktok-hits": {

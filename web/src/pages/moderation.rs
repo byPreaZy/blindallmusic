@@ -396,7 +396,7 @@ pub fn ModUsers() -> impl IntoView {
                         <input type="text" required maxlength="255"
                             class="mt-1 w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white outline-none"
                             prop:value=ban_reason on:input=move |ev| ban_reason.set(event_target_value(&ev))/></label>
-                    <label class="text-sm text-white/60">{t("Duration (minutes — empty = permanent)")}
+                    <label class="text-sm text-white/60">{t("Duration (minutes, empty = permanent)")}
                         <input type="number" min="1"
                             class="mt-1 w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white outline-none"
                             prop:value=ban_duration on:input=move |ev| ban_duration.set(event_target_value(&ev))/></label>
@@ -640,7 +640,7 @@ pub fn ModTracks() -> impl IntoView {
                                                 <div class="flex items-center justify-between">
                                                     <div class="text-sm text-white">
                                                         <span class="font-medium">{a}</span>
-                                                        <span class="text-white/50">" — "</span>
+                                                        <span class="text-white/50">" : "</span>
                                                         <span>{trk}</span>
                                                     </div>
                                                     <div class="flex gap-1">

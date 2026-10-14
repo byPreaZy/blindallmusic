@@ -18,7 +18,7 @@ command_arguments = ["scripts/copy-public.mjs"]
 port = 4200
 open = false
 
-# Dev proxies — `trunk serve` forwards API + WS to the axum server.
+# Dev proxies : `trunk serve` forwards API + WS to the axum server.
 [[proxy]]
 rewrite = "/api/v1/"
 backend = "http://127.0.0.1:8080/api/v1/"

@@ -161,7 +161,7 @@ async fn record_session(state: &AppState, session: &Value) -> Result<i64, Respon
                     "",
                     "Merci pour votre don",
                     &format!(
-                        "<p>Merci pour votre don de {amount} € — il nous aide à garder \
+                        "<p>Merci pour votre don de {amount} €, il nous aide à garder \
                          Blind'All Music en ligne.</p>"
                     ),
                 )

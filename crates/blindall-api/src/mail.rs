@@ -35,7 +35,7 @@ pub async fn send_opts(
     reply_to: Option<&str>,
 ) -> anyhow::Result<()> {
     if !cfg.configured() {
-        tracing::warn!(to = to_email, subject, "mail not configured — email skipped");
+        tracing::warn!(to = to_email, subject, "mail not configured : email skipped");
         return Ok(());
     }
     let mut body = json!({

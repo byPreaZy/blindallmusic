@@ -2,7 +2,7 @@
 name = "blindall-e2e"
 version = "0.1.0"
 edition.workspace = true
-description = "Black-box HTTP parity suite — hits a running blindall-server (TEST_BASE_URL, default http://localhost:8080). DB-agnostic: the same suite runs against the MySQL and the Postgres/Supabase backends."
+description = "Black-box HTTP parity suite : hits a running blindall-server (TEST_BASE_URL, default http://localhost:8080). DB-agnostic: the same suite runs against the MySQL and the Postgres/Supabase backends."
 publish = false
 
 [dependencies]

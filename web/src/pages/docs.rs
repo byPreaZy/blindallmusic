@@ -60,7 +60,7 @@ fn link_card(href: &'static str, title: &'static str, sub: &'static str, color: 
     }
 }
 
-// ---- /docs — progression systems overview -------------------------------------
+// ---- /docs : progression systems overview -------------------------------------
 
 #[component]
 pub fn DocsIndexPage() -> impl IntoView {
@@ -999,7 +999,7 @@ pub fn DocsCreateContentPage() -> impl IntoView {
     }
 }
 
-// ---- /docs/support — donation-backed -----------------------------------------------
+// ---- /docs/support : donation-backed -----------------------------------------------
 
 fn euros(cents: i64) -> String {
     format!("{:.2} €", cents as f64 / 100.0)
@@ -1056,7 +1056,7 @@ pub fn DocsSupportPage() -> impl IntoView {
                             <div class="h-full rounded-full bg-brand-accent" style=format!("width:{pct:.0}%")></div>
                         </div>
                         <p class="text-sm text-neutral-300">
-                            {format!("{} / {} — {:.0}%", euros(raised), euros(goal), raised as f64 / goal as f64 * 100.0)}
+                            {format!("{} / {} : {:.0}%", euros(raised), euros(goal), raised as f64 / goal as f64 * 100.0)}
                         </p>
                         <div class="mt-4">
                             <A href="/donations" attr:class="btn-primary !px-4 !py-2 text-sm">{t("Donate")}</A>
@@ -1146,7 +1146,7 @@ pub fn DocsSupportPage() -> impl IntoView {
     }
 }
 
-// ---- /blind-test-{slug} — category landing (`CategoryController::show`) --------------
+// ---- /blind-test-{slug} : category landing (`CategoryController::show`) --------------
 
 #[component]
 pub fn CategoryLandingPage() -> impl IntoView {
@@ -1180,7 +1180,7 @@ pub fn CategoryLandingPage() -> impl IntoView {
         <div class="mx-auto max-w-5xl space-y-8 px-4 py-8">
             <Show when=move || not_found.get()>
                 <div class="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-6 text-center text-red-300">
-                    "404 — "{t("Page not found")}
+                    "404 : "{t("Page not found")}
                 </div>
             </Show>
             <Show when=move || data.get().is_none() && !not_found.get()>
@@ -1420,7 +1420,7 @@ pub fn LanguageSwitch() -> impl IntoView {
     view! { <div class="px-4 py-16 text-center text-white/60">{t("Loading")}"…"</div> }
 }
 
-// ---- /banned — `Pages/Banned.vue` -----------------------------------------------------
+// ---- /banned : `Pages/Banned.vue` -----------------------------------------------------
 
 #[component]
 pub fn BannedPage() -> impl IntoView {

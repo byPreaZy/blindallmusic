@@ -265,7 +265,7 @@ fn strip_suffix(s: &str) -> String {
     let mut out = s.to_string();
     for suf in SUFFIXES {
         let l = out.trim_end().to_lowercase();
-        for sep in [" ", " - ", " – ", " — ", " : ", " / ", ", "] {
+        for sep in [" ", " - ", " – ", " : ", " : ", " / ", ", "] {
             let needle = format!("{sep}{suf}");
             if l.ends_with(&needle) {
                 let cut = out.trim_end().len() - needle.len();

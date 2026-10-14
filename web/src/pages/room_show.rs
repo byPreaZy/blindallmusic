@@ -98,7 +98,7 @@ fn apply_room_head(room: &RoomConfig, seo: Option<&Value>, password_protected: b
         .unwrap_or_else(|| room.id.to_string());
     let path = format!("/rooms/{slug}");
     let url = crate::seo::canonical_url(&path);
-    let title = format!("{} — {}", room.name, t("Room title suffix"));
+    let title = format!("{} : {}", room.name, t("Room title suffix"));
     let full_title = format!("{title} | Blind'All Music");
     let image = room
         .photo
@@ -527,7 +527,7 @@ pub fn RoomPage() -> impl IntoView {
                     needs_password.set(false);
                     room_id.set(resp.room.id);
                     crate::i18n::set_title(Some(&format!(
-                        "{} — {}",
+                        "{} : {}",
                         resp.room.name,
                         t("Room title suffix")
                     )));
@@ -540,7 +540,7 @@ pub fn RoomPage() -> impl IntoView {
                     if let Some(name) = e.body["room"]["name"].as_str() {
                         room.update(|c| c.name = name.to_string());
                         crate::i18n::set_title(Some(&format!(
-                            "{} — {}",
+                            "{} : {}",
                             name,
                             t("Room title suffix")
                         )));

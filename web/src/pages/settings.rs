@@ -163,7 +163,7 @@ pub fn SettingsPage() -> impl IntoView {
                                     </button>
                                 </Show>
                             </div>
-                            <p class="text-[10px] text-white/40">{t("Max 1 MB — resized to 350×350")}</p>
+                            <p class="text-[10px] text-white/40">{t("Max 1 MB : resized to 350×350")}</p>
                         </div>
                         <div class="min-w-0 flex-1 space-y-2 text-center sm:text-left">
                             <h2 class="flex flex-wrap items-center justify-center gap-2 text-2xl font-bold text-white sm:justify-start sm:text-3xl">

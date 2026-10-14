@@ -1,4 +1,4 @@
-# Build context hygiene — never ship host artifacts into the image.
+# Build context hygiene : never ship host artifacts into the image.
 target/
 **/target/
 web/node_modules/

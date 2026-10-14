@@ -238,7 +238,7 @@ impl RoomActor {
                 self.round.as_ref().unwrap(), &room_v, json!([]), json!([]),
             )).await;
             self.broadcast_public_state().await;
-            tracing::warn!(room = self.room.id, "no tracks — round aborted");
+            tracing::warn!(room = self.room.id, "no tracks : round aborted");
             return;
         }
 
@@ -289,7 +289,7 @@ impl RoomActor {
             let track = match self.store.load_track(track_id).await {
                 Ok(Some(t)) => t,
                 Ok(None) => {
-                    tracing::error!(track_id, "track not found — skipping");
+                    tracing::error!(track_id, "track not found : skipping");
                     continue; // PHP: recursive playNextTrack()
                 }
                 Err(e) => {
@@ -302,14 +302,14 @@ impl RoomActor {
             if !track.skips_probe() {
                 let dead = match &track.audio {
                     None => {
-                        tracing::info!(track_id, "missing audio url — skipping");
+                        tracing::info!(track_id, "missing audio url : skipping");
                         true
                     }
                     Some(url) => {
                         if self.store.probe_audio(url).await {
                             false
                         } else {
-                            tracing::info!(track_id, "audio probe failed — skipping");
+                            tracing::info!(track_id, "audio probe failed : skipping");
                             true
                         }
                     }

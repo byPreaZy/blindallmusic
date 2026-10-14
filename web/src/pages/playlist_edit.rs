@@ -40,8 +40,8 @@ pub fn PlaylistEditPage() -> impl IntoView {
                     detail.set(Some(d));
                 }
                 Err(e) => err.set(Some(match e.status {
-                    403 => "403 — This action is unauthorized.".into(),
-                    404 => "404 — Page not found".into(),
+                    403 => "403 : This action is unauthorized.".into(),
+                    404 => "404 : Page not found".into(),
                     _ => e.message,
                 })),
             }
@@ -380,7 +380,7 @@ fn TrackList(
                 />
                 <Show when=move || tracks.get().is_empty()>
                     <div class="px-5 py-8 text-center text-sm text-white/40">
-                        {t("No tracks — use the search or an import above")}
+                        {t("No tracks : use the search or an import above")}
                     </div>
                 </Show>
             </div>
@@ -664,7 +664,7 @@ fn ProviderSearch(
                                     <img src=r.artwork_url.clone().unwrap_or_default() class="h-10 w-10 rounded object-cover" alt=""/>
                                     <div class="min-w-0 flex-1">
                                         <div class="truncate text-sm font-medium text-white">
-                                            {r.artist_name.clone().unwrap_or_default()} " — " {r.track_name.clone()}
+                                            {r.artist_name.clone().unwrap_or_default()} " : " {r.track_name.clone()}
                                         </div>
                                         <div class="text-xs text-white/40">{r.provider.clone()}</div>
                                     </div>

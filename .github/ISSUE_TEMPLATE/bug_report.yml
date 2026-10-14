@@ -5,7 +5,7 @@ labels: ["bug"]
 body:
   - type: markdown
     attributes:
-      value: Merci pour le report ! Pour les vulnérabilités de sécurité, voir SECURITY.md — pas d'issue publique.
+      value: Merci pour le report ! Pour les vulnérabilités de sécurité, voir SECURITY.md, pas d'issue publique.
   - type: textarea
     id: what
     attributes:

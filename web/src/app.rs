@@ -134,7 +134,7 @@ pub fn App() -> impl IntoView {
                     <Routes fallback=|| {
                         view! {
                             <div class="mx-auto max-w-md px-4 py-24 text-center text-white/60">
-                                "404 — Page introuvable"
+                                "404 : Page introuvable"
                             </div>
                         }
                     }>

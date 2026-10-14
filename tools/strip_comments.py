@@ -118,7 +118,7 @@ def strip_rs(src: str) -> str:
             m = re.match(r"'(\\.|[^\\'])'", src[i:])
             if m:
                 pending += m.group(0); i += len(m.group(0)); line_start = False; continue
-            pending += c; i += 1; continue   # lifetime — not a string
+            pending += c; i += 1; continue   # lifetime, not a string
         if c == '/' and nxt == '/':
             if pending.strip() == '':
                 line_is_comment = True

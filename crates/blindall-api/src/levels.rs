@@ -83,7 +83,7 @@ mod tests {
     async fn dedup_within_unique_for_window() {
         let d = dispatcher();
         d.dispatch(1, LevelTrigger::Score);
-        d.dispatch(1, LevelTrigger::Score); // skipped — < 120s
+        d.dispatch(1, LevelTrigger::Score); // skipped, < 120s
         d.dispatch(2, LevelTrigger::Login); // different user → allowed
         assert_eq!(d.dispatched_count(), 2);
     }

@@ -59,13 +59,13 @@
     </script>
 
     <!-- AdSense loads at runtime from `ads.rs` once the server reports a
-         configured ADSENSE_CLIENT_ID — no hardcoded publisher account. -->
+         configured ADSENSE_CLIENT_ID : no hardcoded publisher account. -->
 
     <link data-trunk rel="css" href="/public/app.css" />
     <link data-trunk rel="rust" data-wasm-opt="z" data-bin-name="blindall-web" data-integrity="none" />
   </head>
   <body class="font-sans antialiased bg-surface-base">
-    <!-- lamejs — MP3 encoder for the local-track upload 30s segment picker
+    <!-- lamejs : MP3 encoder for the local-track upload 30s segment picker
          (`UploadTrack.vue` parity; Blade loads the same build from jsdelivr). -->
     <script src="/js/lame.all.js" defer></script>
   </body>
