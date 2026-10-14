@@ -129,6 +129,13 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0012_cleanup_featuring.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            13,
+            "media_extraction_pass3".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0013_media_extraction_pass3.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {
