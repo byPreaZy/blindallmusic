@@ -90,7 +90,7 @@ services:
   mysql:
     image: mysql:8.4
     profiles: ["migration"]
-    # pgloader's MySQL driver (QMYND) only speaks mysql_native_password —
+    # pgloader's MySQL driver (QMYND) only speaks mysql_native_password.
     # disabled by default since 8.4, re-enable it for the migration window.
     command:
       - --mysql-native-password=ON

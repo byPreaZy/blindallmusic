@@ -5,7 +5,7 @@ le transfert des droits sur le code soumis (patch, PR) à l'éditeur du projet.
 
 ## Avant de commencer
 
-- Ouvre une **issue** avant tout gros changement (nouvelle feature, refactor) —
+- Ouvre une **issue** avant tout gros changement (nouvelle feature, refactor).
   on valide l'approche ensemble.
 - Petits fixes (typo, bug évident) : PR directe OK.
 
