@@ -1,6 +1,6 @@
 # Blind'All Music
 
-Blind-test musical multijoueur en temps réel — rewrite Rust de Blinest.
+Blind-test musical multijoueur en temps réel.
 
 ## Stack
 
