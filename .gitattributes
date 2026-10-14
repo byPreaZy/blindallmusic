@@ -14,3 +14,10 @@ Caddyfile text eol=lf
 *.svg text eol=lf
 *.woff binary
 *.woff2 binary
+
+# Linguist: ne pas compter les fichiers vendored/générés dans les stats
+web/public/js/** linguist-vendored
+web/public/app.css linguist-generated
+web/package-lock.json linguist-generated
+web/dist/** linguist-generated
+prod_seed.sql linguist-generated
