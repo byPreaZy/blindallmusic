@@ -72,6 +72,27 @@ services:
     volumes:
       - storage_data:/app/storage
 
+  # ---- TLS / edge ----------------------------------------------------------
+  # Active en prod/alpha : `docker compose --profile edge up -d`
+  # DOMAIN (ex: blindallmusic.com) pointe vers le serveur → TLS auto.
+  caddy:
+    image: caddy:2-alpine
+    profiles: [edge]
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+      WWW_DOMAIN: ${WWW_DOMAIN:-www.localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      server:
+        condition: service_started
+
   redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes
@@ -612,5 +633,7 @@ volumes:
   mysql_data:
   redis_data:
   storage_data:
+  caddy_data:
+  caddy_config:
   db-config:
   deno-cache:

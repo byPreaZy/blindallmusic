@@ -1,17 +1,26 @@
-# Blind'All Music : TLS terminator. Caddy auto-provisions Let's Encrypt
-# certificates as soon as the DNS A/AAAA records point at this host.
+# Blind'All Music : terminateur TLS. Caddy provisionne automatiquement un
+# certificat Let's Encrypt dès que le DNS pointe sur l'hôte.
+#
+#   DOMAIN=blindall-alpha.duckdns.org  (alpha / test)
+#   DOMAIN=blindallmusic.com         (prod)
+#   WWW_DOMAIN=www.blindallmusic.com (optionnel, redirige le www)
 
-blindallmusic.com {
-    reverse_proxy server:8080
+{$DOMAIN:localhost} {
+	reverse_proxy server:8080
 
-    # /ws?token=... — keep bearer tokens out of access logs
-    log {
-        format transform "{common_log}" {
-            request>uri query delete
-        }
-    }
+	# /ws?ticket=... et autres paramètres : jamais dans les access logs.
+	log {
+		format filter {
+			wrap console
+			fields {
+				uri>query {
+					action delete
+				}
+			}
+		}
+	}
 }
 
-www.blindallmusic.com {
-    redir https://blindallmusic.com{uri} permanent
+{$WWW_DOMAIN:www.localhost} {
+	redir https://{$DOMAIN}{uri} permanent
 }

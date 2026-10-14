@@ -8,10 +8,16 @@ ARG NODE_VERSION=24.19.0
 ARG TRUNK_VERSION=0.21.14
 
 # wasm32 target + node (tailwind hook) + trunk binary.
+# TARGETARCH: amd64 (x64) ou arm64 (aarch64) — Oracle Always Free = ARM.
+ARG TARGETARCH
 RUN rustup target add wasm32-unknown-unknown \
- && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
+ && case "$TARGETARCH" in \
+      arm64) NODEARCH=arm64; TRUNKARCH=aarch64 ;; \
+      *)     NODEARCH=x64;   TRUNKARCH=x86_64  ;; \
+    esac \
+ && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODEARCH}.tar.xz" \
       | tar -xJ -C /usr/local --strip-components=1 \
- && curl -fsSL "https://github.com/trunk-rs/trunk/releases/download/v${TRUNK_VERSION}/trunk-x86_64-unknown-linux-gnu.tar.gz" \
+ && curl -fsSL "https://github.com/trunk-rs/trunk/releases/download/v${TRUNK_VERSION}/trunk-${TRUNKARCH}-unknown-linux-gnu.tar.gz" \
       | tar -xz -C /usr/local/bin \
  && node --version && trunk --version
 
