@@ -24,7 +24,7 @@ impl Default for DonationsConfig {
     fn default() -> Self {
         Self {
             monthly_goal_cents: 6_000,
-            stripe_payment_url: "https://donate.stripe.com/00g2bvf8i08X8De6oo".into(),
+            stripe_payment_url: String::new(),
             stripe_webhook_secret: String::new(),
             supporter_perks: DONOR_PERKS.iter().map(|s| s.to_string()).collect(),
             supporter_reaction_emojis: ["☕", "💎", "🙏", "✨", "🎁", "🫶"]
