@@ -1,0 +1,48 @@
+name: Bug report
+description: Signaler un comportement incorrect
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Merci pour le report ! Pour les vulnérabilités de sécurité, voir SECURITY.md — pas d'issue publique.
+  - type: textarea
+    id: what
+    attributes:
+      label: Comportement observé
+      description: Ce qui se passe aujourd'hui
+      placeholder: "En rejoignant une room..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportement attendu
+      description: Ce qui aurait dû se passer
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Étapes de reproduction
+      placeholder: "1. Aller sur... 2. Cliquer sur..."
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Où ?
+      options:
+        - Production (blindallmusic.com)
+        - Local / dev
+        - Les deux
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Contexte
+      description: Navigateur, OS, connecté/invité, room concernée
+      placeholder: "Firefox, Windows 11, compte connecté, room Rock"
+    validations:
+      required: false

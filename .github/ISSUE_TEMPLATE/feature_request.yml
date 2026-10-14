@@ -1,0 +1,26 @@
+name: Feature request
+description: Proposer une amélioration ou une nouvelle fonctionnalité
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problème résolu
+      description: Quel besoin ou friction ça adresse ?
+      placeholder: "Quand je joue en room privée..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposition
+      description: Comment tu imagines la solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives envisagées
+    validations:
+      required: false

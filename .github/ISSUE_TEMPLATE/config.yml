@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Sécurité
+    url: mailto:clerelydesign@gmail.com
+    about: Vulnérabilités — ne pas ouvrir d'issue publique (voir SECURITY.md)
+  - name: Contact
+    url: https://blindallmusic.com/contact
+    about: Questions générales via le formulaire de contact du site
