@@ -156,6 +156,7 @@ pub fn Player(
                             Ok(_) => {
                                 is_playing.set(true);
                                 needs_gesture.set(false);
+                                loading.set(false);
                                 let target = *pending_start.borrow();
                                 if target > 0.0 {
                                     let a2 = a.clone();
@@ -176,6 +177,7 @@ pub fn Player(
                                     .ok()
                                     .and_then(|n| n.as_string())
                                     .unwrap_or_default();
+                                loading.set(false);
                                 if name == "NotAllowedError" {
                                     needs_gesture.set(true);
                                 } else {

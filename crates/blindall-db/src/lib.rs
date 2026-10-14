@@ -108,6 +108,20 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0009_fix_media_answers.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            10,
+            "media_extraction_pass2".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0010_media_extraction_pass2.sql").into(),
+            false,
+        ),
+        sqlx::migrate::Migration::new(
+            11,
+            "media_aliases".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0011_media_aliases.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {
