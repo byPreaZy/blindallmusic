@@ -3,6 +3,13 @@
 
 blindallmusic.com {
     reverse_proxy server:8080
+
+    # /ws?token=... — keep bearer tokens out of access logs
+    log {
+        format transform "{common_log}" {
+            request>uri query delete
+        }
+    }
 }
 
 www.blindallmusic.com {

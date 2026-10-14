@@ -219,9 +219,37 @@ async fn main() -> anyhow::Result<()> {
         .collect(),
     };
 
-    let app = router(state).layer(
-        tower_http::trace::TraceLayer::new_for_http(),
-    );
+    let app = router(state)
+        // Never log query strings: /ws carries the bearer token
+        .layer(tower_http::trace::TraceLayer::new_for_http().make_span_with(
+            |req: &axum::http::Request<axum::body::Body>| {
+                tracing::info_span!("http", method = %req.method(), path = %req.uri().path())
+            },
+        ))
+        .layer(
+            tower_http::set_header::SetResponseHeaderLayer::overriding(
+                axum::http::header::X_CONTENT_TYPE_OPTIONS,
+                axum::http::HeaderValue::from_static("nosniff"),
+            ),
+        )
+        .layer(tower_http::set_header::SetResponseHeaderLayer::overriding(
+            axum::http::header::X_FRAME_OPTIONS,
+            axum::http::HeaderValue::from_static("DENY"),
+        ))
+        .layer(tower_http::set_header::SetResponseHeaderLayer::overriding(
+            axum::http::header::REFERRER_POLICY,
+            axum::http::HeaderValue::from_static("strict-origin-when-cross-origin"),
+        ))
+        .layer(tower_http::set_header::SetResponseHeaderLayer::overriding(
+            axum::http::HeaderName::from_static("permissions-policy"),
+            axum::http::HeaderValue::from_static("camera=(), microphone=(), geolocation=()"),
+        ))
+        .layer(tower_http::set_header::SetResponseHeaderLayer::overriding(
+            axum::http::header::CONTENT_SECURITY_POLICY,
+            axum::http::HeaderValue::from_static(
+                "default-src 'self'; script-src 'self' 'wasm-unsafe-eval';                  style-src 'self' 'unsafe-inline' https://fonts.bunny.net;                  font-src 'self' https://fonts.bunny.net;                  img-src 'self' data: https:; media-src 'self' https:;                  connect-src 'self' wss: ws: https:;                  object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
+            ),
+        ));
 
     let listener = tokio::net::TcpListener::bind(&bind).await?;
     tracing::info!(%bind, "blindall-server listening");
