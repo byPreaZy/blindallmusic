@@ -122,6 +122,13 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0011_media_aliases.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            12,
+            "cleanup_featuring".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0012_cleanup_featuring.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {
