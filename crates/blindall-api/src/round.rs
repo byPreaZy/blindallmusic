@@ -25,6 +25,15 @@ pub async fn check(
     user: CurrentUser,
     Json(body): Json<CheckBody>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    if let Some(secs) = state
+        .check_rate
+        .retry_after(&format!("check|{}", user.id()), 120)
+    {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({"error": "rate_limited", "retry_after": secs})),
+        ));
+    }
     if body.text.trim().is_empty() || body.text.len() > 255 {
         return Err((
             StatusCode::UNPROCESSABLE_ENTITY,

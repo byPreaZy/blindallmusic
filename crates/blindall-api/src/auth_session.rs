@@ -317,6 +317,29 @@ pub async fn login(
     Json(json!({ "token": token, "user": enriched_user_json(&state, &user, is_mod).await })).into_response()
 }
 
+/// Sliding-window per-key rate limiter (PHP throttle:N,1 equivalent).
+#[derive(Default)]
+pub struct RateBucket {
+    hits: std::sync::Mutex<std::collections::HashMap<String, Vec<Instant>>>,
+}
+
+impl RateBucket {
+    /// Records a hit; returns seconds to wait if over `per_minute`.
+    pub fn retry_after(&self, key: &str, per_minute: usize) -> Option<u64> {
+        let window = Duration::from_secs(60);
+        let mut map = self.hits.lock().unwrap();
+        let a = map.entry(key.to_string()).or_default();
+        a.retain(|t| t.elapsed() < window);
+        if a.len() >= per_minute {
+            let oldest = a.iter().min().unwrap();
+            Some(window.saturating_sub(oldest.elapsed()).as_secs().max(1))
+        } else {
+            a.push(Instant::now());
+            None
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct GuestThrottle {
     hits: Mutex<HashMap<String, Vec<Instant>>>,

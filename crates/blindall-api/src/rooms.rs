@@ -511,6 +511,16 @@ pub async fn presence_joined(
     Path(id): Path<i64>,
     user: CurrentUser,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    if let Some(secs) = state
+        .presence_rate
+        .retry_after(&format!("presence|{}", user.id()), 10)
+    {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({"error": "rate_limited", "retry_after": secs})),
+        ));
+    }
+
     let cfg = state
         .store
         .room_config(id)
@@ -542,6 +552,16 @@ pub async fn presence_left(
     Path(id): Path<i64>,
     user: CurrentUser,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    if let Some(secs) = state
+        .presence_rate
+        .retry_after(&format!("presence|{}", user.id()), 10)
+    {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({"error": "rate_limited", "retry_after": secs})),
+        ));
+    }
+
     let cfg = state
         .store
         .room_config(id)

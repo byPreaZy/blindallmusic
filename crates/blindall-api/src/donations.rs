@@ -66,7 +66,14 @@ pub fn verify_stripe_signature(
     mac.update(b".");
     mac.update(payload);
     let expected = hex::encode(mac.finalize().into_bytes());
-    if signatures.iter().any(|s| *s == expected) {
+    let ok = signatures.iter().any(|s| {
+        s.len() == expected.len()
+            && s.bytes()
+                .zip(expected.bytes())
+                .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+                == 0
+    });
+    if ok {
         Ok(())
     } else {
         Err(())

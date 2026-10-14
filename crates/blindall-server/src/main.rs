@@ -119,6 +119,9 @@ async fn main() -> anyhow::Result<()> {
         http: reqwest::Client::new(),
         throttle: std::sync::Arc::new(blindall_api::auth_session::LoginThrottle::default()),
         guest_throttle: std::sync::Arc::new(blindall_api::auth_session::GuestThrottle::default()),
+        chat_rate: std::sync::Arc::new(blindall_api::auth_session::RateBucket::default()),
+        presence_rate: std::sync::Arc::new(blindall_api::auth_session::RateBucket::default()),
+        check_rate: std::sync::Arc::new(blindall_api::auth_session::RateBucket::default()),
         levels: std::sync::Arc::new(blindall_api::levels::LevelDispatcher::new(
             blindall_db::LevelRepo::new(pool.clone()),
             hub.clone(),
