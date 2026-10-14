@@ -64,7 +64,7 @@ impl NotificationRepo {
 
     pub async fn suggestions(&self, user_id: i64, limit: i64) -> Result<Vec<Value>, sqlx::Error> {
         let rows = sqlx::query(
-            "SELECT id, data, created_at, read_at FROM notifications \
+            "SELECT id, type, data, created_at, read_at FROM notifications \
              WHERE notifiable_type = 'App\\Models\\User' AND notifiable_id = $1 \
              AND type = 'App\\Notifications\\NewSuggestion' \
              ORDER BY read_at IS NOT NULL, created_at DESC LIMIT $2",
