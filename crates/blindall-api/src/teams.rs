@@ -204,6 +204,10 @@ pub async fn update(
     CurrentUser(user): CurrentUser,
     Json(body): Json<TeamBody>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let Some(team) = state.teams.find(id).await.ok().flatten() else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -235,6 +239,10 @@ pub async fn update_photo(
     CurrentUser(user): CurrentUser,
     mut multipart: axum::extract::Multipart,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let Some(team) = state.teams.find(id).await.ok().flatten() else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -285,6 +293,10 @@ pub async fn destroy(
     Path(id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let Some(team) = state.teams.find(id).await.ok().flatten() else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -303,6 +315,10 @@ pub async fn leave(
     Path(id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let Some(team) = state.teams.find(id).await.ok().flatten() else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -326,6 +342,10 @@ pub async fn switch_owner(
     Path((id, uid)): Path<(i64, i64)>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let Some(team) = state.teams.find(id).await.ok().flatten() else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -343,6 +363,10 @@ pub async fn remove_member(
     Path((id, uid)): Path<(i64, i64)>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let Some(team) = state.teams.find(id).await.ok().flatten() else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -360,6 +384,10 @@ pub async fn request_join(
     Path(id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     if user.team_id.is_some() {
         return validation(
             "team",
@@ -413,6 +441,10 @@ pub async fn cancel_request(
     Path(id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     match state.teams.cancel_request(id, user.id).await {
         Ok(()) => Json(json!({"ok": true})).into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
@@ -436,6 +468,10 @@ pub async fn accept_request(
     CurrentUser(user): CurrentUser,
     body: Option<Json<RequestActionBody>>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let Some((team_id, requester_id)) = state.teams.find_request(request_id).await.ok().flatten()
     else {
         return StatusCode::NOT_FOUND.into_response();
@@ -485,6 +521,10 @@ pub async fn decline_request(
     CurrentUser(user): CurrentUser,
     body: Option<Json<RequestActionBody>>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let Some((team_id, requester_id)) = state.teams.find_request(request_id).await.ok().flatten()
     else {
         return StatusCode::NOT_FOUND.into_response();

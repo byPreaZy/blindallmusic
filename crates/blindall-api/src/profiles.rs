@@ -277,6 +277,10 @@ pub async fn unlike_track(
     Path(track_id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     match state.profiles.unlike_track(user.id, track_id).await {
         Ok(()) => {
             state

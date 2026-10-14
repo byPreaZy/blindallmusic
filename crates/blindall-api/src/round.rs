@@ -208,6 +208,10 @@ pub async fn start(
     Path(id): Path<i64>,
     user: CurrentUser,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    if user.0.is_guest {
+        return Err((StatusCode::FORBIDDEN, Json(json!({"message": "guest_forbidden"}))));
+    }
+
     state
         .manager
         .send(id, RoomCommand::Start {
@@ -244,6 +248,10 @@ pub async fn pause(
     Path(id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    if user.is_guest {
+        return Err((StatusCode::FORBIDDEN, Json(json!({"message": "guest_forbidden"}))));
+    }
+
     require_room_control(&state, id, &user).await?;
     state
         .manager
@@ -258,6 +266,10 @@ pub async fn resume(
     Path(id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    if user.is_guest {
+        return Err((StatusCode::FORBIDDEN, Json(json!({"message": "guest_forbidden"}))));
+    }
+
     require_room_control(&state, id, &user).await?;
     state
         .manager
@@ -272,6 +284,10 @@ pub async fn stop(
     Path(id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    if user.is_guest {
+        return Err((StatusCode::FORBIDDEN, Json(json!({"message": "guest_forbidden"}))));
+    }
+
     require_room_control(&state, id, &user).await?;
     state
         .manager

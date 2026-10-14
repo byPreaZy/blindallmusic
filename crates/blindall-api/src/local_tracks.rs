@@ -24,6 +24,10 @@ pub async fn store(
     CurrentUser(user): CurrentUser,
     request: axum::extract::Request,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     if !state.auth.is_public_moderator(user.id).await {
         return StatusCode::FORBIDDEN.into_response();
     }
@@ -155,7 +159,14 @@ pub struct SearchQuery {
     term: Option<String>,
 }
 
-pub async fn search(State(state): State<AppState>, Query(q): Query<SearchQuery>) -> Response {
+pub async fn search(
+    user: CurrentUser,
+    State(state): State<AppState>,
+    Query(q): Query<SearchQuery>,
+) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     let Some(term) = q.term.filter(|t| !t.is_empty()) else {
         return Json(json!([])).into_response();
     };
@@ -201,6 +212,9 @@ pub async fn index(
     Query(q): Query<PageQuery>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
     if !(user.is_administrator || state.auth.is_public_moderator(user.id).await) {
         return StatusCode::FORBIDDEN.into_response();
     }
@@ -237,6 +251,10 @@ pub async fn update(
     CurrentUser(user): CurrentUser,
     Json(body): Json<UpdateBody>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     if !(user.is_administrator || state.auth.is_public_moderator(user.id).await) {
         return StatusCode::FORBIDDEN.into_response();
     }
@@ -262,6 +280,10 @@ pub async fn destroy(
     Path(id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     if !(user.is_administrator || state.auth.is_public_moderator(user.id).await) {
         return StatusCode::FORBIDDEN.into_response();
     }

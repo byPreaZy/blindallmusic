@@ -72,6 +72,10 @@ pub async fn update(
     CurrentUser(user): CurrentUser,
     Json(body): Json<UpdateProfileBody>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     if user.id != id {
         return forbidden();
     }
@@ -116,6 +120,10 @@ pub async fn update_password(
     CurrentUser(user): CurrentUser,
     Json(body): Json<UpdatePasswordBody>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     if user.id != id {
         return forbidden();
     }
@@ -159,6 +167,10 @@ pub async fn update_donation_preferences(
     CurrentUser(user): CurrentUser,
     Json(body): Json<DonationPreferencesBody>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     if user.id != id {
         return forbidden();
     }
@@ -178,6 +190,10 @@ pub async fn update_photo(
     CurrentUser(user): CurrentUser,
     mut multipart: axum::extract::Multipart,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     if user.id != id {
         return forbidden();
     }
@@ -216,6 +232,10 @@ pub async fn destroy_photo(
     Path(id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     if user.id != id {
         return forbidden();
     }
@@ -305,6 +325,10 @@ pub async fn notifications(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let list = state.notifications.unread(user.id, 50).await.unwrap_or_default();
     let count = state
         .notifications
@@ -319,6 +343,10 @@ pub async fn notification_read(
     Path(id): Path<String>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     match state.notifications.mark_read(user.id, &id).await {
         Ok(true) => Json(json!({"ok": true})).into_response(),
         Ok(false) => StatusCode::NOT_FOUND.into_response(),
@@ -366,6 +394,10 @@ pub async fn destroy(
     Path(id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     if !self_or_admin(&user, id) {
         return forbidden();
     }

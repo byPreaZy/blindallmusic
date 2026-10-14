@@ -638,6 +638,10 @@ pub async fn edit(
     Path(key): Path<String>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let room = match load_room_by_key(&state, &key).await {
         Ok(r) => r,
         Err(e) => return e,
@@ -878,6 +882,10 @@ pub async fn mine(
     CurrentUser(user): CurrentUser,
     Query(q): Query<MineParams>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     match state
         .rooms
         .moderated_rooms(user.id, q.search.as_deref(), q.trashed.as_deref())
@@ -924,6 +932,10 @@ pub async fn attach_playlist(
     CurrentUser(user): CurrentUser,
     Json(body): Json<PlaylistIdBody>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let room = match load_room(&state, id).await {
         Ok(r) => r,
         Err(e) => return e,
@@ -946,6 +958,10 @@ pub async fn detach_playlist(
     CurrentUser(user): CurrentUser,
     Json(body): Json<PlaylistIdBody>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let room = match load_room(&state, id).await {
         Ok(r) => r,
         Err(e) => return e,
@@ -970,6 +986,10 @@ pub async fn attach_moderator(
     CurrentUser(user): CurrentUser,
     Json(body): Json<UserIdBody>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let room = match load_room(&state, id).await {
         Ok(r) => r,
         Err(e) => return e,
@@ -992,6 +1012,10 @@ pub async fn detach_moderator(
     CurrentUser(user): CurrentUser,
     Json(body): Json<UserIdBody>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     if let Err(e) = load_room(&state, id).await {
         return e;
     }
@@ -1011,6 +1035,10 @@ pub async fn bookmark(
     Path(id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     if let Err(e) = load_room(&state, id).await {
         return e;
     }
@@ -1025,6 +1053,10 @@ pub async fn unbookmark(
     Path(id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     match state.rooms.unbookmark(user.id, id).await {
         Ok(()) => Json(json!({"is_bookmarked": false})).into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
@@ -1166,6 +1198,10 @@ pub async fn upvote_track(
     Path((room_id, track_id)): Path<(i64, i64)>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     if let Err(e) = load_room(&state, room_id).await {
         return e;
     }
@@ -1202,6 +1238,10 @@ pub async fn downvote_track(
     CurrentUser(user): CurrentUser,
     Json(body): Json<DownvoteBody>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     if let Err(e) = load_room(&state, room_id).await {
         return e;
     }
@@ -1243,6 +1283,10 @@ pub async fn alert(
     CurrentUser(user): CurrentUser,
     Json(body): Json<AlertBody>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let room = match load_room(&state, id).await {
         Ok(r) => r,
         Err(e) => return e,
@@ -1292,6 +1336,10 @@ pub async fn suggestion(
     CurrentUser(user): CurrentUser,
     Json(body): Json<SuggestionBody>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let room = match load_room(&state, id).await {
         Ok(r) => r,
         Err(e) => return e,
@@ -1348,6 +1396,10 @@ pub async fn update_photo(
     CurrentUser(user): CurrentUser,
     mut multipart: axum::extract::Multipart,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let room = match load_room(&state, id).await {
         Ok(r) => r,
         Err(e) => return e,
@@ -1391,6 +1443,10 @@ pub async fn delete_picture(
     Path(id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let room = match load_room(&state, id).await {
         Ok(r) => r,
         Err(e) => return e,
@@ -1418,8 +1474,11 @@ pub async fn search_room_tracks(
     State(state): State<AppState>,
     Path(id): Path<i64>,
     Query(q): Query<TrackSearchQuery>,
-    CurrentUser(_user): CurrentUser,
+    CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = require_not_guest(&user) {
+        return r;
+    }
     if load_room(&state, id).await.is_err() {
         return StatusCode::NOT_FOUND.into_response();
     }

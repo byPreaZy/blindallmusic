@@ -16,6 +16,9 @@ pub async fn search(
     user: CurrentUser,
     Query(q): Query<SearchParams>,
 ) -> Json<Value> {
+    if user.0.is_guest {
+        return Json(json!({ "results": [], "errors": ["guest_forbidden"] }));
+    }
     let term = q.term.unwrap_or_default();
     let providers: Vec<&str> = q
         .providers

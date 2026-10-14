@@ -475,6 +475,10 @@ pub async fn destroy(
     Path(message_id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let Some(msg) = state.chat.find_message(message_id).await.ok().flatten() else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -497,6 +501,10 @@ pub async fn restore(
     Path(message_id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+
     let allowed = user.is_administrator || state.auth.is_public_moderator(user.id).await;
     if !allowed {
         return StatusCode::FORBIDDEN.into_response();
