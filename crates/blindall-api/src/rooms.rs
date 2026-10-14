@@ -1094,8 +1094,12 @@ pub struct UserCountBody {
 pub async fn update_user_count(
     State(state): State<AppState>,
     Path(id): Path<i64>,
+    CurrentUser(user): CurrentUser,
     Json(body): Json<UserCountBody>,
 ) -> Response {
+    if let Some(r) = require_not_guest(&user) {
+        return r;
+    }
     match state.rooms.update_user_count(id, body.count).await {
         Ok(()) => Json(json!({"ok": true})).into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
