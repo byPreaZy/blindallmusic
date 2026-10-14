@@ -136,6 +136,20 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0013_media_extraction_pass3.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            14,
+            "media_extraction_pass4".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0014_media_extraction_pass4.sql").into(),
+            false,
+        ),
+        sqlx::migrate::Migration::new(
+            15,
+            "media_fill_null".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0015_media_fill_null.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {

@@ -342,6 +342,7 @@ pub fn ModSuggestions() -> impl IntoView {
                                                             let val = a["value"].as_str().unwrap_or("").to_string();
                                                             view! { <div class="text-white/70"><span class="text-white/40">{ty} " : "</span>{val}</div> }
                                                         }).collect::<Vec<_>>()}
+                                                        <RematchPanel track_id=tid/>
                                                     </div>
                                                 }.into_any()
                                             })}
@@ -381,6 +382,129 @@ pub fn ModSuggestions() -> impl IntoView {
                 </div>
             </Show>
         </ModShell>
+    }
+}
+
+// ---- deezer rematch ------------------------------------------------------------
+
+/// Lets a moderator re-point a track at a correct Deezer version — for wrong
+/// audio reports (foreign-language covers, bad rips) raised by suggestions.
+#[component]
+fn RematchPanel(track_id: i64) -> impl IntoView {
+    let open = RwSignal::new(false);
+    let term = RwSignal::new(String::new());
+    let term_loaded = RwSignal::new(false);
+    let candidates = RwSignal::new(Vec::<Value>::new());
+    let searching = RwSignal::new(false);
+    let applied = RwSignal::new(Option::<String>::None);
+    let err = RwSignal::new(Option::<String>::None);
+
+    let search = move || {
+        searching.set(true);
+        err.set(None);
+        let q = term.get_untracked();
+        let path = if q.trim().is_empty() {
+            format!("/api/v1/moderation/tracks/{track_id}/rematch")
+        } else {
+            format!("/api/v1/moderation/tracks/{track_id}/rematch?q={}", js_sys::encode_uri_component(&q))
+        };
+        leptos::task::spawn_local(async move {
+            match api::get::<Value>(&path).await {
+                Ok(v) => {
+                    term_loaded.set(true);
+                    if let Some(t) = v["term"].as_str() {
+                        term.set(t.to_string());
+                    }
+                    candidates.set(v["tracks"].as_array().cloned().unwrap_or_default());
+                }
+                Err(e) => err.set(Some(e.message)),
+            }
+            searching.set(false);
+        });
+    };
+
+    view! {
+        <div class="mt-2 border-t border-white/10 pt-2">
+            <Show when=move || applied.get().is_some() fallback=move || view! {
+                <div>
+                    <Show when=move || !open.get() fallback=move || view! {
+                        <div class="space-y-2">
+                            <div class="flex items-center gap-2">
+                                <input type="text" class="input flex-1 !py-1 text-xs"
+                                    prop:value=move || term.get()
+                                    on:input=move |e| term.set(event_target_value(&e))
+                                    placeholder="Artiste — titre…"/>
+                                <button type="button" class="rounded border border-white/15 px-2 py-1 text-xs text-brand-accent-light hover:bg-white/5"
+                                    disabled=move || searching.get()
+                                    on:click=move |_| search()>
+                                    {if searching.get() { t("Loading").to_string() } else { t("Search Deezer").to_string() }}
+                                </button>
+                            </div>
+                            <ErrLine error=err/>
+                            {candidates.get().into_iter().map(|c| {
+                                let pid = c["provider_id"].as_str().unwrap_or("").to_string();
+                                let artist = c["artist_name"].as_str().unwrap_or("").to_string();
+                                let name = c["track_name"].as_str().unwrap_or("").to_string();
+                                let album = c["album_name"].as_str().unwrap_or("").to_string();
+                                let art = c["artwork_url"].as_str().unwrap_or("").to_string();
+                                let purl = c["provider_url"].as_str().map(str::to_string);
+                                let preview = c["preview_url"].as_str().unwrap_or("").to_string();
+                                let label = format!("{artist} — {name}");
+                                let use_label = label.clone();
+                                let use_art = art.clone();
+                                view! {
+                                    <div class="flex items-center gap-2 rounded border border-white/10 px-2 py-1.5">
+                                        {(!art.is_empty()).then(|| view! { <img src=art class="h-8 w-8 rounded" alt=""/> })}
+                                        <div class="min-w-0 flex-1">
+                                            <div class="truncate text-white/85">{label}</div>
+                                            <div class="truncate text-white/40">{album}</div>
+                                        </div>
+                                        {(!preview.is_empty()).then(|| view! {
+                                            <audio controls preload="none" src=preview class="h-7 w-40"/>
+                                        })}
+                                        <button type="button" class="shrink-0 rounded border border-emerald-500/30 px-2 py-1 text-xs text-emerald-300"
+                                            on:click=move |_| {
+                                                let label = use_label.clone();
+                                                let purl = purl.clone();
+                                                let art = use_art.clone();
+                                                let pid = pid.clone();
+                                                let name = name.clone();
+                                                let artist = artist.clone();
+                                                leptos::task::spawn_local(async move {
+                                                    let body = serde_json::json!({
+                                                        "provider": "deezer",
+                                                        "provider_id": pid,
+                                                        "provider_url": purl,
+                                                        "artwork_url": art,
+                                                        "track_name": name,
+                                                        "artist_name": artist,
+                                                    });
+                                                    match api::post::<Value, _>(&format!("/api/v1/moderation/tracks/{track_id}/rematch"), &body).await {
+                                                        Ok(_) => applied.set(Some(label)),
+                                                        Err(e) => err.set(Some(e.message)),
+                                                    }
+                                                });
+                                            }>{t("Use")}</button>
+                                    </div>
+                                }
+                            }).collect::<Vec<_>>()}
+                        </div>
+                    }>
+                        <button type="button" class="text-xs text-brand-accent-light hover:underline"
+                            on:click=move |_| {
+                                open.set(true);
+                                if !term_loaded.get_untracked() {
+                                    search();
+                                }
+                            }>
+                            {t("Rematch audio (Deezer)")}
+                        </button>
+                    </Show>
+                </div>
+            }>
+                <div class="text-emerald-300">{t("Audio replaced:")} " " {applied.get().unwrap_or_default()}</div>
+            </Show>
+        </div>
     }
 }
 

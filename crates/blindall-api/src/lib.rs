@@ -184,6 +184,10 @@ pub fn router(state: AppState) -> Router {
             get(moderation::suggestions),
         )
         .route(
+            "/api/v1/moderation/tracks/{id}/rematch",
+            get(moderation::track_rematch_candidates).post(moderation::track_rematch_apply),
+        )
+        .route(
             "/api/v1/moderation/trashed-messages",
             get(moderation::trashed_messages),
         )

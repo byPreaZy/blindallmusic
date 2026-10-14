@@ -406,6 +406,55 @@ impl PlaylistRepo {
             .collect())
     }
 
+    /// Point a track at a different provider resource (moderation rematch):
+    /// replaces provider/provider_id/preview/artwork and, when supplied,
+    /// syncs the Title/Artist answers so players answer what they hear.
+    pub async fn rematch_track(
+        &self,
+        track_id: i64,
+        provider: &str,
+        provider_id: &str,
+        provider_url: Option<&str>,
+        preview_url: &str,
+        artwork_url: Option<&str>,
+        track_name: Option<&str>,
+        artist_name: Option<&str>,
+    ) -> Result<bool, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let r = sqlx::query(
+            "UPDATE tracks SET provider = $2, provider_id = $3, provider_url = $4, \
+             preview_url = $5, artwork_url = COALESCE($6, artwork_url), updated_at = now() \
+             WHERE id = $1",
+        )
+        .bind(track_id)
+        .bind(provider)
+        .bind(provider_id)
+        .bind(provider_url)
+        .bind(preview_url)
+        .bind(artwork_url)
+        .execute(&mut *tx)
+        .await?;
+        if r.rows_affected() == 0 {
+            return Ok(false);
+        }
+        for (type_name, new_value) in [("Title", track_name), ("Artist", artist_name)] {
+            if let Some(v) = new_value.map(str::trim).filter(|s| !s.is_empty()) {
+                sqlx::query(
+                    "UPDATE track_answers ta SET value = $2, updated_at = now() \
+                     FROM answer_types at \
+                     WHERE at.id = ta.answer_type_id AND ta.track_id = $1 AND at.name = $3",
+                )
+                .bind(track_id)
+                .bind(v)
+                .bind(type_name)
+                .execute(&mut *tx)
+                .await?;
+            }
+        }
+        tx.commit().await?;
+        Ok(true)
+    }
+
     pub async fn upsert_track(
         &self,
         playlist_id: i64,

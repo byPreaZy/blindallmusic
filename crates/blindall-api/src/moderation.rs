@@ -264,6 +264,106 @@ pub async fn ban(
     }
 }
 
+// ---- track rematch (Deezer) -------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct RematchSearchQuery {
+    q: Option<String>,
+}
+
+/// GET /api/v1/moderation/tracks/{id}/rematch?q=
+/// Deezer candidates for a track — the default query is "Artist Title" built
+/// from its stored answers; moderators can pass an explicit q.
+pub async fn track_rematch_candidates(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    Query(q): Query<RematchSearchQuery>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
+    if !require_moderator(&state, &user).await {
+        return forbidden();
+    }
+    let term = match q.q.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(t) => t.to_string(),
+        None => {
+            let answers = state
+                .playlists
+                .track_answers_labeled(id)
+                .await
+                .unwrap_or_default();
+            let find = |ty: &str| {
+                answers
+                    .iter()
+                    .find(|a| a["type"].as_str() == Some(ty))
+                    .and_then(|a| a["value"].as_str())
+                    .unwrap_or("")
+                    .to_string()
+            };
+            let term = format!("{} {}", find("Artist"), find("Title"));
+            term.trim().to_string()
+        }
+    };
+    if term.is_empty() {
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(json!({"error": "Track has no artist/title to search with."})),
+        )
+            .into_response();
+    }
+    let (results, errors) = state.providers.search(&term, &["deezer"], true).await;
+    Json(json!({"tracks": results, "term": term, "errors": errors})).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct RematchBody {
+    provider: String,
+    provider_id: String,
+    provider_url: Option<String>,
+    artwork_url: Option<String>,
+    track_name: Option<String>,
+    artist_name: Option<String>,
+}
+
+/// POST /api/v1/moderation/tracks/{id}/rematch
+/// Repoint the track at the chosen Deezer resource and sync its Title/Artist
+/// answers with the new version (keeps media answers and scores).
+pub async fn track_rematch_apply(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+    Json(body): Json<RematchBody>,
+) -> Response {
+    if !require_moderator(&state, &user).await {
+        return forbidden();
+    }
+    if body.provider != "deezer" || body.provider_id.trim().is_empty() {
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(json!({"error": "Only deezer rematches are supported."})),
+        )
+            .into_response();
+    }
+    let preview = format!("deezer://{}", body.provider_id.trim());
+    match state
+        .playlists
+        .rematch_track(
+            id,
+            "deezer",
+            body.provider_id.trim(),
+            body.provider_url.as_deref(),
+            &preview,
+            body.artwork_url.as_deref(),
+            body.track_name.as_deref(),
+            body.artist_name.as_deref(),
+        )
+        .await
+    {
+        Ok(true) => Json(json!({"ok": true})).into_response(),
+        Ok(false) => StatusCode::NOT_FOUND.into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
 // ---- moderators (admin only) -----------------------------------------------
 
 pub async fn moderators(
