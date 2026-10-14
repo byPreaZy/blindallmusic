@@ -1,0 +1,17 @@
+[package]
+name = "blindall-realtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Native WebSocket hub: channels, presence, event fan-out. Replaces Reverb/Echo."
+
+[dependencies]
+axum.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true

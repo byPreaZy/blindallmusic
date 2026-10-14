@@ -1,0 +1,802 @@
+//! Playlists + tracks persistence — mirrors PlaylistController /
+//! TrackController data access (manual row mapping, same schema).
+
+use chrono::{DateTime, Utc};
+use serde::Serialize;
+use sqlx::postgres::PgPool;
+use sqlx::Row;
+
+#[derive(Clone)]
+pub struct PlaylistRepo {
+    pool: PgPool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PlaylistRow {
+    pub id: i64,
+    pub name: String,
+    pub user_id: i64,
+    pub is_public: bool,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PlaylistListItem {
+    #[serde(flatten)]
+    pub playlist: PlaylistRow,
+    pub owner_name: String,
+    pub total_tracks: i64,
+    pub moderators: Vec<ModeratorEntry>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ModeratorEntry {
+    pub id: i64,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AnswerRow {
+    pub id: i64,
+    pub answer_type_id: String,
+    pub value: String,
+    pub score: f64,
+    pub aliases: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PlaylistTrack {
+    pub id: i64,
+    pub provider: String,
+    pub provider_id: String,
+    pub provider_url: Option<String>,
+    pub preview_url: String,
+    pub artwork_url: String,
+    pub dificulty: Option<i64>,
+    pub hint: Option<String>,
+    pub created_at: Option<DateTime<Utc>>,
+    pub answers: Vec<AnswerRow>,
+    pub up_votes: i64,
+    pub down_votes: i64,
+}
+
+impl PlaylistRepo {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
+    pub async fn find(&self, id: i64) -> Result<Option<PlaylistRow>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, name, user_id, is_public, description FROM playlists WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|r| PlaylistRow {
+            id: r.get("id"),
+            name: r.get("name"),
+            user_id: r.get("user_id"),
+            is_public: r.get::<bool, _>("is_public"),
+            description: r.get("description"),
+        }))
+    }
+
+    /// `isPlaylistModerator` — morph pivot lookup.
+    pub async fn is_moderator(&self, playlist_id: i64, user_id: i64) -> bool {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT EXISTS(SELECT 1 FROM moderables WHERE user_id = $1 \
+             AND moderable_id = $2 AND moderable_type = 'App\\Models\\Playlist')::int::bigint",
+        )
+        .bind(user_id)
+        .bind(playlist_id)
+        .fetch_one(&self.pool)
+        .await
+        .map(|v| v == 1)
+        .unwrap_or(false)
+    }
+
+    /// `canEditPlaylist` — owner || moderator || administrator.
+    pub async fn can_edit(&self, p: &PlaylistRow, user_id: i64, is_admin: bool) -> bool {
+        p.user_id == user_id || is_admin || self.is_moderator(p.id, user_id).await
+    }
+
+    /// Playlists the user owns OR moderates (PHP `moderatedPlaylists`
+    /// actually returns only moderated ones — the owner is attached as a
+    /// moderator at creation, so the union collapses to the pivot).
+    pub async fn list_for_user(
+        &self,
+        user_id: i64,
+    ) -> Result<Vec<PlaylistListItem>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT p.id, p.name, p.user_id, p.is_public, p.description, \
+             p.updated_at, u.name AS owner_name, \
+             (SELECT COUNT(*) FROM tracks t WHERE t.playlist_id = p.id) AS total_tracks \
+             FROM playlists p JOIN users u ON u.id = p.user_id \
+             WHERE p.id IN (SELECT moderable_id FROM moderables \
+               WHERE user_id = $1 AND moderable_type = 'App\\Models\\Playlist') \
+             ORDER BY p.updated_at DESC",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut out = Vec::with_capacity(rows.len());
+        for r in rows {
+            let id: i64 = r.get("id");
+            out.push(PlaylistListItem {
+                playlist: PlaylistRow {
+                    id,
+                    name: r.get("name"),
+                    user_id: r.get("user_id"),
+                    is_public: r.get::<bool, _>("is_public"),
+                    description: r.get("description"),
+                },
+                owner_name: r.get("owner_name"),
+                total_tracks: r.get("total_tracks"),
+                moderators: self.moderators(id).await.unwrap_or_default(),
+                updated_at: r.get("updated_at"),
+            });
+        }
+        Ok(out)
+    }
+
+    pub async fn moderators(&self, playlist_id: i64) -> Result<Vec<ModeratorEntry>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT u.id, u.name FROM moderables m JOIN users u ON u.id = m.user_id \
+             WHERE m.moderable_id = $1 AND m.moderable_type = 'App\\Models\\Playlist'",
+        )
+        .bind(playlist_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|r| ModeratorEntry {
+                id: r.get("id"),
+                name: r.get("name"),
+            })
+            .collect())
+    }
+
+    /// `PlaylistController::store` — create + attach creator as moderator.
+    pub async fn create(&self, user_id: i64, name: &str) -> Result<i64, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let now = Utc::now();
+        let res = sqlx::query_scalar::<_, i64>(
+            "INSERT INTO playlists (name, user_id, is_public, created_at, updated_at) \
+             VALUES ($1, $2, false, $3, $4) RETURNING id",
+        )
+        .bind(name)
+        .bind(user_id)
+        .bind(now)
+        .bind(now)
+        .fetch_one(&mut *tx)
+        .await?;
+        let id = res;
+        sqlx::query(
+            "INSERT INTO moderables (user_id, moderable_type, moderable_id, \
+             created_at, updated_at) VALUES ($1, 'App\\Models\\Playlist', $2, $3, $4)",
+        )
+        .bind(user_id)
+        .bind(id)
+        .bind(now)
+        .bind(now)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(id)
+    }
+
+    /// `PlaylistModeratorController::detach` — remove a moderator pivot.
+    /// `PlaylistModeratorController::attach` — `syncWithoutDetaching`.
+    pub async fn attach_moderator(&self, playlist_id: i64, user_id: i64) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO moderables (user_id, moderable_type, moderable_id, \
+             created_at, updated_at) VALUES ($1, 'App\\Models\\Playlist', $2, $3, $4)",
+        )
+        .bind(user_id)
+        .bind(playlist_id)
+        .bind(chrono::Utc::now())
+        .bind(chrono::Utc::now())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn detach_moderator(&self, playlist_id: i64, user_id: i64) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "DELETE FROM moderables WHERE user_id = $1 AND moderable_id = $2 \
+             AND moderable_type = 'App\\Models\\Playlist'",
+        )
+        .bind(user_id)
+        .bind(playlist_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// `PlaylistCsvExportService` — every track (ordered by id) with its
+    /// answers and up/down vote totals, for the CSV download.
+    pub async fn export_tracks(
+        &self,
+        playlist_id: i64,
+    ) -> Result<Vec<PlaylistTrack>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT t.id, t.provider, t.provider_id, t.provider_url, t.preview_url, \
+             t.artwork_url, t.dificulty, t.hint, t.created_at, \
+             COALESCE((SELECT CAST(SUM(v.votes) AS bigint) FROM votes v \
+               WHERE v.votable_id = t.id AND v.votable_type = 'App\\Models\\Track' \
+               AND v.votes > 0), 0) AS up_votes, \
+             COALESCE(ABS((SELECT CAST(SUM(v.votes) AS bigint) FROM votes v \
+               WHERE v.votable_id = t.id AND v.votable_type = 'App\\Models\\Track' \
+               AND v.votes < 0)), 0) AS down_votes \
+             FROM tracks t WHERE t.playlist_id = $1 ORDER BY t.id",
+        )
+        .bind(playlist_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut tracks = Vec::with_capacity(rows.len());
+        for r in rows {
+            let id: i64 = r.get("id");
+            tracks.push(PlaylistTrack {
+                id,
+                provider: r.get("provider"),
+                provider_id: r.get("provider_id"),
+                provider_url: r.get("provider_url"),
+                preview_url: r.get("preview_url"),
+                artwork_url: r.get("artwork_url"),
+                dificulty: r.get::<Option<i64>, _>("dificulty"),
+                hint: r.get("hint"),
+                created_at: r.get("created_at"),
+                answers: self.track_answers(id).await.unwrap_or_default(),
+                up_votes: r.get("up_votes"),
+                down_votes: r.get("down_votes"),
+            });
+        }
+        Ok(tracks)
+    }
+
+    pub async fn update(
+        &self,
+        id: i64,
+        name: &str,
+        description: Option<&str>,
+        user_id: i64,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE playlists SET name = $1, description = $2, user_id = $3, \
+             updated_at = $4 WHERE id = $5",
+        )
+        .bind(name)
+        .bind(description)
+        .bind(user_id)
+        .bind(Utc::now())
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// `destroy` — detach moderators, delete tracks (answers cascade),
+    /// delete playlist.
+    pub async fn delete(&self, id: i64) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query(
+            "DELETE FROM moderables WHERE moderable_id = $1 \
+             AND moderable_type = 'App\\Models\\Playlist'",
+        )
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query("DELETE FROM tracks WHERE playlist_id = $1")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM playlists WHERE id = $1")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// `has('rooms')` — used by the destroy guard (public + has rooms).
+    pub async fn has_rooms(&self, playlist_id: i64) -> bool {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT EXISTS(SELECT 1 FROM playlist_room WHERE playlist_id = $1)::int::bigint",
+        )
+        .bind(playlist_id)
+        .fetch_one(&self.pool)
+        .await
+        .map(|v| v == 1)
+        .unwrap_or(false)
+    }
+
+    /// `hasProviderTrack` — PHP checks provider_id ONLY (not provider).
+    pub async fn provider_track_id(
+        &self,
+        playlist_id: i64,
+        provider_id: &str,
+    ) -> Result<Option<i64>, sqlx::Error> {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT id FROM tracks WHERE playlist_id = $1 AND provider_id = $2 LIMIT 1",
+        )
+        .bind(playlist_id)
+        .bind(provider_id)
+        .fetch_optional(&self.pool)
+        .await
+    }
+
+    /// Paginated tracks + answers + vote sums. `votes.votes` is ±1
+    /// (`votable_type = Track`).
+    pub async fn tracks_page(
+        &self,
+        playlist_id: i64,
+        page: i64,
+        per_page: i64,
+    ) -> Result<(Vec<PlaylistTrack>, i64), sqlx::Error> {
+        let total = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM tracks WHERE playlist_id = $1",
+        )
+        .bind(playlist_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let rows = sqlx::query(
+            "SELECT t.id, t.provider, t.provider_id, t.provider_url, t.preview_url, \
+             t.artwork_url, t.dificulty, t.hint, t.created_at, \
+             COALESCE((SELECT CAST(SUM(v.votes) AS bigint) FROM votes v \
+               WHERE v.votable_id = t.id AND v.votable_type = 'App\\Models\\Track' \
+               AND v.votes > 0), 0) AS up_votes, \
+             COALESCE(ABS((SELECT CAST(SUM(v.votes) AS bigint) FROM votes v \
+               WHERE v.votable_id = t.id AND v.votable_type = 'App\\Models\\Track' \
+               AND v.votes < 0)), 0) AS down_votes \
+             FROM tracks t WHERE t.playlist_id = $1 \
+             ORDER BY t.created_at DESC LIMIT $2 OFFSET $3",
+        )
+        .bind(playlist_id)
+        .bind(per_page)
+        .bind((page.max(1) - 1) * per_page)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut tracks = Vec::with_capacity(rows.len());
+        for r in rows {
+            let id: i64 = r.get("id");
+            tracks.push(PlaylistTrack {
+                id,
+                provider: r.get("provider"),
+                provider_id: r.get("provider_id"),
+                provider_url: r.get("provider_url"),
+                preview_url: r.get("preview_url"),
+                artwork_url: r.get("artwork_url"),
+                dificulty: r.get::<Option<i64>, _>("dificulty"),
+                hint: r.get("hint"),
+                created_at: r.get("created_at"),
+                answers: self.track_answers(id).await.unwrap_or_default(),
+                up_votes: r.get("up_votes"),
+                down_votes: r.get("down_votes"),
+            });
+        }
+        Ok((tracks, total))
+    }
+
+    pub async fn track_answers(&self, track_id: i64) -> Result<Vec<AnswerRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, answer_type_id, value, score, aliases \
+             FROM track_answers WHERE track_id = $1",
+        )
+        .bind(track_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|r| AnswerRow {
+                id: r.get("id"),
+                answer_type_id: r.get::<i64, _>("answer_type_id").to_string(),
+                value: r.get("value"),
+                score: r.get::<f64, _>("score"),
+                aliases: r.get("aliases"),
+            })
+            .collect())
+    }
+
+    /// `TrackController::store` — firstOrNew(provider+provider_id) then
+    /// updateOrCreate answers 1 (Artist) & 2 (Title).
+    pub async fn upsert_track(
+        &self,
+        playlist_id: i64,
+        user_id: i64,
+        provider: &str,
+        provider_id: &str,
+        provider_url: &str,
+        preview_url: &str,
+        artwork_url: &str,
+        artist_name: &str,
+        track_name: &str,
+    ) -> Result<i64, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let existing = sqlx::query_scalar::<_, i64>(
+            "SELECT id FROM tracks WHERE playlist_id = $1 AND provider = $2 AND provider_id = $3",
+        )
+        .bind(playlist_id)
+        .bind(provider)
+        .bind(provider_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        let now = Utc::now();
+        let track_id = match existing {
+            Some(id) => {
+                sqlx::query(
+                    "UPDATE tracks SET provider_url = $1, preview_url = $2, \
+                     artwork_url = $3, updated_at = $4 WHERE id = $5",
+                )
+                .bind(provider_url)
+                .bind(preview_url)
+                .bind(artwork_url)
+                .bind(now)
+                .bind(id)
+                .execute(&mut *tx)
+                .await?;
+                id
+            }
+            None => {
+                let res = sqlx::query_scalar::<_, i64>(
+                    "INSERT INTO tracks (user_id, playlist_id, provider, provider_id, \
+                     provider_url, preview_url, artwork_url, created_at, updated_at) \
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id",
+                )
+                .bind(user_id)
+                .bind(playlist_id)
+                .bind(provider)
+                .bind(provider_id)
+                .bind(provider_url)
+                .bind(preview_url)
+                .bind(artwork_url)
+                .bind(now)
+                .bind(now)
+                .fetch_one(&mut *tx)
+                .await?;
+                res
+            }
+        };
+
+        for (type_id, value) in [(1i64, artist_name), (2i64, track_name)] {
+            // updateOrCreate(answer_type_id, value).
+            let found = sqlx::query_scalar::<_, i64>(
+                "SELECT id FROM track_answers WHERE track_id = $1 AND answer_type_id = $2",
+            )
+            .bind(track_id)
+            .bind(type_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+            match found {
+                Some(aid) => {
+                    sqlx::query(
+                        "UPDATE track_answers SET value = $1, updated_at = $2 WHERE id = $3",
+                    )
+                    .bind(value)
+                    .bind(now)
+                    .bind(aid)
+                    .execute(&mut *tx)
+                    .await?;
+                }
+                None => {
+                    sqlx::query(
+                        "INSERT INTO track_answers (track_id, answer_type_id, value, \
+                         score, created_at, updated_at) VALUES ($1, $2, $3, 0.5, $4, $5)",
+                    )
+                    .bind(track_id)
+                    .bind(type_id)
+                    .bind(value)
+                    .bind(now)
+                    .bind(now)
+                    .execute(&mut *tx)
+                    .await?;
+                }
+            }
+        }
+        tx.commit().await?;
+        Ok(track_id)
+    }
+
+    /// `TrackController::update` — dificulty / hint only.
+    pub async fn update_track_meta(
+        &self,
+        track_id: i64,
+        dificulty: Option<i64>,
+        hint: Option<&str>,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query("UPDATE tracks SET dificulty = $1, hint = $2, updated_at = $3 WHERE id = $4")
+            .bind(dificulty)
+            .bind(hint)
+            .bind(Utc::now())
+            .bind(track_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// `ProcessDeletedTrack` — answers then track (cascade covers both,
+    /// explicit delete keeps MySQL behaviour identical to PHP's two calls).
+    pub async fn delete_track(&self, track_id: i64) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("DELETE FROM track_answers WHERE track_id = $1")
+            .bind(track_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM tracks WHERE id = $1")
+            .bind(track_id)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// `destroyAll` — all track ids of a playlist (each goes through
+    /// `ProcessDeletedTrack` in PHP).
+    pub async fn track_ids(&self, playlist_id: i64) -> Result<Vec<i64>, sqlx::Error> {
+        sqlx::query_scalar("SELECT id FROM tracks WHERE playlist_id = $1 ORDER BY id")
+            .bind(playlist_id)
+            .fetch_all(&self.pool)
+            .await
+    }
+
+    pub async fn track_belongs_to(&self, playlist_id: i64, track_id: i64) -> bool {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT EXISTS(SELECT 1 FROM tracks WHERE id = $1 AND playlist_id = $2)::int::bigint",
+        )
+        .bind(track_id)
+        .bind(playlist_id)
+        .fetch_one(&self.pool)
+        .await
+        .map(|v| v == 1)
+        .unwrap_or(false)
+    }
+
+    /// `answer_types` list (id, name) — PHP caches by locale; names are
+    /// raw keys here, translated client-side.
+    pub async fn answer_types(&self) -> Result<Vec<(i64, String)>, sqlx::Error> {
+        let rows = sqlx::query("SELECT id, name FROM answer_types ORDER BY id")
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows
+            .iter()
+            .map(|r| (r.get::<i64, _>("id"), r.get::<String, _>("name")))
+            .collect())
+    }
+
+    /// `Playlist::isPublic()->get()` — public/official playlists for the
+    /// room attach dropdown and discovery (`available_playlists` in PHP).
+    pub async fn list_public(&self) -> Result<Vec<(i64, String, i64)>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT p.id, p.name, COUNT(t.id) AS tracks_count FROM playlists p \
+             LEFT JOIN tracks t ON t.playlist_id = p.id \
+             WHERE p.is_public = true \
+             GROUP BY p.id, p.name ORDER BY p.name",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|r| (r.get("id"), r.get("name"), r.get("tracks_count")))
+            .collect())
+    }
+
+    /// `Playlist::rooms` — rooms using this playlist (edit page section).
+    pub async fn rooms_for_playlist(
+        &self,
+        playlist_id: i64,
+    ) -> Result<Vec<(i64, String, String)>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT r.id, r.slug, r.name FROM playlist_room rp \
+             JOIN rooms r ON r.id = rp.room_id \
+             WHERE rp.playlist_id = $1 AND r.deleted_at IS NULL ORDER BY r.name",
+        )
+        .bind(playlist_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|r| (r.get("id"), r.get("slug"), r.get("name")))
+            .collect())
+    }
+
+    /// `Playlist::difficulties` — COUNT grouped by `dificulty` bucket.
+    pub async fn difficulty_counts(
+        &self,
+        playlist_id: i64,
+    ) -> Result<Vec<(i64, i64)>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT dificulty, COUNT(*) AS c FROM tracks \
+             WHERE playlist_id = $1 GROUP BY dificulty",
+        )
+        .bind(playlist_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|r| {
+                (
+                    r.get::<Option<i64>, _>("dificulty").unwrap_or(0),
+                    r.get::<i64, _>("c"),
+                )
+            })
+            .collect())
+    }
+
+    pub async fn track_count(&self, playlist_id: i64) -> Result<i64, sqlx::Error> {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM tracks WHERE playlist_id = $1",
+        )
+        .bind(playlist_id)
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    /// Which playlist owns a track — used by the answers CRUD authz.
+    pub async fn track_playlist_id(&self, track_id: i64) -> Result<Option<i64>, sqlx::Error> {
+        sqlx::query_scalar::<_, i64>("SELECT playlist_id FROM tracks WHERE id = $1")
+            .bind(track_id)
+            .fetch_optional(&self.pool)
+            .await
+    }
+
+    /// `TrackAnswerController::store` — value required/max 255,
+    /// score 0..=99, up to 20 aliases (validated in the API layer).
+    pub async fn create_answer(
+        &self,
+        track_id: i64,
+        answer_type_id: i64,
+        value: &str,
+        score: f64,
+        aliases: Option<Vec<String>>,
+    ) -> Result<i64, sqlx::Error> {
+        let aliases_json = aliases
+            .filter(|a| !a.is_empty())
+            .map(|a| sqlx::types::Json(serde_json::Value::from(a)));
+        let res = sqlx::query_scalar::<_, i64>(
+            "INSERT INTO track_answers (track_id, answer_type_id, value, score, \
+             aliases, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+        )
+        .bind(track_id)
+        .bind(answer_type_id)
+        .bind(value)
+        .bind(score)
+        .bind(aliases_json)
+        .bind(Utc::now())
+        .bind(Utc::now())
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(res)
+    }
+
+    pub async fn update_answer(
+        &self,
+        answer_id: i64,
+        answer_type_id: i64,
+        value: &str,
+        score: f64,
+        aliases: Option<Vec<String>>,
+    ) -> Result<(), sqlx::Error> {
+        let aliases_json = aliases
+            .filter(|a| !a.is_empty())
+            .map(|a| sqlx::types::Json(serde_json::Value::from(a)));
+        sqlx::query(
+            "UPDATE track_answers SET answer_type_id = $1, value = $2, score = $3, \
+             aliases = $4, updated_at = $5 WHERE id = $6",
+        )
+        .bind(answer_type_id)
+        .bind(value)
+        .bind(score)
+        .bind(aliases_json)
+        .bind(Utc::now())
+        .bind(answer_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn answer_belongs_to(&self, track_id: i64, answer_id: i64) -> bool {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT id FROM track_answers WHERE id = $1 AND track_id = $2 LIMIT 1",
+        )
+        .bind(answer_id)
+        .bind(track_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map(|r| r.is_some())
+        .unwrap_or(false)
+    }
+
+    pub async fn delete_answer(&self, answer_id: i64) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM track_answers WHERE id = $1")
+            .bind(answer_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// `Auth::user()->getUpVotedItems(Track::class)` — Blind'All Music Likes source.
+    pub async fn upvoted_track_ids(&self, user_id: i64) -> Result<Vec<i64>, sqlx::Error> {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT votable_id FROM votes \
+             WHERE votable_type = 'App\\Models\\Track' AND votes > 0 AND user_id = $1",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await
+    }
+
+    /// `BlindallLikesService::importPlaylist` — copy a track (provider fields +
+    /// all answers) into a playlist, skipping existing provider+provider_id.
+    /// Returns Some(new_track_id) or None when already present/source missing.
+    pub async fn duplicate_track(
+        &self,
+        playlist_id: i64,
+        user_id: i64,
+        src_track_id: i64,
+    ) -> Result<Option<i64>, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let exists = sqlx::query_scalar::<_, i64>(
+            "SELECT dst.id FROM tracks dst JOIN tracks src ON src.id = $1 \
+             WHERE dst.playlist_id = $2 AND dst.provider = src.provider \
+             AND dst.provider_id = src.provider_id LIMIT 1",
+        )
+        .bind(src_track_id)
+        .bind(playlist_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        if exists.is_some() {
+            tx.rollback().await?;
+            return Ok(None);
+        }
+        let now = Utc::now();
+        let new_id: Option<i64> = sqlx::query_scalar::<_, i64>(
+            "INSERT INTO tracks (user_id, playlist_id, provider, provider_id, \
+             provider_url, preview_url, artwork_url, dificulty, hint, \
+             created_at, updated_at) \
+             SELECT $1, $2, provider, provider_id, provider_url, preview_url, \
+             artwork_url, dificulty, hint, $3, $4 FROM tracks WHERE id = $5 RETURNING id",
+        )
+        .bind(user_id)
+        .bind(playlist_id)
+        .bind(now)
+        .bind(now)
+        .bind(src_track_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some(new_id) = new_id else {
+            tx.rollback().await?;
+            return Ok(None);
+        };
+        sqlx::query(
+            "INSERT INTO track_answers (track_id, answer_type_id, value, aliases, \
+             score, created_at, updated_at) \
+             SELECT $1, answer_type_id, value, aliases, score, $2, $3 \
+             FROM track_answers WHERE track_id = $4",
+        )
+        .bind(new_id)
+        .bind(now)
+        .bind(now)
+        .bind(src_track_id)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(Some(new_id))
+    }
+
+    /// Invalidate the `room_{id}_tracks_count` cache keys for every room
+    /// using this playlist (PHP does the same on track mutations).
+    pub async fn room_ids_for_playlist(&self, playlist_id: i64) -> Vec<i64> {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT room_id FROM playlist_room WHERE playlist_id = $1",
+        )
+        .bind(playlist_id)
+        .fetch_all(&self.pool)
+        .await
+        .unwrap_or_default()
+    }
+}

@@ -1,0 +1,39 @@
+# Rust build artifacts
+target/
+**/target/
+target-e2e/
+
+# Frontend artifacts
+web/node_modules/
+web/dist/
+web/.trunk/
+
+# Local toolchain (this dev machine: gnullvm + generated import libs + trunk binary)
+# See tools/gen_import_libs.py — regenerate `.libs/` with it if needed.
+.cargo/
+.libs/
+.tools/
+
+# Environment & secrets
+*.env
+.env
+.env.*
+!.env.example
+
+# Runtime data (Docker bind mounts / local storage)
+volumes/
+storage/app/
+
+# Dev leftovers
+fixtures/
+tests/
+__pycache__/
+*.pyc
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

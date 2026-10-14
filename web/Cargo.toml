@@ -1,0 +1,85 @@
+[package]
+name = "blindall-web"
+version = "0.1.0"
+edition = "2021"
+
+# Standalone workspace — wasm-only deps don't belong in the server
+# workspace's `cargo check --workspace`.
+[workspace]
+
+[dependencies]
+leptos = { version = "0.8", features = ["csr"] }
+leptos_router = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+gloo-net = { version = "0.6", features = ["http"] }
+gloo-timers = { version = "0.3", features = ["futures"] }
+send_wrapper = "0.6"
+console_error_panic_hook = "0.1"
+web-sys = { version = "0.3", features = [
+    "console",
+    "Window",
+    "Document",
+    "Element",
+    "HtmlElement",
+    "HtmlInputElement",
+    "HtmlAudioElement",
+    "HtmlMediaElement",
+    "MediaError",
+    "WebSocket",
+    "MessageEvent",
+    "CloseEvent",
+    "Event",
+    "EventTarget",
+    "File",
+    "FileList",
+    "FormData",
+    "Storage",
+    "Navigator",
+    "Location",
+    "Url",
+    "UrlSearchParams",
+    "KeyboardEvent",
+    "FocusEvent",
+    "SubmitEvent",
+    "MouseEvent",
+    "DomTokenList",
+    "CssStyleDeclaration",
+    "Node",
+    "NodeList",
+    "DomRect",
+    "BinaryType",
+    "Blob",
+    "BlobPropertyBag",
+    "HtmlAnchorElement",
+    "HtmlTextAreaElement",
+    "Clipboard",
+    "AudioContext",
+    "AudioContextState",
+    "AudioContextOptions",
+    "AudioDestinationNode",
+    "AudioBuffer",
+    "AudioBufferSourceNode",
+    "AudioBufferSourceOptions",
+    "AudioScheduledSourceNode",
+    "AudioNode",
+    "AudioParam",
+    "GainNode",
+    "GainOptions",
+    "DynamicsCompressorNode",
+    "DynamicsCompressorOptions",
+    "BaseAudioContext",
+    "OfflineAudioContext",
+    "PointerEvent",
+    "IntersectionObserver",
+    "IntersectionObserverEntry",
+    "IntersectionObserverInit",
+] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1

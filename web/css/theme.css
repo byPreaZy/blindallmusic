@@ -1,0 +1,39 @@
+/**
+ * Blind'All Music — palette rétro sobre (RGAA AA)
+ * Fonds : midnight · deep
+ * Accents : teal (actions) · champagne · teal clair (highlights)
+ */
+:root {
+  color-scheme: dark;
+
+  --color-midnight: 24 24 42;
+  --color-deep: 20 30 54;
+  --color-deep-hover: 28 38 66;
+  --color-deep-card: 20 30 54;
+
+  --color-primary: 48 124 130;
+  --color-primary-hover: 64 148 154;
+  --color-primary-dark: 32 100 106;
+  --color-primary-light: 88 168 174;
+
+  --color-secondary: 196 184 132;
+  --color-secondary-dark: 168 156 108;
+  --color-secondary-strong: 128 114 64;
+
+  --color-accent: 64 148 154;
+  --color-accent-hover: 88 168 174;
+  --color-accent-dark: 48 124 130;
+  --color-accent-light: 132 192 198;
+
+  --color-danger: 208 78 94;
+  --color-danger-dark: 166 56 70;
+
+  --glow-primary: 0 0 16px rgb(var(--color-primary) / 0.14);
+  --glow-accent: 0 0 16px rgb(var(--color-accent) / 0.14);
+  --glow-secondary: 0 0 12px rgb(var(--color-secondary) / 0.1);
+
+  --surface-base: rgb(var(--color-midnight));
+  --surface-raised: rgb(var(--color-deep));
+  --surface-overlay: rgb(var(--color-deep-card));
+  --surface-hover: rgb(var(--color-deep-hover));
+}

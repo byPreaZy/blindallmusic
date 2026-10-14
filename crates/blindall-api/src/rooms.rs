@@ -1,0 +1,1544 @@
+//! Room listing + state + management endpoints.
+//! Ports `RoomController`, `RoomPlaylistController`, `RoomModeratorController`,
+//! `RoomBookmarkController`, `RankingController::roomScores`.
+
+use crate::auth::{CurrentUser, OptionalUser};
+use crate::state::AppState;
+use axum::extract::{Path, Query, State};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use axum::Json;
+use blindall_db::RoomOptions;
+use blindall_game::{GameStore, PlayerInfo, RoomCommand};
+use serde::Deserialize;
+use serde_json::{json, Map, Value};
+
+fn forbidden() -> Response {
+    (StatusCode::FORBIDDEN, Json(json!({"error": "unauthorized"}))).into_response()
+}
+
+/// banhammer `ip.banned` 403 — `config/ban.php` `messages.ip`.
+fn ip_banned_response() -> Response {
+    (
+        StatusCode::FORBIDDEN,
+        Json(json!({"error": "Access from your IP address is restricted."})),
+    )
+        .into_response()
+}
+
+fn validation(field: &str, msg: &str) -> Response {
+    (
+        StatusCode::UNPROCESSABLE_ENTITY,
+        Json(json!({"message": msg, "errors": {field: [msg]}})),
+    )
+        .into_response()
+}
+
+/// PHP `not.guest` middleware equivalent.
+fn require_not_guest(user: &blindall_db::entities::User) -> Option<Response> {
+    user.is_guest.then(|| {
+        (StatusCode::FORBIDDEN, Json(json!({"error": "guest_forbidden"}))).into_response()
+    })
+}
+
+/// `GET /api/v1/rooms` — public rooms currently playing (homepage).
+/// Minimal port of HomeController's room list; full catalog later.
+pub async fn list(State(state): State<AppState>) -> Json<Value> {
+    let rooms = state.store.public_playing_rooms().await.unwrap_or_default();
+    let now = chrono::Utc::now().timestamp();
+    let mut out = Vec::with_capacity(rooms.len());
+    for r in rooms {
+        let members = state
+            .presence
+            .member_count(r.id, now)
+            .await
+            .unwrap_or(0);
+        out.push(json!({
+            "id": r.id,
+            "name": r.name,
+            "slug": r.slug,
+            "is_playing": r.is_playing,
+            "member_count": members,
+            "tracks_by_round": r.tracks_by_round,
+        }));
+    }
+    Json(json!({ "rooms": out }))
+}
+
+/// `GET /api/v1/rooms/{id-or-slug}` — room config + live game snapshot
+/// (equivalent of what `Show.vue` hydrates with on first load).
+/// Laravel resolves `{room}` by slug; accept a numeric id too.
+#[derive(serde::Deserialize)]
+pub struct ShowParams {
+    /// `?password=` — room password for protected rooms (PHP reads it from
+    /// the request input before rendering the show page).
+    password: Option<String>,
+}
+
+pub async fn show(
+    State(state): State<AppState>,
+    Path(key): Path<String>,
+    headers: axum::http::HeaderMap,
+    axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<std::net::SocketAddr>,
+    axum::extract::Query(params): axum::extract::Query<ShowParams>,
+    user: OptionalUser,
+) -> Result<Json<Value>, Response> {
+    // banhammer `ip.banned` + `auth.banned` middleware — `rooms.{room}` show.
+    let ip = crate::auth_session::client_ip(&headers, &addr.ip().to_string());
+    if state.auth.is_ip_banned(&ip).await {
+        return Err(ip_banned_response());
+    }
+    if let Some(u) = &user.0 {
+        if state.moderation.is_banned(u.id).await.unwrap_or(false) {
+            return Err(ip_banned_response());
+        }
+    }
+    let row = match key.parse::<i64>() {
+        Ok(id) => state.rooms.find(id).await.ok().flatten(),
+        Err(_) => state.rooms.find_by_slug(&key).await.ok().flatten(),
+    }
+    .ok_or_else(|| StatusCode::NOT_FOUND.into_response())?;
+    let id = row.id;
+    let cfg = state
+        .store
+        .room_config(id)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND.into_response())?;
+
+    // PHP `RoomController::show`: password rooms redirect until the right
+    // `password` input is supplied — without it nothing is rendered. The API
+    // answer is a 403, which is the honest equivalent (previously the whole
+    // payload leaked past the lock). `Rooms/Password.vue` still shows the
+    // room name, so the error body carries that non-sensitive field.
+    let room_password = state.rooms.password_of(id).await.ok().flatten();
+    if let Some(expected) = &room_password {
+        if params.password.as_deref() != Some(expected.as_str()) {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Json(json!({
+                    "error": "password_required",
+                    "room": {"id": row.id, "name": row.name, "slug": row.slug},
+                })),
+            )
+                .into_response());
+        }
+    }
+
+    // `RoomParticipationService::grantAccess` — PHP grants on every
+    // successful show (guests included); joined/check/scores verify it.
+    if let Some(u) = &user.0 {
+        let _ = state.presence.grant_participation(id, u.id).await;
+    }
+
+    let can_edit = match &user.0 {
+        Some(u) => state.rooms.has_control(&row, u.id, u.is_administrator).await,
+        None => false,
+    };
+    let is_bookmarked = match &user.0 {
+        Some(u) => state
+            .rooms
+            .is_bookmarked(u.id, id)
+            .await
+            .unwrap_or(false),
+        None => false,
+    };
+
+    let snapshot = state.manager.snapshot(id).await.ok().flatten();
+    let now = chrono::Utc::now().timestamp();
+    let member_count = state.presence.member_count(id, now).await.unwrap_or(0);
+    let is_playing = snapshot
+        .as_ref()
+        .map(|s| s.is_playing)
+        .unwrap_or(row.is_playing);
+
+    let photo = row.photo_path.as_deref().map(|p| state.storage.url(p));
+    let slug = row.slug.clone().unwrap_or_else(|| id.to_string());
+    let url = format!("/rooms/{slug}");
+    let moderators: Vec<Value> = state
+        .rooms
+        .moderators_detail(id)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(mid, name, photo_path)| {
+            json!({
+                "id": mid,
+                "name": name,
+                "photo": photo_path.as_deref().map(|p| state.storage.url(p)),
+            })
+        })
+        .collect();
+    let tracks_count = state.rooms.tracks_count(id).await.unwrap_or(0);
+    let rounds_count = state.rooms.rounds_count(id).await.unwrap_or(0);
+    let owner = state.rooms.owner(id).await.ok().flatten().map(|(oid, name, photo_path)| {
+        json!({
+            "id": oid,
+            "name": name,
+            "photo": photo_path.as_deref().map(|p| state.storage.url(p)),
+        })
+    });
+    let category = match row.category_id {
+        Some(cid) => state
+            .rooms
+            .category_name_slug(cid)
+            .await
+            .ok()
+            .flatten()
+            .map(|(name, cslug)| json!({ "id": cid, "name": name, "slug": cslug })),
+        None => None,
+    };
+    let public_rooms: Vec<Value> = state
+        .rooms
+        .public_room_cards()
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(slug, name, photo_path)| {
+            json!({
+                "slug": slug,
+                "name": name,
+                "photo": photo_path.as_deref().map(|p| state.storage.url(p)),
+            })
+        })
+        .collect();
+
+    // `RoomController::show` SEO payload — `isOfficialSeoRoom` (public, no
+    // password, slug whitelisted in `official_room_seo`) gates the whole
+    // `RoomSeoPanel`: breadcrumbs / intro copy / stats / similar official
+    // rooms. Content strings are the configured FR texts (PHP `intros` only
+    // ships `fr`); the SPA falls back to the translated `Room page *` keys
+    // for other locales exactly like `RoomContentService::configuredText`.
+    let seo = if row.is_public && room_password.is_none() && crate::official_seo::is_official_slug(&slug)
+    {
+        let mut breadcrumbs = vec![json!({"label": "Home", "href": "/"})];
+        if let Some(cat) = &category {
+            if let (Some(cname), Some(cslug)) =
+                (cat["name"].as_str(), cat["slug"].as_str())
+            {
+                breadcrumbs.push(json!({
+                    "label": cname,
+                    "href": format!("/blind-test-{cslug}"),
+                }));
+            }
+        }
+        breadcrumbs.push(json!({"label": row.name, "href": null}));
+
+        let similar_rooms: Vec<Value> = match row.category_id {
+            Some(cid) => state
+                .rooms
+                .official_similar_rooms(cid, id, crate::official_seo::slugs(), 4)
+                .await
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(rslug, name, photo_path)| {
+                    json!({
+                        "slug": rslug,
+                        "name": name,
+                        "photo": photo_path.as_deref().map(|p| state.storage.url(p)),
+                    })
+                })
+                .collect(),
+            None => Vec::new(),
+        };
+
+        let intro = crate::official_seo::configured_intro(&slug, "fr");
+        json!({
+            "breadcrumbs": breadcrumbs,
+            "stats": {
+                "rounds": rounds_count,
+                "tracks": tracks_count,
+                "players_online": member_count,
+            },
+            "similar_rooms": similar_rooms,
+            "content": {
+                "intro": intro.as_ref().and_then(|i| i.intro.clone()),
+                "intro_secondary": intro.as_ref().and_then(|i| i.intro_secondary.clone()),
+            },
+        })
+    } else {
+        Value::Null
+    };
+
+    Ok(Json(json!({
+        "seo": seo,
+        "room": {
+            "id": cfg.id,
+            "name": cfg.name,
+            "description": row.description,
+            "photo": photo,
+            "slug": slug,
+            "url": url,
+            "can_edit": can_edit,
+            "is_bookmarked": is_bookmarked,
+            "is_playing": is_playing,
+            "is_chat_active": row.is_chat_active,
+            "is_random": row.is_random,
+            "track_duration": cfg.track_duration,
+            "pause_between_tracks": cfg.pause_between_tracks,
+            "pause_between_rounds": cfg.pause_between_rounds,
+            "tracks_by_round": cfg.tracks_by_round,
+            "is_public": cfg.is_public,
+            "is_autostart": cfg.is_autostart,
+            "member_count": member_count,
+            "tracks_count": tracks_count,
+            "rounds_count": rounds_count,
+            "moderators": moderators,
+            "owner": owner,
+            "category": category,
+        },
+        "public_rooms": public_rooms,
+        "game": snapshot.map(|s| json!({
+            "is_playing": s.is_playing,
+            "round": s.round.map(|r| blindall_game::events::round_payload(&r)),
+            "track": s.current_track.map(|t| json!({
+                "id": t.id,
+                "provider": t.provider,
+                "preview_url": t.preview_url,
+                "audio": t.audio,
+                "hint": t.hint,
+                "answers": t.answers.iter().map(|a| json!({
+                    "id": a.id, "name": a.type_name,
+                })).collect::<Vec<_>>(),
+            })),
+            "played_track_ids": s.played_track_ids,
+        })),
+    })))
+}
+
+// ---- presence + hydration ---------------------------------------------------
+
+/// `formatUserForRoom` / `Broadcast::channel('rooms.{id}')` — the full
+/// member shape: team object, level + XP, public-round count for the ELO
+/// "N/A" state, level metrics, per-round score total and donor perks.
+pub(crate) fn player_info_json(
+    state: &AppState,
+    p: &PlayerInfo,
+    score_total: f64,
+    perks: &[String],
+) -> Value {
+    json!({
+        "id": p.id,
+        "name": p.name,
+        "is_guest": p.is_guest,
+        "team": p.team_id.map(|id| json!({
+            "id": id,
+            "name": p.team_name.clone().unwrap_or_default(),
+        })),
+        "photo": crate::profiles::photo_url(state, p.photo.as_deref().unwrap_or(""), &p.name),
+        "elo": p.elo,
+        "level": p.level,
+        "current_xp": p.current_xp,
+        "xp_for_next_level": p.xp_for_next_level,
+        "total_xp": p.total_xp,
+        "userLevel": {
+            "level": p.level,
+            "rounds_played_count": p.rounds_played_count,
+        },
+        "public_rounds_played_count": p.public_rounds_played_count,
+        "level_metrics": {
+            "score_public_rooms": p.score_public_rooms,
+            "seniority_months": p.months_seniority,
+            "consecutive_days_streak": p.consecutive_days_streak,
+            "rooms_created_count": p.rooms_created_count,
+            "playlists_created_count": p.playlists_created_count,
+            "tracks_liked_count": p.tracks_liked_count,
+            "has_team": p.team_id.is_some(),
+        },
+        "score": {
+            "answers": [],
+            "points": 0,
+            "total": score_total,
+        },
+        "donor_perks": perks,
+        "is_supporter": !perks.is_empty(),
+    })
+}
+
+async fn room_state(state: &AppState, room_id: i64) -> Value {
+    let now = chrono::Utc::now().timestamp();
+    let member_ids = state
+        .presence
+        .member_ids(room_id, now)
+        .await
+        .unwrap_or_default();
+    let info = state
+        .store
+        .players_info(&member_ids)
+        .await
+        .unwrap_or_default();
+
+    let snapshot = state.manager.snapshot(room_id).await.ok().flatten();
+    let (round_id, raw_scores) = match snapshot.as_ref().and_then(|s| s.round.as_ref()) {
+        Some(r) if r.finished_at.is_none() => {
+            let sc = state.scores.all_scores(r.id).await.unwrap_or_default();
+            (Some(r.id), sc)
+        }
+        _ => (None, Default::default()),
+    };
+    let mut scores = Map::new();
+    let raw_map: std::collections::HashMap<i64, f64> = raw_scores.into_iter().collect();
+    for (uid, s) in &raw_map {
+        scores.insert(uid.to_string(), json!(s));
+    }
+
+    // Donor perks for this month's supporters (`enrichUserPayloadWithMap`
+    // — all-or-nothing perk list per configured month key).
+    let supporter_ids: std::collections::HashSet<i64> = state
+        .donations_repo
+        .supporter_ids(&member_ids, &blindall_db::donations::current_month_key())
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .collect();
+    let configured: Vec<String> = state.donations.supporter_perks.clone();
+
+    let users: Vec<Value> = member_ids
+        .iter()
+        .filter_map(|uid| info.get(uid))
+        .map(|p| {
+            let perks: &[String] = if supporter_ids.contains(&p.id) {
+                &configured
+            } else {
+                &[]
+            };
+            player_info_json(state, p, raw_map.get(&p.id).copied().unwrap_or(0.0), perks)
+        })
+        .collect();
+
+    json!({
+        "users": users,
+        "scores": scores,
+        "roundId": round_id,
+    })
+}
+
+async fn broadcast_room_state(state: &AppState, room_id: i64) {
+    let channel = blindall_game::events::room_channel(room_id);
+    let st = room_state(state, room_id).await;
+    state.hub.broadcast(&channel, "RoomState", st, None).await;
+}
+
+async fn broadcast_public_state(state: &AppState, cfg: &blindall_game::store::RoomConfig) {
+    let now = chrono::Utc::now().timestamp();
+    let count = state
+        .presence
+        .member_count(cfg.id, now)
+        .await
+        .unwrap_or(0);
+    let snapshot = state.manager.snapshot(cfg.id).await.ok().flatten();
+    let (idx, playing) = snapshot
+        .as_ref()
+        .and_then(|s| s.round.as_ref())
+        .map(|r| (r.current, r.is_playing))
+        .unwrap_or((0, false));
+    let payload = blindall_game::events::room_public_state(cfg, count, idx, playing);
+    state
+        .hub
+        .broadcast(
+            &blindall_game::events::public_channel(cfg.id),
+            "RoomPublicState",
+            payload,
+            None,
+        )
+        .await;
+}
+
+/// `GET /api/v1/rooms/{id}/joined` — `RoomController::joined`.
+/// Hydrates the room page: autostart dispatch, round/track snapshot,
+/// presence-scored state, played track cards.
+pub async fn joined(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    user: CurrentUser,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let row = load_room(&state, id)
+        .await
+        .map_err(|_| (StatusCode::NOT_FOUND, Json(json!({"error": "room_not_found"}))))?;
+    let cfg = state
+        .store
+        .room_config(id)
+        .await
+        .map_err(|_| (StatusCode::NOT_FOUND, Json(json!({"error": "room_not_found"}))))?;
+
+    // PHP `RoomController::joined` → `ensureCanParticipate` — 403 until the
+    // user went through `show` (which grants participation + checks the
+    // room password).
+    if !state
+        .presence
+        .has_participation(id, user.id())
+        .await
+        .unwrap_or(false)
+    {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "room_access_required"})),
+        ));
+    }
+
+    // PHP: !is_playing && is_autostart → StartRound::dispatch (actor no-ops
+    // if a round is already running).
+    if !row.is_playing && cfg.is_autostart {
+        let _ = state
+            .manager
+            .send(id, RoomCommand::Start {
+                user_id: Some(user.id()),
+            })
+            .await;
+    }
+
+    let st = room_state(&state, id).await;
+    let snapshot = state.manager.snapshot(id).await.ok().flatten();
+
+    let played: Vec<Value> = match &snapshot {
+        Some(s) => {
+            let mut v = Vec::new();
+            for tid in &s.played_track_ids {
+                if let Ok(Some(t)) = state.store.load_track(*tid).await {
+                    let mut p = blindall_game::events::track_playlist_payload(&t);
+                    // Broadcast payloads carry `user_voted_*: false`; hydrate
+                    // the requester's real vote state (PHP passes $user to
+                    // playlistPayloadForRoom in the same spot).
+                    if let Ok(vp) = state.votes.payload(*tid, user.id()).await {
+                        p["user_voted_up"] = vp["user_voted_up"].clone();
+                        p["user_voted_down"] = vp["user_voted_down"].clone();
+                    }
+                    v.push(p);
+                }
+            }
+            v
+        }
+        None => vec![],
+    };
+
+    let mut track = Value::Null;
+    let mut round = Value::Null;
+    let mut start_time = 0.0_f64;
+    if let Some(s) = &snapshot {
+        if let Some(r) = &s.round {
+            if r.finished_at.is_none() {
+                round = blindall_game::events::round_payload(r);
+                if let Some(t) = &s.current_track {
+                    track = json!({
+                        "id": t.id,
+                        "provider": t.provider,
+                        "preview_url": t.preview_url,
+                        "audio": t.audio,
+                        "hint": t.hint,
+                        "answers": t.answers.iter().map(|a| json!({
+                            "id": a.id, "name": a.type_name,
+                        })).collect::<Vec<_>>(),
+                    });
+                    if let Some(started) = r.current_track_started_at {
+                        let elapsed = (chrono::Utc::now() - started).num_milliseconds() as f64 / 1000.0;
+                        start_time = elapsed.max(0.0).min(cfg.track_duration as f64);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(Json(json!({
+        "round": round,
+        "track": track,
+        "room": {"id": cfg.id, "is_playing": row.is_playing},
+        "startTime": start_time,
+        "scores": st["scores"],
+        "users": st["users"],
+        "roundId": st["roundId"],
+        "playedTracks": played,
+    })))
+}
+
+/// `POST /api/v1/rooms/{id}/presence-joined` — heartbeat add + broadcasts.
+pub async fn presence_joined(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    user: CurrentUser,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let cfg = state
+        .store
+        .room_config(id)
+        .await
+        .map_err(|_| (StatusCode::NOT_FOUND, Json(json!({"error": "room_not_found"}))))?;
+    let now = chrono::Utc::now().timestamp();
+    let _ = state.presence.add_member(id, user.id(), now).await;
+    let st = room_state(&state, id).await;
+    state
+        .hub
+        .broadcast(
+            &blindall_game::events::room_channel(id),
+            "RoomState",
+            st.clone(),
+            None,
+        )
+        .await;
+    broadcast_public_state(&state, &cfg).await;
+    Ok(Json(json!({
+        "ok": true,
+        "users": st["users"],
+        "scores": st["scores"],
+        "roundId": st["roundId"],
+    })))
+}
+
+/// `POST /api/v1/rooms/{id}/presence-left` — heartbeat remove + broadcasts.
+pub async fn presence_left(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    user: CurrentUser,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let cfg = state
+        .store
+        .room_config(id)
+        .await
+        .map_err(|_| (StatusCode::NOT_FOUND, Json(json!({"error": "room_not_found"}))))?;
+    let _ = state.presence.remove_member(id, user.id()).await;
+    broadcast_room_state(&state, id).await;
+    broadcast_public_state(&state, &cfg).await;
+    Ok(Json(json!({"ok": true})))
+}
+
+/// `GET /api/v1/rooms/{id}/public-state` — `RoomController::publicState`.
+pub async fn public_state(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: axum::http::HeaderMap,
+    axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<std::net::SocketAddr>,
+    user: OptionalUser,
+) -> Result<Json<Value>, StatusCode> {
+    // banhammer `ip.banned` + `auth.banned` — `rooms.{room}/public-state`.
+    let ip = crate::auth_session::client_ip(&headers, &addr.ip().to_string());
+    if state.auth.is_ip_banned(&ip).await {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if let Some(u) = &user.0 {
+        if state.moderation.is_banned(u.id).await.unwrap_or(false) {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+    let cfg = state
+        .store
+        .room_config(id)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    let now = chrono::Utc::now().timestamp();
+    let count = state.presence.member_count(id, now).await.unwrap_or(0);
+    let snapshot = state.manager.snapshot(id).await.ok().flatten();
+    let (idx, playing) = snapshot
+        .as_ref()
+        .and_then(|s| s.round.as_ref())
+        .map(|r| (r.current, r.is_playing))
+        .unwrap_or((0, false));
+    Ok(Json(blindall_game::events::room_public_state(
+        &cfg, count, idx, playing,
+    )))
+}
+
+// ---- management ------------------------------------------------------------
+
+fn room_json(r: &blindall_db::RoomRow) -> Value {
+    json!({
+        "id": r.id,
+        "user_id": r.user_id,
+        "name": r.name,
+        "slug": r.slug,
+        "description": r.description,
+        "category_id": r.category_id,
+        "photo_path": r.photo_path,
+        "tracks_by_round": r.tracks_by_round,
+        "track_duration": r.track_duration,
+        "pause_between_tracks": r.pause_between_tracks,
+        "pause_between_rounds": r.pause_between_rounds,
+        "is_public": r.is_public,
+        "is_random": r.is_random,
+        "is_chat_active": r.is_chat_active,
+        "is_playing": r.is_playing,
+        "is_autostart": r.is_autostart,
+        "is_featured": r.is_featured,
+        "color": r.color,
+        "has_password": r.has_password,
+        "user_count": r.user_count,
+        "deleted_at": r.deleted_at,
+    })
+}
+
+async fn load_room(state: &AppState, id: i64) -> Result<blindall_db::RoomRow, Response> {
+    state
+        .rooms
+        .find(id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())?
+        .ok_or_else(|| StatusCode::NOT_FOUND.into_response())
+}
+
+/// Laravel binds `{room}` by slug; numeric ids still work (edit links and
+/// old bookmarks use both).
+async fn load_room_by_key(state: &AppState, key: &str) -> Result<blindall_db::RoomRow, Response> {
+    let row = match key.parse::<i64>() {
+        Ok(id) => state.rooms.find(id).await,
+        Err(_) => state.rooms.find_by_slug(key).await,
+    };
+    row.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())?
+        .ok_or_else(|| StatusCode::NOT_FOUND.into_response())
+}
+
+/// `GET /api/v1/rooms/{id-or-slug}/edit` — `RoomController::edit` payload:
+/// full room + moderators + attached playlists + `owned` flag
+/// (playlist attach/detach is owner/admin only in PHP).
+pub async fn edit(
+    State(state): State<AppState>,
+    Path(key): Path<String>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
+    let room = match load_room_by_key(&state, &key).await {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    let id = room.id;
+    if !state.rooms.has_control(&room, user.id, user.is_administrator).await {
+        return forbidden();
+    }
+    let mods = state.rooms.moderators(id).await.unwrap_or_default();
+    let pls = state.rooms.room_playlists(id).await.unwrap_or_default();
+    let mut v = room_json(&room);
+    v["moderators"] =
+        json!(mods.iter().map(|(id, n)| json!({"id": id, "name": n})).collect::<Vec<_>>());
+    v["playlists"] =
+        json!(pls.iter().map(|(id, n)| json!({"id": id, "name": n})).collect::<Vec<_>>());
+    Json(json!({
+        "room": v,
+        "owned": user.is_administrator || room.user_id == user.id,
+    }))
+    .into_response()
+}
+
+#[derive(Deserialize)]
+pub struct CreateRoom {
+    name: String,
+    category_id: i64,
+}
+
+/// `POST /api/v1/rooms` — `RoomController::store`.
+pub async fn store(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Json(body): Json<CreateRoom>,
+) -> Response {
+    if let Some(r) = require_not_guest(&user) {
+        return r;
+    }
+    let name = body.name.trim();
+    if name.is_empty() || name.chars().count() > 25 {
+        return validation("name", "The name field is required and must not exceed 25 characters.");
+    }
+    let mods = state.auth.reserved_moderator_names().await.unwrap_or_default();
+    if crate::auth_session::validate_name(name, &mods).is_err() {
+        return validation("name", "validation.reserved");
+    }
+    if state.rooms.name_taken(name, None).await.unwrap_or(false) {
+        return validation("name", "The name has already been taken.");
+    }
+    if !state.rooms.category_exists(body.category_id).await.unwrap_or(false) {
+        return validation("category_id", "The selected category id is invalid.");
+    }
+    match state.rooms.create(user.id, name, body.category_id).await {
+        Ok(id) => {
+            // PHP `UpdateUserLevel::dispatch($user, 'rooms_count')`.
+            state
+                .levels
+                .dispatch(user.id, blindall_db::LevelTrigger::RoomsCount);
+            match state.rooms.find(id).await {
+                Ok(Some(room)) => {
+                    (StatusCode::CREATED, Json(json!({"room": room_json(&room)}))).into_response()
+                }
+                _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+            }
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "room create failed");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct UpdateRoom {
+    name: String,
+    description: Option<String>,
+    category_id: i64,
+}
+
+/// `PUT /api/v1/rooms/{id}` — `RoomController::update` (moderator only).
+pub async fn update(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+    Json(body): Json<UpdateRoom>,
+) -> Response {
+    if let Some(r) = require_not_guest(&user) {
+        return r;
+    }
+    let room = match load_room(&state, id).await {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    if !state.rooms.has_control(&room, user.id, user.is_administrator).await {
+        return forbidden();
+    }
+    let name = body.name.trim();
+    if name.is_empty() || name.chars().count() > 25 {
+        return validation("name", "The name field is required and must not exceed 25 characters.");
+    }
+    let mods = state.auth.reserved_moderator_names().await.unwrap_or_default();
+    // `new Reserved` allows keeping the current name.
+    if !name.eq_ignore_ascii_case(&room.name)
+        && crate::auth_session::validate_name(name, &mods).is_err()
+    {
+        return validation("name", "validation.reserved");
+    }
+    if state.rooms.name_taken(name, Some(id)).await.unwrap_or(false) {
+        return validation("name", "The name has already been taken.");
+    }
+    if !state.rooms.category_exists(body.category_id).await.unwrap_or(false) {
+        return validation("category_id", "The selected category id is invalid.");
+    }
+    match state
+        .rooms
+        .update_fields(id, name, body.description.as_deref(), body.category_id)
+        .await
+    {
+        Ok(()) => Json(json!({"ok": true})).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct UpdateOptions {
+    password: Option<String>,
+    has_password: Option<bool>,
+    tracks_by_round: i64,
+    track_duration: i64,
+    pause_between_tracks: i64,
+    pause_between_rounds: i64,
+    is_chat_active: bool,
+    is_autostart: bool,
+    is_random: bool,
+    color: Option<String>,
+    is_featured: Option<bool>,
+}
+
+/// `PUT /api/v1/rooms/{id}/options` — `RoomController::updateOptions`.
+/// PHP lacks an authz check here (any authed user could change options);
+/// we require room control — deliberate fix of an upstream hole.
+pub async fn update_options(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+    Json(body): Json<UpdateOptions>,
+) -> Response {
+    if let Some(r) = require_not_guest(&user) {
+        return r;
+    }
+    let room = match load_room(&state, id).await {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    if !state.rooms.has_control(&room, user.id, user.is_administrator).await {
+        return forbidden();
+    }
+    if !(1..=50).contains(&body.tracks_by_round) {
+        return validation("tracks_by_round", "The tracks by round field must be between 1 and 50.");
+    }
+    if !(5..=30).contains(&body.track_duration) {
+        return validation("track_duration", "The track duration field must be between 5 and 30.");
+    }
+    if !(0..=60).contains(&body.pause_between_tracks) {
+        return validation("pause_between_tracks", "The pause between tracks field must be between 0 and 60.");
+    }
+    if !(0..=60).contains(&body.pause_between_rounds) {
+        return validation("pause_between_rounds", "The pause between rounds field must be between 0 and 60.");
+    }
+    let options = RoomOptions {
+        password: body.password,
+        has_password: body.has_password.unwrap_or(false),
+        tracks_by_round: body.tracks_by_round,
+        track_duration: body.track_duration,
+        pause_between_tracks: body.pause_between_tracks,
+        pause_between_rounds: body.pause_between_rounds,
+        is_chat_active: body.is_chat_active,
+        is_autostart: body.is_autostart,
+        is_random: body.is_random,
+        color: body.color,
+        is_featured: user.is_administrator.then_some(body.is_featured).flatten(),
+    };
+    match state.rooms.update_options(id, &options).await {
+        Ok(()) => {
+            // Hot-reload game config for live actors.
+            if let Ok(cfg) = state.store.room_config(id).await {
+                let _ = state
+                    .manager
+                    .send(id, blindall_game::RoomCommand::UpdateConfig { cfg })
+                    .await;
+            }
+            Json(json!({"ok": true})).into_response()
+        }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `DELETE /api/v1/rooms/{id}` — `RoomController::destroy`
+/// (PHP also lacks the check; we require control).
+pub async fn destroy(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
+    if let Some(r) = require_not_guest(&user) {
+        return r;
+    }
+    let room = match load_room(&state, id).await {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    if !state.rooms.has_control(&room, user.id, user.is_administrator).await {
+        return forbidden();
+    }
+    // PHP `destroy` runs `deletePhoto()` first — remove the stored file
+    // before `soft_delete` nulls the path.
+    if let Some(p) = room.photo_path.as_deref() {
+        if !p.is_empty() {
+            state.storage.delete(p).await;
+        }
+    }
+    match state.rooms.soft_delete(id).await {
+        Ok(()) => Json(json!({"ok": true})).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `PUT /api/v1/rooms/{id}/restore`.
+pub async fn restore(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
+    if let Some(r) = require_not_guest(&user) {
+        return r;
+    }
+    let room = match load_room(&state, id).await {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    if !state.rooms.has_control(&room, user.id, user.is_administrator).await {
+        return forbidden();
+    }
+    match state.rooms.restore(id).await {
+        Ok(()) => Json(json!({"ok": true})).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `GET /api/v1/rooms/mine` — `RoomController::index` (moderated rooms).
+pub async fn mine(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Query(q): Query<MineParams>,
+) -> Response {
+    match state
+        .rooms
+        .moderated_rooms(user.id, q.search.as_deref(), q.trashed.as_deref())
+        .await
+    {
+        Ok(rooms) => {
+            let mut out = Vec::with_capacity(rooms.len());
+            for (r, category_name, rounds_count) in &rooms {
+                let mut v = room_json(r);
+                let mods = state.rooms.moderators(r.id).await.unwrap_or_default();
+                let pls = state.rooms.room_playlists(r.id).await.unwrap_or_default();
+                v["moderators"] = json!(mods.iter().map(|(id, n)| json!({"id": id, "name": n})).collect::<Vec<_>>());
+                v["playlists"] = json!(pls.iter().map(|(id, n)| json!({"id": id, "name": n})).collect::<Vec<_>>());
+                v["rounds_count"] = json!(rounds_count);
+                v["category"] = match (r.category_id, category_name) {
+                    (Some(id), Some(name)) => json!({"id": id, "name": name}),
+                    _ => Value::Null,
+                };
+                out.push(v);
+            }
+            Json(json!({"rooms": out})).into_response()
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "rooms/mine failed");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct MineParams {
+    search: Option<String>,
+    trashed: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct PlaylistIdBody {
+    playlist_id: i64,
+}
+
+/// `POST /api/v1/rooms/{id}/playlists/attach` — owner or admin only.
+pub async fn attach_playlist(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+    Json(body): Json<PlaylistIdBody>,
+) -> Response {
+    let room = match load_room(&state, id).await {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    if !(user.is_administrator || room.user_id == user.id) {
+        return forbidden();
+    }
+    if !state.rooms.playlist_exists(body.playlist_id).await.unwrap_or(false) {
+        return validation("playlist_id", "The selected playlist id is invalid.");
+    }
+    match state.rooms.attach_playlist(id, body.playlist_id).await {
+        Ok(()) => Json(json!({"ok": true})).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `DELETE /api/v1/rooms/{id}/playlists/detach` — owner or admin only.
+pub async fn detach_playlist(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+    Json(body): Json<PlaylistIdBody>,
+) -> Response {
+    let room = match load_room(&state, id).await {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    if !(user.is_administrator || room.user_id == user.id) {
+        return forbidden();
+    }
+    match state.rooms.detach_playlist(id, body.playlist_id).await {
+        Ok(()) => Json(json!({"ok": true})).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct UserIdBody {
+    user_id: i64,
+}
+
+/// `POST /api/v1/rooms/{id}/moderators/attach` — owner or admin.
+pub async fn attach_moderator(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+    Json(body): Json<UserIdBody>,
+) -> Response {
+    let room = match load_room(&state, id).await {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    if !(user.is_administrator || room.user_id == user.id) {
+        return forbidden();
+    }
+    if !state.rooms.user_exists(body.user_id).await.unwrap_or(false) {
+        return validation("user_id", "The selected user id is invalid.");
+    }
+    match state.rooms.attach_moderator(id, body.user_id).await {
+        Ok(()) => Json(json!({"ok": true})).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `DELETE /api/v1/rooms/{id}/moderators/detach` — moderator or admin.
+pub async fn detach_moderator(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+    Json(body): Json<UserIdBody>,
+) -> Response {
+    if let Err(e) = load_room(&state, id).await {
+        return e;
+    }
+    let allowed = user.is_administrator
+        || state.rooms.is_moderator(id, user.id).await;
+    if !allowed {
+        return forbidden();
+    }
+    match state.rooms.detach_moderator(id, body.user_id).await {
+        Ok(()) => Json(json!({"ok": true})).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `POST /api/v1/rooms/{id}/bookmark` — `RoomBookmarkController::store`.
+pub async fn bookmark(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
+    if let Err(e) = load_room(&state, id).await {
+        return e;
+    }
+    match state.rooms.bookmark(user.id, id).await {
+        Ok(()) => Json(json!({"is_bookmarked": true})).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `DELETE /api/v1/rooms/{id}/bookmark`.
+pub async fn unbookmark(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
+    match state.rooms.unbookmark(user.id, id).await {
+        Ok(()) => Json(json!({"is_bookmarked": false})).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `GET /api/v1/rooms/{id}/scores` — `RankingController::roomScores`.
+pub async fn scores(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    OptionalUser(user): OptionalUser,
+) -> Response {
+    match state.rooms.leaderboards(id).await {
+        Ok(boards) => {
+            let user_snap = match user {
+                Some(u) => state
+                    .rooms
+                    .user_snapshot(id, u.id, &boards)
+                    .await
+                    .unwrap_or(serde_json::Value::Null),
+                None => serde_json::Value::Null,
+            };
+            let mut v = boards;
+            v["user"] = user_snap;
+            Json(v).into_response()
+        }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct UserCountBody {
+    count: i64,
+}
+
+/// `POST /api/v1/rooms/{id}/user-count` — `updateUserCount`.
+pub async fn update_user_count(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    Json(body): Json<UserCountBody>,
+) -> Response {
+    match state.rooms.update_user_count(id, body.count).await {
+        Ok(()) => Json(json!({"ok": true})).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `GET /api/v1/categories` — for the room create/edit forms.
+pub async fn categories(State(state): State<AppState>) -> Response {
+    match state.rooms.categories().await {
+        Ok(rows) => Json(json!({
+            "categories": rows.iter().map(|(id, n)| json!({"id": id, "name": n})).collect::<Vec<_>>()
+        }))
+        .into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `GET /api/v1/categories/{slug}/landing` — `CategoryController::show`:
+/// SEO landing = category + official public rooms + `CategoryContentService`
+/// copy. 404 when the category has no official public rooms (PHP parity).
+pub async fn category_landing(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+) -> Response {
+    let Some((cat_id, cat_name, cat_slug)) =
+        state.rooms.category_by_slug(&slug).await.ok().flatten()
+    else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let rooms = state
+        .rooms
+        .public_for_category(cat_id)
+        .await
+        .unwrap_or_default();
+    if rooms.is_empty() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let now = chrono::Utc::now().timestamp();
+    let mut room_json = Vec::with_capacity(rooms.len());
+    let mut names = Vec::with_capacity(rooms.len());
+    for r in &rooms {
+        names.push(r.name.clone());
+        let members = state.presence.member_count(r.id, now).await.unwrap_or(0);
+        room_json.push(json!({
+            "id": r.id,
+            "name": r.name,
+            "slug": r.slug,
+            "photo_path": r.photo_path,
+            "is_playing": r.is_playing,
+            "member_count": members,
+            "tracks_by_round": r.tracks_by_round,
+        }));
+    }
+    let count = rooms.len() as i64;
+    let rooms_joined = names.join(", ");
+    let c = crate::category_content::content(&cat_slug, &cat_name, count, &rooms_joined);
+    Json(json!({
+        "category": {"id": cat_id, "name": cat_name, "slug": cat_slug},
+        "content": {
+            "title": c.title,
+            "meta_title": c.meta_title,
+            "meta_description": c.meta_description,
+            "heading": c.heading,
+            "intro": c.intro,
+            "intro_secondary": c.intro_secondary,
+            "rooms_heading": c.rooms_heading,
+            "faq_title": c.faq_title,
+            "faq": c.faq.iter().map(|(q, a)| json!({"question": q, "answer": a})).collect::<Vec<_>>(),
+        },
+        "rooms": room_json,
+        "rooms_count": count,
+    }))
+    .into_response()
+}
+
+// ---- track votes --------------------------------------------------------------
+
+/// `TrackVoted` broadcast on `rooms.{id}` — our channel `room:{id}`.
+/// PHP serializes the whole track; the client only reads
+/// `e.track.{id,upvotes,downvotes}` (Answers.vue listener).
+async fn broadcast_track_voted(state: &AppState, room_id: i64, track_id: i64) {
+    let track = state
+        .votes
+        .payload(track_id, 0)
+        .await
+        .map(|v| {
+            json!({
+                "id": track_id,
+                "upvotes": v["upvotes"],
+                "downvotes": v["downvotes"],
+            })
+        })
+        .unwrap_or_else(|_| json!({"id": track_id}));
+    state
+        .hub
+        .broadcast(
+            &format!("room:{room_id}"),
+            "TrackVoted",
+            json!({"track": track}),
+            None,
+        )
+        .await;
+}
+
+/// `POST /api/v1/rooms/{room}/tracks/{track}/upvote` — `TrackController::upvote`.
+pub async fn upvote_track(
+    State(state): State<AppState>,
+    Path((room_id, track_id)): Path<(i64, i64)>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
+    if let Err(e) = load_room(&state, room_id).await {
+        return e;
+    }
+    if let Err(_) = state.votes.apply_upvote(user.id, track_id).await {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    // PHP `UpdateUserLevel::dispatch($user, 'likes_count')`.
+    state
+        .levels
+        .dispatch(user.id, blindall_db::LevelTrigger::LikesCount);
+    broadcast_track_voted(&state, room_id, track_id).await;
+    match state.votes.payload(track_id, user.id).await {
+        Ok(v) => Json(v).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct DownvoteBody {
+    reason: Option<String>,
+}
+
+const DOWNVOTE_REASONS: &[&str] = &[
+    "sound_quality",
+    "difficulty",
+    "passage_choice",
+    "personal_taste",
+    "controversial_artist",
+    "other",
+];
+
+/// `POST /api/v1/rooms/{room}/tracks/{track}/downvote` —
+/// `DownvoteTrackRequest` + `TrackDownvoteService` semantics.
+pub async fn downvote_track(
+    State(state): State<AppState>,
+    Path((room_id, track_id)): Path<(i64, i64)>,
+    CurrentUser(user): CurrentUser,
+    Json(body): Json<DownvoteBody>,
+) -> Response {
+    if let Err(e) = load_room(&state, room_id).await {
+        return e;
+    }
+    let reason = body.reason.as_deref();
+    if let Some(r) = reason {
+        if !DOWNVOTE_REASONS.contains(&r) {
+            return validation("reason", "The selected reason is invalid.");
+        }
+    }
+    match state.votes.apply_downvote(user.id, track_id, reason).await {
+        Ok(Ok(())) => {}
+        // No prior downvote + no reason → PHP's 422.
+        Ok(Err(())) => return validation("reason", "A downvote reason is required."),
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+    // PHP `UpdateUserLevel::dispatch($user, 'likes_count')`.
+    state
+        .levels
+        .dispatch(user.id, blindall_db::LevelTrigger::LikesCount);
+    broadcast_track_voted(&state, room_id, track_id).await;
+    match state.votes.payload(track_id, user.id).await {
+        Ok(v) => Json(v).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+// ---- alerts / suggestions -----------------------------------------------------
+
+/// `d/m/Y H:i` — the PHP notification `created_at` format.
+fn notif_timestamp() -> String {
+    chrono::Utc::now().format("%d/%m/%Y %H:%M").to_string()
+}
+
+#[derive(Deserialize)]
+pub struct AlertBody {
+    message: Option<String>,
+}
+
+/// `POST /api/v1/rooms/{id}/alert` — `RoomController::alert`:
+/// notifies every public moderator (`NewRoomAlert`).
+pub async fn alert(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+    Json(body): Json<AlertBody>,
+) -> Response {
+    let room = match load_room(&state, id).await {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    let message = body.message.unwrap_or_default();
+    if message.chars().count() > 255 {
+        return validation("message", "The message must not exceed 255 characters.");
+    }
+    let moderators = state
+        .auth
+        .public_moderator_ids()
+        .await
+        .unwrap_or_default();
+    let text = if message.is_empty() {
+        format!("{} reports a problem on the chat {}", user.name, room.name)
+    } else {
+        format!(
+            "{} reports a problem on the chat {} : {}",
+            user.name, room.name, message
+        )
+    };
+    for mod_id in moderators {
+        let _ = state
+            .notifications
+            .notify(
+                mod_id,
+                "App\\Notifications\\NewRoomAlert",
+                json!({
+                    "room": {"id": room.id, "name": room.name},
+                    "created_at": notif_timestamp(),
+                    "message": text,
+                }),
+            )
+            .await;
+    }
+    Json(json!({"ok": true})).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct SuggestionBody {
+    suggestion: String,
+}
+
+/// `POST /api/v1/rooms/{id}/suggestion` — `RoomController::sendSuggestion`:
+/// `sendSuggestion` gate (admin OR account >2mo AND total score >500),
+/// notifies the room moderators (`NewSuggestion`).
+pub async fn suggestion(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+    Json(body): Json<SuggestionBody>,
+) -> Response {
+    let room = match load_room(&state, id).await {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    if body.suggestion.is_empty() {
+        return validation("suggestion", "The suggestion field is required.");
+    }
+    // Gate::define('sendSuggestion') — admin || (created_at < -2mo && sum(total_scores) > 500).
+    let allowed = user.is_administrator || {
+        match state.auth.created_at_and_total_score(user.id).await {
+            Ok(Some((Some(created), total))) => {
+                created < chrono::Utc::now() - chrono::Duration::days(60) && total > 500.0
+            }
+            _ => false,
+        }
+    };
+    if !allowed {
+        return forbidden();
+    }
+    let playlists: Vec<String> = state
+        .rooms
+        .room_playlists(room.id)
+        .await
+        .unwrap_or_default()
+        .iter()
+        .map(|(_, name)| name.clone())
+        .collect();
+    for (mod_id, _name) in state.rooms.moderators(room.id).await.unwrap_or_default() {
+        let _ = state
+            .notifications
+            .notify(
+                mod_id,
+                "App\\Notifications\\NewSuggestion",
+                json!({
+                    "room": {
+                        "id": room.id,
+                        "name": room.name,
+                        "playlists": playlists.join(","),
+                    },
+                    "user": {"id": user.id, "name": user.name},
+                    "created_at": notif_timestamp(),
+                    "message": body.suggestion,
+                }),
+            )
+            .await;
+    }
+    Json(json!({"ok": true})).into_response()
+}
+
+// ---- room photo (`HasPicture`) + track search ---------------------------------
+
+/// `POST /api/v1/rooms/{id}/photo` — `RoomController::update` photo branch:
+/// `photo` image ≤2048KB → contain 350×350 webp at `rooms/{uniqid}.webp`.
+pub async fn update_photo(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+    mut multipart: axum::extract::Multipart,
+) -> Response {
+    let room = match load_room(&state, id).await {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    if !state.rooms.has_control(&room, user.id, user.is_administrator).await {
+        return forbidden();
+    }
+    let mut bytes = None;
+    while let Ok(Some(field)) = multipart.next_field().await {
+        if field.name() == Some("photo") {
+            match field.bytes().await {
+                Ok(b) if b.len() <= 2048 * 1024 => bytes = Some(b),
+                _ => return validation("photo", "The photo must not exceed 2048 kilobytes."),
+            }
+        }
+    }
+    let Some(bytes) = bytes else {
+        return validation("photo", "The photo field is required.");
+    };
+    let webp = match crate::storage::image_to_webp_contain(&bytes, 350, 350) {
+        Ok(w) => w,
+        Err(()) => return validation("photo", "The photo must be an image."),
+    };
+    let path = format!("rooms/{}.webp", uuid::Uuid::now_v7().simple());
+    if state.storage.put(&path, &webp).await.is_err() {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    match state.rooms.set_photo(id, &path).await {
+        Ok(prev) => {
+            if let Some(p) = prev {
+                state.storage.delete(&p).await;
+            }
+            Json(json!({"ok": true, "photo_path": path})).into_response()
+        }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `DELETE /api/v1/rooms/{id}/picture` — `RoomController::deletePicture`.
+pub async fn delete_picture(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
+    let room = match load_room(&state, id).await {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    if !state.rooms.has_control(&room, user.id, user.is_administrator).await {
+        return forbidden();
+    }
+    match state.rooms.clear_photo(id).await {
+        Ok(prev) => {
+            if let Some(p) = prev {
+                state.storage.delete(&p).await;
+            }
+            Json(json!({"ok": true})).into_response()
+        }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct TrackSearchQuery {
+    search: Option<String>,
+}
+
+/// `GET /api/v1/rooms/{id}/tracks/search?search=` — `RoomController::searchTracks`:
+/// ids (+ answers) of attached-playlist tracks matching the term, limit 10.
+pub async fn search_room_tracks(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    Query(q): Query<TrackSearchQuery>,
+    CurrentUser(_user): CurrentUser,
+) -> Response {
+    if load_room(&state, id).await.is_err() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let term = q.search.unwrap_or_default();
+    let ids = state
+        .rooms
+        .search_track_ids(id, &term)
+        .await
+        .unwrap_or_default();
+    let mut out = Vec::with_capacity(ids.len());
+    for tid in ids {
+        let answers = state.playlists.track_answers(tid).await.unwrap_or_default();
+        out.push(json!({
+            "id": tid,
+            "answers": answers.iter().map(|a| json!({
+                "id": a.id,
+                "answer_type_id": a.answer_type_id,
+                "value": a.value,
+            })).collect::<Vec<_>>(),
+        }));
+    }
+    Json(json!(out)).into_response()
+}

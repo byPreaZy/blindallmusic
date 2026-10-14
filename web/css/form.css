@@ -1,0 +1,38 @@
+@layer components {
+  .form-label {
+    @apply mb-2 block select-none text-sm font-medium text-white;
+  }
+
+  .form-input,
+  .form-textarea,
+  .form-select {
+    @apply relative block w-full appearance-none rounded-lg border border-white/10 bg-surface-raised/70 py-2.5 text-left font-sans leading-normal text-white transition-all duration-200;
+    @apply focus:border-white/25 focus:bg-surface-raised focus:ring-2 focus:ring-white/15;
+
+    &::placeholder {
+      @apply text-white/60 opacity-100;
+    }
+  }
+
+  .form-select {
+    @apply pl-2 pr-6;
+    background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAQCAYAAAAMJL+VAAAABGdBTUEAALGPC/xhBQAAAQtJREFUOBG1lEEOgjAQRalbGj2OG9caOACn4ALGtfEuHACiazceR1PWOH/CNA3aMiTaBDpt/7zPdBKy7M/DCL9pGkvxxVp7KsvyJftL5rZt1865M+Ucq6pyyF3hNcI7Cuu+728QYn/JQA5yKaempxuZmQngOwEaYx55nu+1lQh8GIatMGi+01NwBcEmhxBqK4nAPZJ78K0KKFAJmR3oPp8+Iwgob0Oa6+TLoeCvRx+mTUYf/FVBGTPRwDkfLxnaSrRwcH0FWhNOmrkWYbE2XEicqgSa1J0LQ+aPCuQgZiLnwewbGuz5MGoAhcIkCQcjaTBjMgtXGURMVHC1wcQEy0J+Zlj8bKAnY1/UzDe2dbAVqfXn6wAAAABJRU5ErkJggg==');
+    background-size: 0.7rem;
+    background-repeat: no-repeat;
+    background-position: right 0.7rem center;
+
+    &::-ms-expand {
+      @apply opacity-0;
+    }
+  }
+
+  .form-input.error,
+  .form-textarea.error,
+  .form-select.error {
+    @apply border-brand-primary focus:ring focus:ring-brand-primary/30;
+  }
+
+  .form-error {
+    @apply mt-2 text-sm text-brand-primary-light;
+  }
+}

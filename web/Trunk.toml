@@ -1,0 +1,29 @@
+[build]
+target = "index.html"
+dist = "dist"
+public_url = "/"
+# Rebuild tailwind → public/app.css before packing assets.
+[[hooks]]
+stage = "pre_build"
+command = "node"
+command_arguments = ["scripts/build-css.mjs"]
+
+# Then mirror public/ contents at the dist root (root-level URLs).
+[[hooks]]
+stage = "post_build"
+command = "node"
+command_arguments = ["scripts/copy-public.mjs"]
+
+[serve]
+port = 4200
+open = false
+
+# Dev proxies — `trunk serve` forwards API + WS to the axum server.
+[[proxy]]
+rewrite = "/api/v1/"
+backend = "http://127.0.0.1:8080/api/v1/"
+
+[[proxy]]
+rewrite = "/ws"
+backend = "ws://127.0.0.1:8080/ws"
+ws = true

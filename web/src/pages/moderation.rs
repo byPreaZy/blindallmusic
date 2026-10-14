@@ -1,0 +1,699 @@
+//! Moderation section — `Pages/Moderation/*` port (dashboard, trashed
+//! messages, banned users, users management, moderators, local tracks).
+//! Gated on `is_public_moderator || is_administrator` — enforced API-side too.
+
+use crate::api;
+use crate::auth::use_auth;
+use crate::i18n::t;
+use leptos::prelude::*;
+use leptos_router::components::A;
+use leptos_router::hooks::use_params_map;
+use serde_json::{json, Value};
+
+const SECTIONS: &[(&str, &str)] = &[
+    ("/moderation", "Dashboard"),
+    ("/moderation/users", "Users"),
+    ("/moderation/banned-users", "Banned users"),
+    ("/moderation/trashed-messages", "Trashed messages"),
+    ("/moderation/moderators", "Moderators"),
+    ("/moderation/tracks", "Local tracks"),
+];
+
+#[component]
+pub fn ModShell(active: &'static str, children: ChildrenFn) -> impl IntoView {
+    let auth = use_auth();
+    view! {
+        <div class="mx-auto max-w-6xl px-4 py-8">
+            // `auth.ready` gate — prevents a 403 flash while `/auth/me` loads.
+            <Show when=move || {
+                auth.ready.get()
+                    && auth.user.get()
+                        .map(|u| u.is_administrator || u.is_public_moderator)
+                        .unwrap_or(false)
+            }
+                fallback=move || {
+                    if auth.ready.get() {
+                        view! {
+                            <div class="py-24 text-center">
+                                <h1 class="retro-title retro-title--white mb-4 text-2xl">"403"</h1>
+                                <p class="text-white/60">{t("You do not have access to this page.")}</p>
+                            </div>
+                        }.into_any()
+                    } else {
+                        view! { <div class="py-24 text-center text-white/60">{t("Loading")}"…"</div> }.into_any()
+                    }
+                }>
+                <h1 class="retro-title retro-title--white mb-6 text-3xl">{t("Moderation")}</h1>
+                <nav class="mb-8 flex flex-wrap gap-2">
+                    {SECTIONS.iter().map(|(href, label)| {
+                        let is = *href == active;
+                        view! {
+                            <A href=*href attr:class=move || if is {
+                                "rounded-lg bg-brand-accent px-3 py-1.5 text-sm font-semibold text-black"
+                            } else {
+                                "rounded-lg border border-white/10 px-3 py-1.5 text-sm text-white/70 hover:bg-white/5"
+                            }>{t(*label)}</A>
+                        }
+                    }).collect::<Vec<_>>()}
+                </nav>
+                {children()}
+            </Show>
+        </div>
+    }
+}
+
+fn enc(s: &str) -> String {
+    s.replace('%', "%25").replace('&', "%26").replace('=', "%3D").replace(' ', "%20").replace('#', "%23")
+}
+
+fn pager(page: RwSignal<i64>, last_page: RwSignal<i64>, reload: impl Fn() + Copy + Send + Sync + 'static) -> impl IntoView {
+    view! {
+        <Show when=move || { last_page.get() > 1 }>
+            <div class="mt-4 flex items-center justify-center gap-3">
+                <button type="button" class="rounded border border-white/10 px-3 py-1 text-sm text-white/70 disabled:opacity-40"
+                    disabled=move || { page.get() <= 1 }
+                    on:click=move |_| { page.update(|p| *p -= 1); reload(); }>"←"</button>
+                <span class="text-sm text-white/60">{move || format!("{} / {}", page.get(), last_page.get())}</span>
+                <button type="button" class="rounded border border-white/10 px-3 py-1 text-sm text-white/70 disabled:opacity-40"
+                    disabled=move || { page.get() >= last_page.get() }
+                    on:click=move |_| { page.update(|p| *p += 1); reload(); }>"→"</button>
+            </div>
+        </Show>
+    }
+}
+
+fn search_bar(search: RwSignal<String>, reload: impl Fn() + Copy + Send + Sync + 'static) -> impl IntoView {
+    view! {
+        <form class="mb-4 flex gap-2" on:submit=move |ev| { ev.prevent_default(); reload(); }>
+            <input type="text" placeholder=t("Search")
+                class="rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-sm text-white outline-none"
+                prop:value=search on:input=move |ev| search.set(event_target_value(&ev))/>
+            <button type="submit" class="btn-primary !px-4 !py-2 text-sm">{t("Filter")}</button>
+        </form>
+    }
+}
+
+#[component]
+fn ErrLine(error: RwSignal<Option<String>>) -> impl IntoView {
+    view! {
+        {move || error.get().map(|e| view! {
+            <div class="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">{e}</div>
+        })}
+    }
+}
+
+fn fmt_date(v: &Value) -> String {
+    v.as_str().map(|s| s.chars().take(10).collect()).unwrap_or_else(|| "—".to_string())
+}
+
+// ---- dashboard ---------------------------------------------------------------
+
+#[component]
+pub fn ModDashboard() -> impl IntoView {
+    let data = RwSignal::new(Value::Null);
+    leptos::task::spawn_local(async move {
+        if let Ok(v) = api::get::<Value>("/api/v1/moderation").await {
+            data.set(v);
+        }
+    });
+    view! {
+        <ModShell active="/moderation">
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {move || {
+                    let d = data.get();
+                    [
+                        ("Users", "total_users"), ("Rooms", "total_rooms"),
+                        ("Public rooms", "public_rooms"), ("Private rooms", "private_rooms"),
+                        ("Playlists", "total_playlists"), ("Public playlists", "public_playlists"),
+                        ("Private playlists", "private_playlists"),
+                        ("Messages today", "todays_messages"), ("Banned users", "banned_users"),
+                    ].into_iter().map(|(label, key)| {
+                        let val = d[key].as_i64().unwrap_or(0);
+                        view! {
+                            <div class="card p-5">
+                                <div class="text-sm text-white/50">{t(label)}</div>
+                                <div class="retro-title retro-title--white mt-1 text-2xl">{val}</div>
+                            </div>
+                        }
+                    }).collect::<Vec<_>>()
+                }}
+            </div>
+        </ModShell>
+    }
+}
+
+// ---- trashed messages ----------------------------------------------------------
+
+#[component]
+pub fn ModTrashedMessages() -> impl IntoView {
+    let data = RwSignal::new(Value::Null);
+    let loading = RwSignal::new(true);
+    let error = RwSignal::new(Option::<String>::None);
+    let page = RwSignal::new(1i64);
+    let last_page = RwSignal::new(1i64);
+    let search = RwSignal::new(String::new());
+
+    let load = move || {
+        let s = search.get_untracked();
+        let p = page.get_untracked();
+        leptos::task::spawn_local(async move {
+            match api::get::<Value>(&format!("/api/v1/moderation/trashed-messages?page={p}&search={}", enc(&s))).await {
+                Ok(v) => { last_page.set(v["last_page"].as_i64().unwrap_or(1)); data.set(v); }
+                Err(e) => error.set(Some(e.message)),
+            }
+            loading.set(false);
+        });
+    };
+    load();
+
+    view! {
+        <ModShell active="/moderation/trashed-messages">
+            <ErrLine error=error/>
+            {search_bar(search, move || { page.set(1); load(); })}
+            <Show when=move || !loading.get() fallback=move || view! {
+                <div class="py-16 text-center text-white/60">{t("Loading")}"…"</div>
+            }>
+                <div class="card">
+                    {move || data.get()["data"].as_array().cloned().unwrap_or_default()
+                        .into_iter().map(|m| {
+                            let mid = m["id"].as_i64().unwrap_or(0);
+                            let body = m["body"].as_str().unwrap_or("").to_string();
+                            let uname = m["user_name"].as_str().or(m["user"]["name"].as_str()).unwrap_or("?").to_string();
+                            let uid = m["user_id"].as_i64().unwrap_or(0);
+                            let room = m["room_name"].as_str().unwrap_or("—").to_string();
+                            let deleted = fmt_date(&m["deleted_at"]);
+                            view! {
+                                <div class="border-b border-white/5 px-4 py-3 last:border-0">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div>
+                                            <div class="text-sm text-white/80">{body}</div>
+                                            <div class="mt-1 text-xs text-white/40">
+                                                <A href=format!("/profile/{uid}") attr:class="hover:text-brand-accent-light">{uname}</A>
+                                                " · " {room} " · " {t("deleted")} " " {deleted}
+                                            </div>
+                                        </div>
+                                        <div class="flex shrink-0 gap-1">
+                                            <button type="button" class="rounded px-2 py-1 text-xs text-emerald-300 hover:bg-emerald-500/10"
+                                                on:click=move |_| leptos::task::spawn_local(async move {
+                                                    let _ = api::post_empty::<Value>(&format!("/api/v1/moderation/trashed-messages/{mid}/restore")).await;
+                                                    load();
+                                                })>{t("Restore")}</button>
+                                            <button type="button" class="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-500/10"
+                                                on:click=move |_| leptos::task::spawn_local(async move {
+                                                    let _ = api::delete::<Value>(&format!("/api/v1/moderation/trashed-messages/{mid}")).await;
+                                                    load();
+                                                })>{t("Delete")}</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }).collect::<Vec<_>>()}
+                </div>
+                {pager(page, last_page, load)}
+            </Show>
+        </ModShell>
+    }
+}
+
+// ---- banned users --------------------------------------------------------------
+
+#[component]
+pub fn ModBannedUsers() -> impl IntoView {
+    let data = RwSignal::new(Value::Null);
+    let loading = RwSignal::new(true);
+    let error = RwSignal::new(Option::<String>::None);
+    let page = RwSignal::new(1i64);
+    let last_page = RwSignal::new(1i64);
+    let search = RwSignal::new(String::new());
+
+    let load = move || {
+        let s = search.get_untracked();
+        let p = page.get_untracked();
+        leptos::task::spawn_local(async move {
+            match api::get::<Value>(&format!("/api/v1/moderation/banned-users?page={p}&search={}", enc(&s))).await {
+                Ok(v) => { last_page.set(v["last_page"].as_i64().unwrap_or(1)); data.set(v); }
+                Err(e) => error.set(Some(e.message)),
+            }
+            loading.set(false);
+        });
+    };
+    load();
+
+    view! {
+        <ModShell active="/moderation/banned-users">
+            <ErrLine error=error/>
+            {search_bar(search, move || { page.set(1); load(); })}
+            <Show when=move || !loading.get() fallback=move || view! {
+                <div class="py-16 text-center text-white/60">{t("Loading")}"…"</div>
+            }>
+                <div class="card">
+                    {move || data.get()["data"].as_array().cloned().unwrap_or_default()
+                        .into_iter().map(|u| {
+                            let uid = u["id"].as_i64().unwrap_or(0);
+                            let name = u["name"].as_str().unwrap_or("").to_string();
+                            let email = u["email"].as_str().unwrap_or("—").to_string();
+                            let ip = u["ip"].as_str().unwrap_or("—").to_string();
+                            let bans = u["bans_count"].as_i64().unwrap_or(0);
+                            view! {
+                                <div class="flex items-center justify-between border-b border-white/5 px-4 py-3 last:border-0">
+                                    <div>
+                                        <A href=format!("/moderation/users/{uid}") attr:class="font-medium text-white hover:text-brand-accent-light">
+                                            {name}
+                                        </A>
+                                        <div class="text-xs text-white/40">{email} " · ip: " {ip} " · " {bans} " " {t("bans")}</div>
+                                    </div>
+                                    <button type="button" class="rounded-lg border border-emerald-500/30 px-3 py-1.5 text-sm text-emerald-300"
+                                        on:click=move |_| leptos::task::spawn_local(async move {
+                                            let _ = api::post_empty::<Value>(&format!("/api/v1/moderation/banned-users/{uid}/unban")).await;
+                                            load();
+                                        })>{t("Unban")}</button>
+                                </div>
+                            }
+                        }).collect::<Vec<_>>()}
+                </div>
+                {pager(page, last_page, load)}
+            </Show>
+        </ModShell>
+    }
+}
+
+// ---- users management ------------------------------------------------------------
+
+#[component]
+pub fn ModUsers() -> impl IntoView {
+    let data = RwSignal::new(Value::Null);
+    let loading = RwSignal::new(true);
+    let error = RwSignal::new(Option::<String>::None);
+    let page = RwSignal::new(1i64);
+    let last_page = RwSignal::new(1i64);
+    let search = RwSignal::new(String::new());
+    let ban_user = RwSignal::new(Option::<i64>::None);
+    let ban_reason = RwSignal::new(String::new());
+    let ban_duration = RwSignal::new(String::new());
+
+    let load = move || {
+        let s = search.get_untracked();
+        let p = page.get_untracked();
+        leptos::task::spawn_local(async move {
+            match api::get::<Value>(&format!("/api/v1/moderation/users?page={p}&search={}", enc(&s))).await {
+                Ok(v) => { last_page.set(v["last_page"].as_i64().unwrap_or(1)); data.set(v); }
+                Err(e) => error.set(Some(e.message)),
+            }
+            loading.set(false);
+        });
+    };
+    load();
+
+    view! {
+        <ModShell active="/moderation/users">
+            <ErrLine error=error/>
+            {search_bar(search, move || { page.set(1); load(); })}
+            <Show when=move || !loading.get() fallback=move || view! {
+                <div class="py-16 text-center text-white/60">{t("Loading")}"…"</div>
+            }>
+                <div class="card overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="text-xs uppercase text-white/40">
+                            <tr>
+                                <th class="px-4 py-3">{t("User")}</th>
+                                <th class="px-4 py-3">{t("Messages")}</th>
+                                <th class="px-4 py-3">{t("Reported")}</th>
+                                <th class="px-4 py-3">{t("Status")}</th>
+                                <th class="px-4 py-3 text-right">{t("Actions")}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {move || data.get()["data"].as_array().cloned().unwrap_or_default()
+                                .into_iter().map(|u| {
+                                    let uid = u["id"].as_i64().unwrap_or(0);
+                                    let name = u["name"].as_str().unwrap_or("").to_string();
+                                    let msgs = u["messages_count"].as_i64().unwrap_or(0);
+                                    let reported = u["reported_messages_count"].as_i64().unwrap_or(0);
+                                    let banned = u["is_banned"].as_bool().unwrap_or(false);
+                                    let staff = u["is_admin"].as_bool().unwrap_or(false) || u["is_moderator"].as_bool().unwrap_or(false);
+                                    let can_ban = u["can_ban"].as_bool().unwrap_or(!staff);
+                                    view! {
+                                        <tr class="border-b border-white/5 last:border-0">
+                                            <td class="px-4 py-2">
+                                                <A href=format!("/moderation/users/{uid}") attr:class="font-medium text-white hover:text-brand-accent-light">
+                                                    {name}
+                                                </A>
+                                                <div class="text-xs text-white/40">
+                                                    {u["provider"].as_str().unwrap_or("blindall").to_string()}
+                                                    {u["is_guest"].as_bool().unwrap_or(false).then(|| " · guest")}
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-2 text-white/70">{msgs}</td>
+                                            <td class="px-4 py-2">
+                                                <span class={if reported > 0 { "text-amber-300" } else { "text-white/50" }}>{reported}</span>
+                                            </td>
+                                            <td class="px-4 py-2">
+                                                {if banned { view! {
+                                                    <span class="rounded bg-red-500/20 px-2 py-0.5 text-xs text-red-300">{t("Banned")}</span>
+                                                }.into_any() } else if staff { view! {
+                                                    <span class="rounded bg-brand-accent/20 px-2 py-0.5 text-xs text-brand-accent-light">{t("Staff")}</span>
+                                                }.into_any() } else { view! {
+                                                    <span class="rounded bg-white/10 px-2 py-0.5 text-xs text-white/60">{t("Active")}</span>
+                                                }.into_any() }}
+                                            </td>
+                                            <td class="px-4 py-2 text-right">
+                                                <div class="flex justify-end gap-1">
+                                                    {if banned { view! {
+                                                        <button type="button" class="rounded px-2 py-1 text-xs text-emerald-300 hover:bg-emerald-500/10"
+                                                            on:click=move |_| leptos::task::spawn_local(async move {
+                                                                let _ = api::post_empty::<Value>(&format!("/api/v1/moderation/banned-users/{uid}/unban")).await;
+                                                                load();
+                                                            })>{t("Unban")}</button>
+                                                    }.into_any() } else if can_ban { view! {
+                                                        <button type="button" class="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-500/10"
+                                                            on:click=move |_| ban_user.set(Some(uid))>{t("Ban")}</button>
+                                                    }.into_any() } else { view! {<span/>}.into_any() }}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }).collect::<Vec<_>>()}
+                        </tbody>
+                    </table>
+                </div>
+                {pager(page, last_page, load)}
+            </Show>
+
+            <Show when=move || ban_user.get().is_some()>
+                <form class="card mt-6 grid max-w-md gap-3 p-5" on:submit=move |ev| {
+                    ev.prevent_default();
+                    let uid = ban_user.get().unwrap_or(0);
+                    let reason = ban_reason.get_untracked();
+                    let dur = ban_duration.get_untracked();
+                    leptos::task::spawn_local(async move {
+                        let body = json!({
+                            "reason": reason,
+                            "duration": dur.parse::<i64>().ok(),
+                        });
+                        match api::post::<Value,_>(&format!("/api/v1/moderation/users/{uid}/ban"), &body).await {
+                            Ok(_) => { ban_user.set(None); ban_reason.set(String::new()); ban_duration.set(String::new()); load(); }
+                            Err(e) => error.set(Some(e.message)),
+                        }
+                    });
+                }>
+                    <h2 class="font-bold text-white">{t("Ban user")}</h2>
+                    <label class="text-sm text-white/60">{t("Reason")}
+                        <input type="text" required maxlength="255"
+                            class="mt-1 w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white outline-none"
+                            prop:value=ban_reason on:input=move |ev| ban_reason.set(event_target_value(&ev))/></label>
+                    <label class="text-sm text-white/60">{t("Duration (minutes — empty = permanent)")}
+                        <input type="number" min="1"
+                            class="mt-1 w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white outline-none"
+                            prop:value=ban_duration on:input=move |ev| ban_duration.set(event_target_value(&ev))/></label>
+                    <div class="flex gap-2">
+                        <button type="submit" class="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white">{t("Ban")}</button>
+                        <button type="button" class="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/70"
+                            on:click=move |_| ban_user.set(None)>{t("Cancel")}</button>
+                    </div>
+                </form>
+            </Show>
+        </ModShell>
+    }
+}
+
+// ---- user detail -------------------------------------------------------------------
+
+#[component]
+pub fn ModUserShow() -> impl IntoView {
+    let params = use_params_map();
+    let data = RwSignal::new(Value::Null);
+    let loading = RwSignal::new(true);
+    let error = RwSignal::new(Option::<String>::None);
+    let ban_reason = RwSignal::new(String::new());
+    let ban_duration = RwSignal::new(String::new());
+    let show_ban = RwSignal::new(false);
+
+    let load = move || {
+        let id = params.get().get("id").unwrap_or_default();
+        leptos::task::spawn_local(async move {
+            match api::get::<Value>(&format!("/api/v1/moderation/users/{id}")).await {
+                Ok(v) => data.set(v),
+                Err(e) => error.set(Some(e.message)),
+            }
+            loading.set(false);
+        });
+    };
+    load();
+
+    view! {
+        <ModShell active="/moderation/users">
+            <ErrLine error=error/>
+            <Show when=move || !loading.get() fallback=move || view! {
+                <div class="py-16 text-center text-white/60">{t("Loading")}"…"</div>
+            }>
+                {move || {
+                    let d = data.get();
+                    let u = d["user"].clone();
+                    if u.is_null() { return view! {<div/>}.into_any(); }
+                    let uid = u["id"].as_i64().unwrap_or(0);
+                    let name = u["name"].as_str().unwrap_or("").to_string();
+                    let provider = u["provider"].as_str().unwrap_or("blindall").to_string();
+                    let created = fmt_date(&u["created_at"]);
+                    let banned = u["is_banned"].as_bool().unwrap_or(false);
+                    let sensitive = d["canViewSensitiveData"].as_bool().unwrap_or(false);
+                    let email = u["email"].as_str().unwrap_or("—").to_string();
+                    let ip = u["ip"].as_str().unwrap_or("—").to_string();
+                    let elo = u["elo"].as_i64().unwrap_or(0);
+                    let history = u["ban_history"].as_array().cloned().unwrap_or_default();
+                    view! {
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div class="card p-5">
+                                <div class="mb-3 flex items-center justify-between">
+                                    <h2 class="text-lg font-bold text-white">{name}</h2>
+                                    {if banned { view! {
+                                        <button type="button" class="rounded-lg border border-emerald-500/30 px-3 py-1.5 text-sm text-emerald-300"
+                                            on:click=move |_| leptos::task::spawn_local(async move {
+                                                let _ = api::post_empty::<Value>(&format!("/api/v1/moderation/banned-users/{uid}/unban")).await;
+                                                load();
+                                            })>{t("Unban")}</button>
+                                    }.into_any() } else { view! {
+                                        <button type="button" class="rounded-lg bg-red-500/20 px-3 py-1.5 text-sm text-red-300"
+                                            on:click=move |_| show_ban.set(true)>{t("Ban")}</button>
+                                    }.into_any() }}
+                                </div>
+                                <dl class="space-y-1 text-sm">
+                                    <div class="flex justify-between"><dt class="text-white/50">"ID"</dt><dd class="text-white">{uid}</dd></div>
+                                    <div class="flex justify-between"><dt class="text-white/50">{t("Provider")}</dt><dd class="text-white">{provider}</dd></div>
+                                    <div class="flex justify-between"><dt class="text-white/50">"ELO"</dt><dd class="text-white">{elo}</dd></div>
+                                    <div class="flex justify-between"><dt class="text-white/50">{t("Member since")}</dt><dd class="text-white">{created}</dd></div>
+                                    {sensitive.then(|| view! {
+                                        <div>
+                                            <div class="flex justify-between"><dt class="text-white/50">{t("Email")}</dt><dd class="text-white">{email}</dd></div>
+                                            <div class="flex justify-between"><dt class="text-white/50">"IP"</dt><dd class="text-white">{ip}</dd></div>
+                                        </div>
+                                    })}
+                                </dl>
+                            </div>
+                            <div class="card p-5">
+                                <h2 class="mb-3 font-bold text-white">{t("Ban history")}</h2>
+                                {if history.is_empty() { view! {
+                                    <p class="text-sm text-white/50">{t("No bans")}</p>
+                                }.into_any() } else { view! {
+                                    <div class="space-y-2">
+                                        {history.into_iter().map(|b| {
+                                            let comment = b["comment"].as_str().unwrap_or("—").to_string();
+                                            let expired = b["expired_at"].as_str().unwrap_or("permanent").to_string();
+                                            let at = fmt_date(&b["created_at"]);
+                                            view! {
+                                                <div class="rounded border border-white/10 px-3 py-2 text-xs">
+                                                    <div class="text-white/80">{comment}</div>
+                                                    <div class="text-white/40">{at} " → " {expired}</div>
+                                                </div>
+                                            }
+                                        }).collect::<Vec<_>>()}
+                                    </div>
+                                }.into_any() }}
+                            </div>
+                        </div>
+                        <Show when=move || show_ban.get()>
+                            <form class="card mt-4 grid max-w-md gap-3 p-5" on:submit=move |ev| {
+                                ev.prevent_default();
+                                let reason = ban_reason.get_untracked();
+                                let dur = ban_duration.get_untracked();
+                                leptos::task::spawn_local(async move {
+                                    let body = json!({"reason": reason, "duration": dur.parse::<i64>().ok()});
+                                    match api::post::<Value,_>(&format!("/api/v1/moderation/users/{uid}/ban"), &body).await {
+                                        Ok(_) => { show_ban.set(false); load(); }
+                                        Err(e) => error.set(Some(e.message)),
+                                    }
+                                });
+                            }>
+                                <label class="text-sm text-white/60">{t("Reason")}
+                                    <input type="text" required maxlength="255"
+                                        class="mt-1 w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white outline-none"
+                                        prop:value=ban_reason on:input=move |ev| ban_reason.set(event_target_value(&ev))/></label>
+                                <label class="text-sm text-white/60">{t("Duration (minutes)")}
+                                    <input type="number" min="1"
+                                        class="mt-1 w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white outline-none"
+                                        prop:value=ban_duration on:input=move |ev| ban_duration.set(event_target_value(&ev))/></label>
+                                <div class="flex gap-2">
+                                    <button type="submit" class="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white">{t("Ban")}</button>
+                                    <button type="button" class="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/70"
+                                        on:click=move |_| show_ban.set(false)>{t("Cancel")}</button>
+                                </div>
+                            </form>
+                        </Show>
+                    }.into_any()
+                }}
+            </Show>
+        </ModShell>
+    }
+}
+
+// ---- moderators ------------------------------------------------------------------
+
+#[component]
+pub fn ModModerators() -> impl IntoView {
+    let data = RwSignal::new(Value::Null);
+    let loading = RwSignal::new(true);
+    let page = RwSignal::new(1i64);
+    let last_page = RwSignal::new(1i64);
+
+    let load = move || {
+        let p = page.get_untracked();
+        leptos::task::spawn_local(async move {
+            if let Ok(v) = api::get::<Value>(&format!("/api/v1/moderation/moderators?page={p}")).await {
+                last_page.set(v["last_page"].as_i64().unwrap_or(1));
+                data.set(v);
+            }
+            loading.set(false);
+        });
+    };
+    load();
+
+    view! {
+        <ModShell active="/moderation/moderators">
+            <Show when=move || !loading.get() fallback=move || view! {
+                <div class="py-16 text-center text-white/60">{t("Loading")}"…"</div>
+            }>
+                <div class="card">
+                    {move || data.get()["data"].as_array().cloned().unwrap_or_default()
+                        .into_iter().map(|u| {
+                            let uid = u["id"].as_i64().unwrap_or(0);
+                            let name = u["name"].as_str().unwrap_or("").to_string();
+                            let created = fmt_date(&u["created_at"]);
+                            view! {
+                                <div class="flex items-center justify-between border-b border-white/5 px-4 py-3 last:border-0">
+                                    <A href=format!("/profile/{uid}") attr:class="font-medium text-white hover:text-brand-accent-light">{name}</A>
+                                    <span class="text-xs text-white/40">{t("since")} " " {created}</span>
+                                </div>
+                            }
+                        }).collect::<Vec<_>>()}
+                </div>
+                {pager(page, last_page, load)}
+            </Show>
+        </ModShell>
+    }
+}
+
+// ---- local tracks --------------------------------------------------------------------
+
+#[component]
+pub fn ModTracks() -> impl IntoView {
+    let data = RwSignal::new(Value::Null);
+    let loading = RwSignal::new(true);
+    let error = RwSignal::new(Option::<String>::None);
+    let page = RwSignal::new(1i64);
+    let last_page = RwSignal::new(1i64);
+    let search = RwSignal::new(String::new());
+    let editing = RwSignal::new(Option::<i64>::None);
+    let form = RwSignal::new(json!({"artist_name":"","track_name":""}));
+
+    let load = move || {
+        let s = search.get_untracked();
+        let p = page.get_untracked();
+        leptos::task::spawn_local(async move {
+            match api::get::<Value>(&format!("/api/v1/moderation/tracks?page={p}&search={}", enc(&s))).await {
+                Ok(v) => {
+                    let total = v["total"].as_i64().unwrap_or(0);
+                    last_page.set((total + 19) / 20);
+                    data.set(v);
+                }
+                Err(e) => error.set(Some(e.message)),
+            }
+            loading.set(false);
+        });
+    };
+    load();
+
+    view! {
+        <ModShell active="/moderation/tracks">
+            <ErrLine error=error/>
+            {search_bar(search, move || { page.set(1); load(); })}
+            <Show when=move || !loading.get() fallback=move || view! {
+                <div class="py-16 text-center text-white/60">{t("Loading")}"…"</div>
+            }>
+                <div class="card">
+                    {move || data.get()["data"].as_array().cloned().unwrap_or_default()
+                        .into_iter().map(|tr| {
+                            let tid = tr["id"].as_i64().unwrap_or(0);
+                            let artist = tr["artist_name"].as_str().unwrap_or("").to_string();
+                            let track = tr["track_name"].as_str().unwrap_or("").to_string();
+                            let etr = tr.clone();
+                            view! {
+                                <div class="border-b border-white/5 px-4 py-3 last:border-0">
+                                    <Show when=move || editing.get() == Some(tid)
+                                        fallback=move || {
+                                            let a = artist.clone(); let trk = track.clone();
+                                            let etr2 = etr.clone();
+                                            view! {
+                                                <div class="flex items-center justify-between">
+                                                    <div class="text-sm text-white">
+                                                        <span class="font-medium">{a}</span>
+                                                        <span class="text-white/50">" — "</span>
+                                                        <span>{trk}</span>
+                                                    </div>
+                                                    <div class="flex gap-1">
+                                                        <button type="button" class="rounded px-2 py-1 text-xs text-white/60 hover:bg-white/10"
+                                                            on:click=move |_| {
+                                                                form.set(json!({
+                                                                    "artist_name": etr2["artist_name"].as_str().unwrap_or(""),
+                                                                    "track_name": etr2["track_name"].as_str().unwrap_or(""),
+                                                                }));
+                                                                editing.set(Some(tid));
+                                                            }>{t("Edit")}</button>
+                                                        <button type="button" class="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-500/10"
+                                                            on:click=move |_| leptos::task::spawn_local(async move {
+                                                                let _ = api::delete::<Value>(&format!("/api/v1/moderation/tracks/{tid}")).await; load();
+                                                            })>{t("Delete")}</button>
+                                                    </div>
+                                                </div>
+                                            }.into_any()
+                                        }>
+                                        <form class="flex flex-wrap items-center gap-2" on:submit=move |ev| {
+                                            ev.prevent_default();
+                                            let f = form.get();
+                                            leptos::task::spawn_local(async move {
+                                                match api::put::<Value,_>(&format!("/api/v1/moderation/tracks/{tid}"), &f).await {
+                                                    Ok(_) => { editing.set(None); load(); }
+                                                    Err(e) => error.set(Some(e.message)),
+                                                }
+                                            });
+                                        }>
+                                            <input type="text" required maxlength="255"
+                                                class="rounded border border-white/10 bg-surface-base px-2 py-1 text-sm text-white"
+                                                prop:value=move || form.get()["artist_name"].as_str().unwrap_or("").to_string()
+                                                on:input=move |ev| form.update(|f| f["artist_name"] = json!(event_target_value(&ev)))/>
+                                            <input type="text" required maxlength="255"
+                                                class="rounded border border-white/10 bg-surface-base px-2 py-1 text-sm text-white"
+                                                prop:value=move || form.get()["track_name"].as_str().unwrap_or("").to_string()
+                                                on:input=move |ev| form.update(|f| f["track_name"] = json!(event_target_value(&ev)))/>
+                                            <button type="submit" class="rounded px-2 py-1 text-xs text-emerald-300">{t("Save")}</button>
+                                            <button type="button" class="rounded px-2 py-1 text-xs text-white/60"
+                                                on:click=move |_| editing.set(None)>{t("Cancel")}</button>
+                                        </form>
+                                    </Show>
+                                </div>
+                            }
+                        }).collect::<Vec<_>>()}
+                </div>
+                {pager(page, last_page, load)}
+            </Show>
+        </ModShell>
+    }
+}

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#1A1A2E" />
+    <meta name="application-name" content="Blind'All Music" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32x32.png" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/favicon-16x16.png" type="image/png" sizes="16x16" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Blind'All Music" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <title>Blind'All Music</title>
+    <meta name="description" content="Jouez à des quiz musicaux multijoueurs gratuits en ligne ! Blind-tests pour tous les goûts : Années 2000, Disney, Chanson française, Années 80, Rock, Pop, et bien plus encore." />
+    <meta name="keywords" content="quiz musical, blind test, quiz musique, test musical, quiz multijoueur, jeu musical en ligne, quiz gratuit, blind test gratuit, quiz années 2000, quiz disney, chanson française, quiz rock, quiz pop" />
+    <meta name="robots" content="index, follow" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Blind'All Music" />
+    <meta property="og:title" content="Blind'All Music - Quiz musicaux gratuits et multijoueurs" />
+    <meta property="og:description" content="Jouez à des quiz musicaux multijoueurs gratuits ! Blind-tests en ligne pour tous les goûts : Années 2000, Disney, Chanson française, Années 80, Rock, Pop, et bien plus encore." />
+    <meta property="og:image" content="/images/statics/screenshot.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Blind'All Music - Quiz musicaux multijoueurs" />
+    <meta property="og:locale" content="fr_FR" />
+    <meta property="og:locale:alternate" content="en_US" />
+    <meta property="og:locale:alternate" content="es_ES" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@blindall" />
+    <meta name="twitter:creator" content="@blindall" />
+    <meta name="twitter:title" content="Blind'All Music - Quiz musicaux gratuits et multijoueurs" />
+    <meta name="twitter:description" content="Jouez à des quiz musicaux multijoueurs gratuits ! Blind-tests en ligne pour tous les goûts : Années 2000, Disney, Chanson française, Années 80, Rock, Pop, et bien plus encore." />
+    <meta name="twitter:image" content="/images/statics/screenshot.png" />
+    <meta name="twitter:image:alt" content="Blind'All Music - Quiz musicaux multijoueurs" />
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Blind'All Music",
+      "logo": "/images/statics/blindall-music-logo.png"
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Blind'All Music"
+    }
+    </script>
+
+    <!-- AdSense loads at runtime from `ads.rs` once the server reports a
+         configured ADSENSE_CLIENT_ID — no hardcoded publisher account. -->
+
+    <link data-trunk rel="css" href="/public/app.css" />
+    <link data-trunk rel="rust" data-wasm-opt="z" data-bin-name="blindall-web" data-integrity="none" />
+  </head>
+  <body class="font-sans antialiased bg-surface-base">
+    <!-- lamejs — MP3 encoder for the local-track upload 30s segment picker
+         (`UploadTrack.vue` parity; Blade loads the same build from jsdelivr). -->
+    <script src="/js/lame.all.js" defer></script>
+  </body>
+</html>

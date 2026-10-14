@@ -1,0 +1,24 @@
+[package]
+name = "blindall-game"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Room actors and round state machine: the game loop, driven by in-process timers."
+
+[dependencies]
+blindall-core = { path = "../blindall-core" }
+blindall-redis = { path = "../blindall-redis" }
+blindall-realtime = { path = "../blindall-realtime" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+async-trait.workspace = true
+anyhow.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+# test-util → tokio::time::{pause,advance} for deterministic timer tests.
+tokio = { workspace = true, features = ["test-util"] }

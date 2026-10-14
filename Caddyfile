@@ -1,0 +1,10 @@
+# Blind'All Music — TLS terminator. Caddy auto-provisions Let's Encrypt
+# certificates as soon as the DNS A/AAAA records point at this host.
+
+blindallmusic.com {
+    reverse_proxy server:8080
+}
+
+www.blindallmusic.com {
+    redir https://blindallmusic.com{uri} permanent
+}

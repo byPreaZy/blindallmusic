@@ -1,0 +1,17 @@
+# This machine has no C toolchain (no MSVC, no gcc, no clang) — the whole
+# toolchain is x86_64-pc-windows-gnullvm and we link with the bundled
+# rust-lld in self-contained mode (MinGW CRT ships with rust-std).
+[build]
+target = "x86_64-pc-windows-gnullvm"
+
+[target.x86_64-pc-windows-gnullvm]
+linker = "rust-lld"
+# Self-contained MinGW CRT lacks import libs for some system DLLs
+# (bcrypt, advapi32, ws2_32, …) — `.libs/` holds generated
+# `lib<name>.dll.a` stubs (tools/gen_import_libs.py). Do NOT add
+# C:\Windows\System32 as a -L: the bare msvcrt.dll there shadows the
+# self-contained CRT import lib and breaks final links.
+rustflags = [
+    "-C", "link-self-contained=y",
+    "-L", ".libs",
+]

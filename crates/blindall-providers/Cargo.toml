@@ -1,0 +1,22 @@
+[package]
+name = "blindall-providers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Music provider clients: Spotify, Deezer, iTunes, Audius, YouTube, local tracks."
+
+[dependencies]
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+fred.workspace = true
+blindall-game = { path = "../blindall-game" }
+tokio.workspace = true
+rand.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+deunicode.workspace = true

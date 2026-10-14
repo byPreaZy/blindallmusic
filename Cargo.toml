@@ -1,0 +1,80 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/blindall-api",
+    "crates/blindall-core",
+    "crates/blindall-db",
+    "crates/blindall-e2e",
+    "crates/blindall-game",
+    "crates/blindall-providers",
+    "crates/blindall-realtime",
+    "crates/blindall-redis",
+    "crates/blindall-server",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.85"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1.45", features = ["full"] }
+futures = "0.3"
+async-trait = "0.1"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Web
+axum = { version = "0.8", features = ["ws", "multipart"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace", "compression-gzip", "fs"] }
+http = "1"
+
+# Database / cache — no TLS crates compiled: this machine has no C toolchain.
+# sqlx talks Postgres (self-hosted Supabase) without TLS; reqwest uses
+# native-tls (schannel FFI, no cc); fred without TLS features.
+# Revisit for production TLS (Linux target).
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "chrono", "json", "bigdecimal", "migrate"] }
+fred = { version = "10", default-features = false, features = [
+    "i-std", "i-scripts", "i-pubsub", "subscriber-client", "transactions", "dns",
+] }
+
+# Errors / tracing
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Utils
+chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = "0.10"
+uuid = { version = "1", features = ["v7", "serde"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
+mp3-duration = "0.1"
+deunicode = "1"
+regex = "1"
+once_cell = "1"
+validator = { version = "0.20", features = ["derive"] }
+
+# Auth / crypto
+bcrypt = "0.17"
+sha2 = "0.10"
+hmac = "0.12"
+base64 = "0.22"
+hex = "0.4"
+sha1 = "0.10"
+url = "2"
+
+# HTTP client — native-tls (schannel on Windows, no C compiler needed)
+reqwest = { version = "0.12", features = ["json", "native-tls", "multipart"], default-features = false }
+
+# Misc
+rand = "0.9"
+
+# Testing
+proptest = "1"
+insta = { version = "1", features = ["json"] }

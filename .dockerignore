@@ -1,0 +1,11 @@
+# Build context hygiene — never ship host artifacts into the image.
+target/
+**/target/
+web/node_modules/
+web/dist/
+web/.trunk/
+.git/
+.tools/
+.libs/
+*.env
+!.env.example
