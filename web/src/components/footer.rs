@@ -58,7 +58,7 @@ pub fn Footer() -> impl IntoView {
                                 <span class="sr-only">"Discord"</span>
                                 <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d=DISCORD_SVG /></svg>
                             </a>
-                            <a href="https://github.com/byPreaZy" target="_blank" rel="external nofollow" class="text-white/70 transition-colors hover:text-brand-accent">
+                            <a href="https://github.com/byPreaZy/blindallmusic" target="_blank" rel="external nofollow" class="text-white/70 transition-colors hover:text-brand-accent">
                                 <span class="sr-only">"GitHub"</span>
                                 <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d=GITHUB_SVG clip-rule="evenodd" /></svg>
                             </a>
