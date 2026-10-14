@@ -93,6 +93,19 @@ services:
       server:
         condition: service_started
 
+  # ---- tunnel Cloudflare (alpha éphémère) ---------------------------------
+  # `docker compose --profile tunnel up -d` → URL https://*.trycloudflare.com
+  # Connexion sortante seulement : aucun port ouvert, pare-feu intact, le PC
+  # n'expose que le conteneur `server` — rien d'autre sur la machine.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: [tunnel]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://server:8080
+    depends_on:
+      server:
+        condition: service_started
+
   redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes
