@@ -212,7 +212,14 @@ impl RoomRepo {
                 .execute(&self.pool)
                 .await?;
         }
-        let password: Option<&str> = if o.has_password { o.password.as_deref() } else { None };
+        // Stocké hashé (bcrypt coût 10) — le secret partagé de room ne dort pas en clair.
+        let password: Option<String> = if o.has_password {
+            o.password
+                .as_deref()
+                .and_then(|p| bcrypt::hash(p.chars().take(72).collect::<String>(), 10).ok())
+        } else {
+            None
+        };
         sqlx::query("UPDATE rooms SET password = $1 WHERE id = $2")
             .bind(password)
             .bind(id)

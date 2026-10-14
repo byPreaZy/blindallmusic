@@ -272,7 +272,7 @@ pub async fn store(
         return StatusCode::FORBIDDEN.into_response();
     }
     if !(user.is_administrator || state.auth.is_public_moderator(user.id).await) {
-        if let Some(secs) = state.chat_rate.retry_after(&format!("chat|{}", user.id), 15) {
+        if let Some(secs) = state.chat_rate.retry_after(&format!("chat|{}", user.id), 15, 60) {
             return (
                 StatusCode::TOO_MANY_REQUESTS,
                 Json(json!({"error": "rate_limited", "retry_after": secs})),

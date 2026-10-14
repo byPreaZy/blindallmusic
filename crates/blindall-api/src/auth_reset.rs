@@ -22,6 +22,12 @@ pub async fn forgot_password(
     if !validator::ValidateEmail::validate_email(&email) {
         return err("email", "The email field must be a valid email address.");
     }
+    if let Some(_) = state
+        .reset_rate
+        .retry_after(&format!("reset|{}", email.to_lowercase()), 3, 3600)
+    {
+        return err("email", "passwords.throttled");
+    }
     let Some((user_id, name)) = state.auth.find_by_email(email).await.ok().flatten() else {
         return err("email", "passwords.user");
     };

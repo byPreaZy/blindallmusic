@@ -146,6 +146,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/rooms/{id}/user-count", post(rooms::update_user_count))
         .route("/api/v1/rooms/{id}/alert", post(rooms::alert))
         .route("/api/v1/rooms/{id}/suggestion", post(rooms::suggestion))
+        .route("/api/v1/ws-ticket", post(crate::auth_session::ws_ticket))
         .route("/api/v1/rooms/{id}/joined", get(rooms::joined))
         .route(
             "/api/v1/rooms/{id}/presence-joined",

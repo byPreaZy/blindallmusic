@@ -122,6 +122,9 @@ async fn main() -> anyhow::Result<()> {
         chat_rate: std::sync::Arc::new(blindall_api::auth_session::RateBucket::default()),
         presence_rate: std::sync::Arc::new(blindall_api::auth_session::RateBucket::default()),
         check_rate: std::sync::Arc::new(blindall_api::auth_session::RateBucket::default()),
+        contact_rate: std::sync::Arc::new(blindall_api::auth_session::RateBucket::default()),
+        reset_rate: std::sync::Arc::new(blindall_api::auth_session::RateBucket::default()),
+        ws_tickets: std::sync::Arc::new(blindall_api::auth_session::WsTickets::default()),
         levels: std::sync::Arc::new(blindall_api::levels::LevelDispatcher::new(
             blindall_db::LevelRepo::new(pool.clone()),
             hub.clone(),

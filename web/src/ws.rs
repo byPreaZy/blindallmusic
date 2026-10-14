@@ -14,7 +14,6 @@ pub type PresenceCallback = Rc<dyn Fn(&str, &[Value])>;
 pub struct Realtime(Rc<Inner>);
 
 struct Inner {
-    url: String,
     ws: RefCell<Option<WebSocket>>,
     channels: RefCell<HashSet<String>>,
     listeners: RefCell<HashMap<(String, String), Vec<EventCallback>>>,
@@ -25,7 +24,7 @@ struct Inner {
     ever_connected: Cell<bool>,
 }
 
-fn ws_url(token: &str) -> String {
+fn ws_url(ticket: &str) -> String {
     let loc = web_sys::window().unwrap().location();
     let host = loc.host().unwrap_or_else(|_| "127.0.0.1:8080".to_string());
     let proto = if loc.protocol().unwrap_or_default() == "https:" {
@@ -33,13 +32,14 @@ fn ws_url(token: &str) -> String {
     } else {
         "ws"
     };
-    format!("{proto}://{host}/ws?token={token}")
+    // Ticket one-time (60s) obtenu via POST /ws-ticket : pas de bearer dans l'URL
+    format!("{proto}://{host}/ws?ticket={ticket}")
 }
 
 impl Realtime {
     pub fn connect(token: &str) -> Self {
+        let _ = token; // auth lue depuis stored_token() à chaque fetch de ticket
         let rt = Self(Rc::new(Inner {
-            url: ws_url(token),
             ws: RefCell::new(None),
             channels: RefCell::new(HashSet::new()),
             listeners: RefCell::new(HashMap::new()),
@@ -58,7 +58,26 @@ impl Realtime {
         let generation = inner.generation.get() + 1;
         inner.generation.set(generation);
 
-        let ws = match WebSocket::new(&inner.url) {
+        // Ticket one-time (60 s) via POST /ws-ticket : jamais de bearer dans l'URL.
+        let rt = self.clone();
+        leptos::task::spawn_local(async move {
+            match crate::api::post_empty::<Value>("/api/v1/ws-ticket").await {
+                Ok(v) => match v["ticket"].as_str() {
+                    Some(t) if rt.0.generation.get() == generation => rt.wire(t, generation),
+                    _ => {}
+                },
+                Err(e) => {
+                    leptos::logging::warn!("ws ticket failed {:?}", e.message);
+                    rt.schedule_reconnect();
+                }
+            }
+        });
+    }
+
+    fn wire(&self, ticket: &str, generation: u64) {
+        let inner = self.0.clone();
+        let url = ws_url(ticket);
+        let ws = match WebSocket::new(&url) {
             Ok(w) => w,
             Err(e) => {
                 leptos::logging::error!("ws connect failed {:?}", e);

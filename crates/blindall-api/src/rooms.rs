@@ -93,7 +93,13 @@ pub async fn show(
 
     let room_password = state.rooms.password_of(id).await.ok().flatten();
     if let Some(expected) = &room_password {
-        if params.password.as_deref() != Some(expected.as_str()) {
+        let given = params.password.as_deref().unwrap_or("");
+        let ok = if expected.starts_with("$2") {
+            bcrypt::verify(given, expected).unwrap_or(false)
+        } else {
+            given == expected
+        };
+        if !ok {
             return Err((
                 StatusCode::FORBIDDEN,
                 Json(json!({
@@ -513,7 +519,7 @@ pub async fn presence_joined(
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     if let Some(secs) = state
         .presence_rate
-        .retry_after(&format!("presence|{}", user.id()), 10)
+        .retry_after(&format!("presence|{}", user.id()), 10, 60)
     {
         return Err((
             StatusCode::TOO_MANY_REQUESTS,
@@ -554,7 +560,7 @@ pub async fn presence_left(
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     if let Some(secs) = state
         .presence_rate
-        .retry_after(&format!("presence|{}", user.id()), 10)
+        .retry_after(&format!("presence|{}", user.id()), 10, 60)
     {
         return Err((
             StatusCode::TOO_MANY_REQUESTS,

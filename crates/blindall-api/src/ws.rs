@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 #[derive(Deserialize)]
 pub struct WsQuery {
-    token: Option<String>,
+    ticket: Option<String>,
 }
 
 pub async fn handler(
@@ -16,16 +16,13 @@ pub async fn handler(
     State(state): State<AppState>,
     Query(q): Query<WsQuery>,
 ) -> Result<Response, StatusCode> {
-    let Some(token) = q.token else {
+    let Some(ticket) = q.ticket else {
         return Err(StatusCode::UNAUTHORIZED);
     };
-    let user = state
-        .auth
-        .user_for_token(&token)
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-    if state.moderation.is_banned(user.id).await.unwrap_or(false) {
+    let Some(user_id) = state.ws_tickets.consume(&ticket) else {
+        return Err(StatusCode::UNAUTHORIZED);
+    };
+    if state.moderation.is_banned(user_id).await.unwrap_or(false) {
         return Err(StatusCode::FORBIDDEN);
     }
 
@@ -34,6 +31,6 @@ pub async fn handler(
     });
     let hub = state.hub.clone();
     Ok(ws.on_upgrade(move |socket| {
-        blindall_realtime::ws::serve(socket, hub, authz, user.id)
+        blindall_realtime::ws::serve(socket, hub, authz, user_id)
     }))
 }

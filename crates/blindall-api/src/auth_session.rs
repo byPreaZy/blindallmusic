@@ -324,13 +324,13 @@ pub struct RateBucket {
 }
 
 impl RateBucket {
-    /// Records a hit; returns seconds to wait if over `per_minute`.
-    pub fn retry_after(&self, key: &str, per_minute: usize) -> Option<u64> {
-        let window = Duration::from_secs(60);
+    /// Records a hit; returns seconds to wait if over `limit` in `window_secs`.
+    pub fn retry_after(&self, key: &str, limit: usize, window_secs: u64) -> Option<u64> {
+        let window = Duration::from_secs(window_secs);
         let mut map = self.hits.lock().unwrap();
         let a = map.entry(key.to_string()).or_default();
         a.retain(|t| t.elapsed() < window);
-        if a.len() >= per_minute {
+        if a.len() >= limit {
             let oldest = a.iter().min().unwrap();
             Some(window.saturating_sub(oldest.elapsed()).as_secs().max(1))
         } else {
@@ -453,6 +453,40 @@ pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Respon
         let _ = state.auth.revoke_token(&t).await;
     }
     StatusCode::NO_CONTENT.into_response()
+}
+
+/// Short-lived one-time tickets for the WebSocket upgrade (keeps bearer
+/// tokens out of URLs — and therefore out of any URL log/history).
+#[derive(Default)]
+pub struct WsTickets {
+    issued: std::sync::Mutex<std::collections::HashMap<String, (i64, Instant)>>,
+}
+
+const WS_TICKET_TTL: Duration = Duration::from_secs(60);
+
+impl WsTickets {
+    pub fn issue(&self, user_id: i64) -> String {
+        use rand::Rng;
+        const CH: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        let mut rng = rand::rng();
+        let t: String = (0..48).map(|_| CH[rng.random_range(0..CH.len())] as char).collect();
+        let mut map = self.issued.lock().unwrap();
+        map.retain(|_, (_, t0)| t0.elapsed() < WS_TICKET_TTL);
+        map.insert(t.clone(), (user_id, Instant::now()));
+        t
+    }
+
+    /// One-time: consumes the ticket, returns the bound user_id if fresh.
+    pub fn consume(&self, ticket: &str) -> Option<i64> {
+        let mut map = self.issued.lock().unwrap();
+        map.retain(|_, (_, t0)| t0.elapsed() < WS_TICKET_TTL);
+        map.remove(ticket).map(|(uid, _)| uid)
+    }
+}
+
+pub async fn ws_ticket(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
+    let t = state.ws_tickets.issue(user.id);
+    Json(json!({ "ticket": t, "expires_in": 60 })).into_response()
 }
 
 fn bearer_token_str(headers: &HeaderMap) -> Option<String> {

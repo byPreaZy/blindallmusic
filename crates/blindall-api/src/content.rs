@@ -113,9 +113,22 @@ pub struct ContactBody {
 
 pub async fn contact(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<std::net::SocketAddr>,
     user: crate::auth::OptionalUser,
     Json(body): Json<ContactBody>,
 ) -> Response {
+    let ip = crate::auth_session::client_ip(&headers, &addr.ip().to_string());
+    if let Some(secs) = state
+        .contact_rate
+        .retry_after(&format!("contact|{ip}"), 5, 3600)
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({"message": "rate_limited", "retry_after": secs})),
+        )
+            .into_response();
+    }
     let email = body.email.trim();
     if email.is_empty() || !email.contains('@') || body.message.is_empty() {
         return (

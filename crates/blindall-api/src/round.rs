@@ -27,7 +27,7 @@ pub async fn check(
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     if let Some(secs) = state
         .check_rate
-        .retry_after(&format!("check|{}", user.id()), 120)
+        .retry_after(&format!("check|{}", user.id()), 120, 60)
     {
         return Err((
             StatusCode::TOO_MANY_REQUESTS,
