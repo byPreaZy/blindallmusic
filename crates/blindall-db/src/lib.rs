@@ -101,6 +101,13 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0008_drop_facebook_data_deletion.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            9,
+            "fix_media_answers".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0009_fix_media_answers.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {
