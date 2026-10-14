@@ -161,7 +161,6 @@ pub async fn contact(
         _ => format!("<p>{}</p>", esc(&body.message)),
     };
     let _ = crate::mail::send_opts(
-        &state.http,
         &state.mail,
         &state.mail.from_email,
         &state.mail.from_name,

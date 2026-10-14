@@ -240,14 +240,11 @@ pub async fn register(
         }
     };
     {
-        let (http, mail, email, name) =
-            (state.http.clone(), state.mail.clone(), email.to_string(), name.to_string());
+        let (mail, email, name) =
+            (state.mail.clone(), email.to_string(), name.to_string());
         tokio::spawn(async move {
-            if let Err(e) = crate::mail::send_welcome(&http, &mail, &email, &name).await {
+            if let Err(e) = crate::mail::send_welcome(&mail, &email, &name).await {
                 tracing::warn!(error = %e, "welcome mail failed");
-            }
-            if let Err(e) = crate::mail::create_contact(&http, &mail, &email, &name, None).await {
-                tracing::warn!(error = %e, "brevo contact create failed");
             }
         });
     }

@@ -51,7 +51,6 @@ pub async fn forgot_password(
                  <p>Ce lien expire dans 60 minutes.</p>"
             );
             if let Err(e) = crate::mail::send(
-                &state.http,
                 &state.mail,
                 email,
                 &name,
@@ -124,7 +123,6 @@ pub async fn verification_notification(
         user.name
     );
     if let Err(e) = crate::mail::send(
-        &state.http,
         &state.mail,
         &email,
         &user.name,

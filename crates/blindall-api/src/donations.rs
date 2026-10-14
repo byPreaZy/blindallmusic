@@ -162,7 +162,6 @@ async fn record_session(state: &AppState, session: &Value) -> Result<i64, Respon
             if let Ok(Some(email)) = state.auth.email_of(uid).await {
                 let amount = format!("{:.2}", amount as f64 / 100.0).replace('.', ",");
                 let _ = crate::mail::send(
-                    &state.http,
                     &state.mail,
                     &email,
                     "",

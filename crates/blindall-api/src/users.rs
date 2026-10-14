@@ -404,12 +404,6 @@ pub async fn destroy(
     if let Ok(Some(path)) = state.auth.photo_path(id).await {
         state.storage.delete(&path).await;
     }
-    if let Ok(Some(email)) = state.auth.email_of(id).await {
-        let (http, mail) = (state.http.clone(), state.mail.clone());
-        tokio::spawn(async move {
-            let _ = crate::mail::delete_contact(&http, &mail, &email).await;
-        });
-    }
     match state.auth.delete_account(id).await {
         Ok(()) => Json(json!({"ok": true})).into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),

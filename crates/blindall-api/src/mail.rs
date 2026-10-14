@@ -1,8 +1,15 @@
-use serde_json::json;
+use lettre::message::{Mailbox, SinglePart};
+use lettre::transport::smtp::authentication::Credentials;
+use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 
 #[derive(Clone)]
 pub struct MailConfig {
-    pub api_key: String,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+    /// "tls" (implicit, port 465) | "starttls" (port 587) | "none" (plain, dev relays)
+    pub encryption: String,
     pub from_email: String,
     pub from_name: String,
     pub app_url: String,
@@ -10,23 +17,38 @@ pub struct MailConfig {
 
 impl MailConfig {
     pub fn configured(&self) -> bool {
-        !self.api_key.is_empty()
+        !self.host.is_empty()
+    }
+
+    fn transport(&self) -> anyhow::Result<AsyncSmtpTransport<Tokio1Executor>> {
+        let enc = self.encryption.to_ascii_lowercase();
+        let mut builder = match enc.as_str() {
+            "tls" | "ssl" => AsyncSmtpTransport::<Tokio1Executor>::relay(&self.host)?,
+            "none" | "plain" => AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&self.host),
+            _ => AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&self.host)?,
+        }
+        .port(self.port);
+        if !self.username.is_empty() {
+            builder = builder.credentials(Credentials::new(
+                self.username.clone(),
+                self.password.clone(),
+            ));
+        }
+        Ok(builder.build())
     }
 }
 
 pub async fn send(
-    http: &reqwest::Client,
     cfg: &MailConfig,
     to_email: &str,
     to_name: &str,
     subject: &str,
     html: &str,
 ) -> anyhow::Result<()> {
-    send_opts(http, cfg, to_email, to_name, subject, html, None).await
+    send_opts(cfg, to_email, to_name, subject, html, None).await
 }
 
 pub async fn send_opts(
-    http: &reqwest::Client,
     cfg: &MailConfig,
     to_email: &str,
     to_name: &str,
@@ -38,29 +60,24 @@ pub async fn send_opts(
         tracing::warn!(to = to_email, subject, "mail not configured : email skipped");
         return Ok(());
     }
-    let mut body = json!({
-        "sender": { "email": cfg.from_email, "name": cfg.from_name },
-        "to": [{ "email": to_email, "name": to_name }],
-        "subject": subject,
-        "htmlContent": html,
-    });
-    if let Some(rt) = reply_to {
-        body["replyTo"] = json!({ "email": rt });
+    let from = Mailbox::new(
+        (!cfg.from_name.is_empty()).then(|| cfg.from_name.clone()),
+        cfg.from_email.parse()?,
+    );
+    let to = Mailbox::new(
+        (!to_name.is_empty()).then(|| to_name.to_string()),
+        to_email.parse()?,
+    );
+    let mut builder = Message::builder().from(from).to(to).subject(subject);
+    if let Some(rt) = reply_to.and_then(|r| r.parse().ok()) {
+        builder = builder.reply_to(Mailbox::new(None, rt));
     }
-    let resp = http
-        .post("https://api.brevo.com/v3/smtp/email")
-        .header("api-key", &cfg.api_key)
-        .json(&body)
-        .send()
-        .await?;
-    if !resp.status().is_success() {
-        anyhow::bail!("brevo send failed: {}", resp.status());
-    }
+    let msg = builder.singlepart(SinglePart::html(html.to_string()))?;
+    cfg.transport()?.send(msg).await?;
     Ok(())
 }
 
 pub async fn send_welcome(
-    http: &reqwest::Client,
     cfg: &MailConfig,
     to_email: &str,
     to_name: &str,
@@ -75,60 +92,5 @@ pub async fn send_welcome(
         name = to_name,
         url = cfg.app_url.trim_end_matches('/'),
     );
-    send(http, cfg, to_email, to_name, "Bienvenue sur Blind'All Music", &html).await
-}
-
-pub async fn create_contact(
-    http: &reqwest::Client,
-    cfg: &MailConfig,
-    email: &str,
-    name: &str,
-    provider: Option<&str>,
-) -> anyhow::Result<()> {
-    if !cfg.configured() {
-        return Ok(());
-    }
-    let resp = http
-        .post("https://api.brevo.com/v3/contacts")
-        .header("api-key", &cfg.api_key)
-        .header("accept", "application/json")
-        .json(&json!({
-            "email": email,
-            "updateEnabled": true,
-            "attributes": {
-                "NOM": name,
-                "INSCRIPTION": chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%:z").to_string(),
-                "PROVIDER": provider,
-            },
-            "listIds": [2],
-        }))
-        .send()
-        .await?;
-    if !resp.status().is_success() {
-        anyhow::bail!("brevo contact create failed: {}", resp.status());
-    }
-    Ok(())
-}
-
-pub async fn delete_contact(
-    http: &reqwest::Client,
-    cfg: &MailConfig,
-    email: &str,
-) -> anyhow::Result<()> {
-    if !cfg.configured() {
-        return Ok(());
-    }
-    let _ = http
-        .delete(format!(
-            "https://api.brevo.com/v3/contacts/{}",
-            urlencoding(email)
-        ))
-        .header("api-key", &cfg.api_key)
-        .send()
-        .await?;
-    Ok(())
-}
-
-fn urlencoding(s: &str) -> String {
-    s.replace('@', "%40").replace('+', "%2B")
+    send(cfg, to_email, to_name, "Bienvenue sur Blind'All Music", &html).await
 }

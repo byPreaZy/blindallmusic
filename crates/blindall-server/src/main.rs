@@ -132,7 +132,15 @@ async fn main() -> anyhow::Result<()> {
         )),
         password_resets: blindall_db::PasswordResetRepo::new(pool.clone(), app_key.clone()),
         mail: blindall_api::mail::MailConfig {
-            api_key: std::env::var("BREVO_KEY").unwrap_or_default(),
+            host: std::env::var("MAIL_HOST").unwrap_or_default(),
+            port: std::env::var("MAIL_PORT")
+                .ok()
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(587),
+            username: std::env::var("MAIL_USERNAME").unwrap_or_default(),
+            password: std::env::var("MAIL_PASSWORD").unwrap_or_default(),
+            encryption: std::env::var("MAIL_ENCRYPTION")
+                .unwrap_or_else(|_| "tls".into()),
             from_email: std::env::var("MAIL_FROM_ADDRESS")
                 .unwrap_or_else(|_| "no-reply@blindallmusic.com".into()),
             from_name: std::env::var("MAIL_FROM_NAME")

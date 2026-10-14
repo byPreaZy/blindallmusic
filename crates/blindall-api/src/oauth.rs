@@ -201,11 +201,10 @@ pub async fn callback(
                         .await
                     {
                         Ok(id) => {
-                            let (http, mail) = (state.http.clone(), state.mail.clone());
-                            let (e2, n2, p2) = (email.clone(), name.clone(), provider.clone());
+                            let mail = state.mail.clone();
+                            let (e2, n2) = (email.clone(), name.clone());
                             tokio::spawn(async move {
-                                let _ = crate::mail::send_welcome(&http, &mail, &e2, &n2).await;
-                                let _ = crate::mail::create_contact(&http, &mail, &e2, &n2, Some(&p2)).await;
+                                let _ = crate::mail::send_welcome(&mail, &e2, &n2).await;
                             });
                             blindall_db::entities::User {
                                 id,
