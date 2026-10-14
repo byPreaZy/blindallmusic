@@ -1,7 +1,3 @@
-//! Donations — `/donations`: monthly progress bar (carryover+raised+surplus
-//! segments), supporters wall, recent donations, 12-month history.
-//! Ports `Donations/Index`.
-
 use crate::api;
 use crate::i18n::t;
 use leptos::prelude::*;
@@ -13,7 +9,6 @@ fn euros(cents: i64) -> String {
 }
 
 fn month_label(key: &str) -> String {
-    // `Y-m` → readable label (short English month + year).
     const MONTHS: [&str; 12] = [
         "Jan", "Feb", "Mar", "Apr", "May", "Jun",
         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
@@ -59,7 +54,6 @@ pub fn DonationsPage() -> impl IntoView {
                 when=move || !loading.get()
                 fallback=move || view! { <div class="text-white/60">{t("Loading")}"…"</div> }
             >
-                // Monthly progress
                 {move || {
                     let p = progress.get();
                     if p.is_null() {
@@ -87,7 +81,6 @@ pub fn DonationsPage() -> impl IntoView {
                                     {euros(carryover + raised)} " / " {euros(goal)}
                                 </span>
                             </div>
-                            // Segmented bar: carryover (dim) + raised (accent) + surplus (teal)
                             <div class="flex h-4 overflow-hidden rounded-full bg-white/10">
                                 {if seg_co > 0 { view! {
                                     <div class="h-full bg-white/30" style=format!("width:{seg_co}%")/>
@@ -115,7 +108,6 @@ pub fn DonationsPage() -> impl IntoView {
                                     </a>
                                 })}
                             </div>
-                            // Monthly supporters wall
                             <Show when=move || has_supporters>
                                 <div class="mt-5 border-t border-white/10 pt-4">
                                     <h3 class="mb-3 text-sm font-semibold uppercase tracking-wider text-white/40">
@@ -143,7 +135,6 @@ pub fn DonationsPage() -> impl IntoView {
                 }}
 
                 <div class="grid gap-8 lg:grid-cols-2">
-                    // Recent donations
                     <div>
                         <h2 class="mb-3 text-lg font-semibold text-white">{t("Recent donations")}</h2>
                         <div class="space-y-2">
@@ -181,7 +172,6 @@ pub fn DonationsPage() -> impl IntoView {
                             }}
                         </div>
                     </div>
-                    // 12-month history
                     <div>
                         <h2 class="mb-3 text-lg font-semibold text-white">{t("History")}</h2>
                         <div class="space-y-2">

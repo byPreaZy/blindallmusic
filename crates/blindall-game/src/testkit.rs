@@ -1,8 +1,3 @@
-//! Test doubles for `GameStore`/`ScoreStore`/`PresenceStore` — in-memory
-//! equivalents that let the actor state machine be tested without MySQL
-//! or Redis. Compiled only under `cfg(test)` via `#[cfg(test)]` in lib.rs
-//! is avoided: this module is `pub` so integration tests reuse it.
-
 use crate::store::{
     GameStore, GameTrack, PlayerInfo, PresenceStore, Result, RoomConfig,
     RoundRow, ScoreStore, StoreError,
@@ -29,7 +24,6 @@ pub struct FakeGameStore {
 }
 
 impl FakeGameStore {
-    /// Pre-seed a round row (recovery tests bypass `create_round`).
     pub fn insert_round(&self, round: RoundRow) {
         self.rounds.lock().unwrap().insert(round.id, round);
     }
@@ -224,14 +218,10 @@ impl GameStore for FakeGameStore {
     }
 }
 
-/// In-memory score store mirroring the Redis data model (set/hash/zset).
 #[derive(Default)]
 pub struct FakeScoreStore {
-    /// (round, user, track) → found answer ids.
     pub found: Mutex<HashMap<(i64, i64, i64), HashSet<i64>>>,
-    /// (round, answer) → user ids who found it.
     pub answer_players: Mutex<HashMap<(i64, i64), HashSet<i64>>>,
-    /// (round, user) → total.
     pub scores: Mutex<HashMap<(i64, i64), f64>>,
     pub history: Mutex<HashMap<(i64, i64), Vec<TrackRecord>>>,
     pub players: Mutex<HashMap<i64, HashSet<i64>>>,
@@ -340,7 +330,6 @@ impl ScoreStore for FakeScoreStore {
     }
 }
 
-/// Presence fake — a set member count per room.
 #[derive(Default)]
 pub struct FakePresenceStore {
     pub counts: Mutex<HashMap<i64, i64>>,
@@ -353,7 +342,6 @@ impl PresenceStore for FakePresenceStore {
     }
 }
 
-/// Track fixture — one answer titled "Titre" valued "song one".
 pub fn fake_track(id: i64, provider: &str) -> GameTrack {
     GameTrack {
         id,

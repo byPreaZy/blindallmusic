@@ -1,11 +1,5 @@
-//! Minimal PHP `serialize()` encoder — writes cache values readable by
-//! Laravel (`Cache::put` serializes the same way). Used for keys shared
-//! with the PHP app (e.g. `weekly-top-10-users`).
-
 use serde_json::{Map, Value};
 
-/// `serialize($value)` for null/bool/int/float/string/array.
-/// Objects/assoc arrays → `a:…` like PHP arrays; lists → `a:…` with int keys.
 pub fn to_php(v: &Value) -> String {
     match v {
         Value::Null => "N;".into(),
@@ -14,7 +8,6 @@ pub fn to_php(v: &Value) -> String {
             if let Some(i) = n.as_i64() {
                 format!("i:{i};")
             } else if let Some(f) = n.as_f64() {
-                // PHP serializes floats with `d:`.
                 format!("d:{f};")
             } else {
                 "i:0;".into()
@@ -42,8 +35,6 @@ pub fn to_php(v: &Value) -> String {
     }
 }
 
-/// `unserialize()` for the subset we read back (strings, ints, arrays).
-/// Kept minimal — used only where we must parse a PHP-written value.
 pub fn from_php(input: &str) -> Option<Value> {
     let mut p = Parser { s: input.as_bytes(), i: 0 };
     let v = p.value()?;

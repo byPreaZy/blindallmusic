@@ -1,6 +1,3 @@
-//! Local tracks — `LocalTrackController` + `LocalTrackService::searchTrack`
-//! + `Moderation\LocalTrackController` ports.
-
 use crate::auth::CurrentUser;
 use crate::state::AppState;
 use axum::{
@@ -22,17 +19,11 @@ fn err(field: &str, msg: &str) -> Response {
         .into_response()
 }
 
-/// `POST /api/v1/local-tracks` — `store`:
-/// audio mp3 ≤1024KB & ~30s (`AudioDuration(30)`), artwork image ≤2048KB,
-/// (artist_name, track_name) unique pair, both ≤255.
-/// `LocalTrackRequest::authorize` — **public moderators only**.
 pub async fn store(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     request: axum::extract::Request,
 ) -> Response {
-    // `LocalTrackRequest::authorize` runs before validation — the moderator
-    // gate must precede multipart parsing (a malformed body still gets 403).
     if !state.auth.is_public_moderator(user.id).await {
         return StatusCode::FORBIDDEN.into_response();
     }
@@ -77,7 +68,6 @@ pub async fn store(
         return err("audio", "validation");
     };
 
-    // `AudioDuration(30)` — getID3 parity: ~30s (±1s).
     let duration = mp3_duration::from_read(&mut std::io::Cursor::new(&audio))
         .map(|d| d.as_secs_f64())
         .unwrap_or(-1.0);
@@ -98,7 +88,6 @@ pub async fn store(
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 
-    // Uploads (PHP stores raw audio; artwork → 300×300 webp).
     let webp = match crate::storage::image_to_webp_contain(&artwork, 300, 300) {
         Ok(w) => w,
         Err(()) => return err("artwork", "The artwork must be an image."),
@@ -130,7 +119,6 @@ pub async fn store(
     }
 }
 
-/// `GET /api/v1/local-tracks/{id}/audio` — `audio`: CORS *, cache 60s.
 pub async fn audio(State(state): State<AppState>, Path(id): Path<i64>) -> Response {
     let paths = match state.local_tracks.paths(id).await {
         Ok(Some(p)) => p,
@@ -167,7 +155,6 @@ pub struct SearchQuery {
     term: Option<String>,
 }
 
-/// `GET /api/v1/providers/local/search/track` — public, provider-format.
 pub async fn search(State(state): State<AppState>, Query(q): Query<SearchQuery>) -> Response {
     let Some(term) = q.term.filter(|t| !t.is_empty()) else {
         return Json(json!([])).into_response();
@@ -209,7 +196,6 @@ pub struct PageQuery {
     per_page: Option<i64>,
 }
 
-/// `GET /api/v1/moderation/tracks` — `ModerationLocalTrackController::index`.
 pub async fn index(
     State(state): State<AppState>,
     Query(q): Query<PageQuery>,
@@ -245,7 +231,6 @@ pub struct UpdateBody {
     track_name: String,
 }
 
-/// `PUT /api/v1/moderation/tracks/{id}` — names update, pair stays unique.
 pub async fn update(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -272,8 +257,6 @@ pub async fn update(
     }
 }
 
-/// `DELETE /api/v1/moderation/tracks/{id}` — `deleteTrack`: files first,
-/// `ProcessDeletedTrack` on every linked playlist track, then the row.
 pub async fn destroy(
     State(state): State<AppState>,
     Path(id): Path<i64>,

@@ -1,10 +1,3 @@
-//! Rankings — `GlobalLeaderboardService`, `MinigameLeaderboardService` and the
-//! team ranking of `RankingController::byTeams`, plus `userLevelMetrics`.
-//!
-//! Public-room scope: when `room_id` is `None` every aggregate joins `rooms`
-//! and filters `is_public`, exactly like `publicRoundStandingsQuery` /
-//! `publicUserScoresQuery` in PHP.
-
 use sqlx::{PgPool, Row};
 use serde_json::{json, Value};
 
@@ -12,7 +5,6 @@ const PER_PAGE: i64 = 10;
 const TEAMS_PER_PAGE: i64 = 50;
 const MINIGAMES_PER_PAGE: i64 = 50;
 
-/// `GlobalLeaderboardService::SORTS`.
 pub const SORTS: [&str; 6] = ["level", "score", "elo", "week", "avg_time", "best_round"];
 
 #[derive(Clone)]
@@ -20,7 +12,6 @@ pub struct RankingsRepo {
     pool: PgPool,
 }
 
-/// One paginator row: the ranked user + its sort value.
 struct RankRow {
     user_id: i64,
     #[allow(dead_code)]
@@ -47,7 +38,6 @@ impl RankingsRepo {
 
     // ---- scope helpers --------------------------------------------------------
 
-    /// `officialRooms` — public rooms for the filter dropdown.
     pub async fn official_rooms(&self) -> Result<Vec<Value>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT id, name FROM rooms WHERE is_public AND deleted_at IS NULL \
@@ -61,7 +51,6 @@ impl RankingsRepo {
             .collect())
     }
 
-    /// `resolveOfficialRoomId` — accepts only existing public rooms.
     pub async fn resolve_official_room_id(
         &self,
         room_id: Option<i64>,
@@ -79,8 +68,6 @@ impl RankingsRepo {
         }
     }
 
-    /// `usersInScopedRoomSubquery` — DISTINCT user_ids of the scope.
-    /// `n` = bind position of `room_id` in the enclosing query ($N).
     fn scoped_users_subquery(room_id: Option<i64>, n: usize) -> String {
         match room_id {
             Some(_) => {
@@ -94,8 +81,6 @@ impl RankingsRepo {
         }
     }
 
-    /// FROM/WHERE fragment shared by every room-scoped standings query.
-    /// `n` = bind position of `room_id` in the enclosing query ($N).
     fn standings_scope(room_id: Option<i64>, n: usize) -> String {
         match room_id {
             Some(_) => format!("FROM round_standings rs WHERE rs.room_id = ${n}"),
@@ -123,7 +108,6 @@ impl RankingsRepo {
 
     // ---- paginators -----------------------------------------------------------
 
-    /// `buildPaginator` — returns the ranked user ids (ordered) + row count.
     async fn paginate(
         &self,
         sort: &str,
@@ -133,10 +117,8 @@ impl RankingsRepo {
         let page = page.max(1);
         let offset = (page - 1) * PER_PAGE;
         let sub = Self::scoped_users_subquery(room_id, 1);
-        // room_id is bound first (=$1) when scoped — limit/offset shift to $2/$3.
         let (lim, off): (usize, usize) = if room_id.is_some() { (2, 3) } else { (1, 2) };
 
-        // (rows_sql, count_sql, binds_room_first)
         let (rows_sql, count_sql) = match sort {
             "level" => (
                 format!(
@@ -299,7 +281,6 @@ impl RankingsRepo {
 
     // ---- entry formatting -----------------------------------------------------
 
-    /// `loadStatsForUsers` + `formatEntry` for a page of user ids.
     async fn format_entries(
         &self,
         user_ids: &[i64],
@@ -308,7 +289,6 @@ impl RankingsRepo {
         if user_ids.is_empty() {
             return Ok(vec![]);
         }
-        // users + levels
         let user_rows = sqlx::query(
             "SELECT u.id, u.name, u.photo_path, u.elo, u.is_guest, \
              ul.level, ul.total_xp, ul.current_xp, ul.xp_for_next_level, \
@@ -319,7 +299,6 @@ impl RankingsRepo {
         .bind(user_ids.to_vec())
         .fetch_all(&self.pool)
         .await?;
-        // round stats aggregate — room_id = $1 when scoped, user_ids array follows.
         let any_n = if room_id.is_some() { 2 } else { 1 };
         let stats_rows = {
             let scope = Self::standings_scope(room_id, 1);
@@ -339,7 +318,6 @@ impl RankingsRepo {
             }
             q.bind(user_ids.to_vec()).fetch_all(&self.pool).await?
         };
-        // room_scores (room scope only)
         let room_score_rows = if let Some(rid) = room_id {
             let scope = Self::user_scores_scope(room_id, 1);
             sqlx::query(&format!(
@@ -363,7 +341,6 @@ impl RankingsRepo {
                 .map(|r| r.get::<f64, _>("total_score"))
         };
         let mut entries = vec![];
-        // Preserve the paginator order (IN() doesn't).
         for uid in user_ids {
             let Some(u) = user_rows.iter().find(|r| r.get::<i64, _>("id") == *uid) else {
                 continue;
@@ -420,7 +397,6 @@ impl RankingsRepo {
         Ok(entries)
     }
 
-    /// `paginatedPayload` — leaderboard page + pagination meta.
     pub async fn leaderboard(
         &self,
         sort: &str,
@@ -442,7 +418,6 @@ impl RankingsRepo {
 
     // ---- user context -----------------------------------------------------------
 
-    /// `userContext` — position + own entry for the authed user.
     pub async fn user_context(
         &self,
         user_id: i64,
@@ -467,7 +442,6 @@ impl RankingsRepo {
     ) -> Result<Option<i64>, sqlx::Error> {
         let pos: Option<i64> = match sort {
             "level" => {
-                // (level, total_xp) tuple comparison, then +1.
                 let lvl = sqlx::query(
                     "SELECT level, total_xp FROM user_levels WHERE user_id = $1",
                 )
@@ -476,7 +450,6 @@ impl RankingsRepo {
                 .await?;
                 let Some(lvl) = lvl else { return Ok(None) };
                 let (l, x): (i64, i64) = (lvl.get("level"), lvl.get("total_xp"));
-                // room_id binds first → sub uses $1, literals shift to $2/$3/$4.
                 let (a, b, c): (usize, usize, usize) =
                     if room_id.is_some() { (2, 3, 4) } else { (1, 2, 3) };
                 let q = format!(
@@ -551,7 +524,6 @@ impl RankingsRepo {
                 let q = format!(
                     "SELECT COUNT(*) + 1 FROM users WHERE elo IS NOT NULL AND elo > $1 {}",
                     if room_id.is_some() {
-                        // elo binds first → room_id is $2.
                         format!("AND id IN ({})", Self::scoped_users_subquery(room_id, 2))
                     } else {
                         String::new()
@@ -681,8 +653,6 @@ impl RankingsRepo {
 
     // ---- teams ----------------------------------------------------------------
 
-    /// `RankingController::byTeams` — paginated team totals on public rooms.
-    /// Returns { data: [{team:{id,name,photo_path}, total_score}], total, ... }.
     pub async fn teams_leaderboard(&self, page: i64) -> Result<Value, sqlx::Error> {
         let page = page.max(1);
         let total: i64 = sqlx::query_scalar(
@@ -730,7 +700,6 @@ impl RankingsRepo {
         }))
     }
 
-    /// `byTeams` user context — position + score of the user's own team.
     pub async fn user_team_position(&self, user_id: i64) -> Result<Value, sqlx::Error> {
         let team_id: Option<i64> =
             sqlx::query_scalar("SELECT team_id FROM users WHERE id = $1")
@@ -767,7 +736,6 @@ impl RankingsRepo {
 
     // ---- minigames ------------------------------------------------------------
 
-    /// `MinigameLeaderboardService::paginatedPayload` — 50/page, user + level.
     pub async fn minigames_leaderboard(&self, page: i64) -> Result<Value, sqlx::Error> {
         let page = page.max(1);
         let total: i64 = sqlx::query_scalar(
@@ -820,7 +788,6 @@ impl RankingsRepo {
         }))
     }
 
-    /// `MinigameLeaderboardService::userContext`.
     pub async fn minigames_user_context(&self, user_id: i64, is_guest: bool) -> Result<Value, sqlx::Error> {
         if is_guest {
             return Ok(json!({"position": null, "score": 0}));
@@ -846,7 +813,6 @@ impl RankingsRepo {
 
     // ---- level metrics --------------------------------------------------------
 
-    /// `RankingController::userLevelMetrics`.
     pub async fn user_level_metrics(&self, user_id: i64) -> Result<Value, sqlx::Error> {
         let row = sqlx::query(
             "SELECT level, current_xp, xp_for_next_level, total_xp, \

@@ -1,7 +1,3 @@
-//! Profile — `/profile/:id` mirroring `Profiles/Show`: header card (photo,
-//! level/XP, ELO, stats), highlights strip, and the three tabs (scores /
-//! likes / bookmarks). Own profile gets the "unlike" action.
-
 use crate::api;
 use crate::auth::use_auth;
 use crate::i18n::t;
@@ -14,13 +10,11 @@ use serde_json::Value;
 pub fn ProfilePage() -> impl IntoView {
     let params = use_params_map();
     let auth = use_auth();
-    // `profile/{user}` is `auth` + `not.guest` in Laravel.
     crate::auth::require_registered(auth);
     let profile = RwSignal::new(Value::Null);
     let highlights = RwSignal::new(Value::Null);
     let donations = RwSignal::new(Vec::<Value>::new());
     let evolution = RwSignal::new(Vec::<(String, f64)>::new());
-    // PHP `ProfileController::show` — `?tab=` whitelist.
     let initial_tab = leptos_router::hooks::use_query_map()
         .get_untracked()
         .get("tab")
@@ -34,7 +28,6 @@ pub fn ProfilePage() -> impl IntoView {
 
     let user_id = move || params.get().get("id").unwrap_or_default();
 
-    // Header + deferred props (highlights / donations / evolution).
     leptos::task::spawn_local({
         async move {
             let uid = user_id();
@@ -53,7 +46,6 @@ pub fn ProfilePage() -> impl IntoView {
             if let Ok(v) = api::get::<Value>(&format!("/api/v1/users/{uid}/donations")).await {
                 donations.set(v["donations"].as_array().cloned().unwrap_or_default());
             }
-            // Deferred prop — `ProfileEvolutionChart` (cumulative daily scores).
             if let Ok(v) = api::get::<Value>(&format!("/api/v1/profile/{uid}/score-evolution")).await {
                 evolution.set(
                     v["score_evolution"]
@@ -74,7 +66,6 @@ pub fn ProfilePage() -> impl IntoView {
         }
     });
 
-    // Tab data (reactive on tab change).
     let tab_page = RwSignal::new(1i64);
     Effect::new(move |_| {
         let (tab_v, page_v) = (tab.get(), tab_page.get());
@@ -110,7 +101,6 @@ pub fn ProfilePage() -> impl IntoView {
             </Show>
             <Show when=move || !loading.get() && !not_found.get()>
                 <ProfileHeader profile=profile on_level=move |_| level_modal.set(true) />
-                // Deferred `profileHighlights` — banner + badges + top rooms.
                 {move || {
                     let h = highlights.get();
                     if h.is_null() {
@@ -139,7 +129,6 @@ pub fn ProfilePage() -> impl IntoView {
                         <div class="rounded-xl border border-white/10 bg-surface-raised/60 p-4">
                             <LevelInfoCard profile=profile compact=true />
                         </div>
-                        // `Donation history` card — `donation_summary.donation_count > 0`.
                         {move || {
                             let ds = profile.get()["donation_summary"].clone();
                             (ds["donation_count"].as_i64().unwrap_or(0) > 0).then(|| {
@@ -166,7 +155,6 @@ pub fn ProfilePage() -> impl IntoView {
                     </aside>
 
                     <main class="space-y-4 lg:col-span-8">
-                        // `ProfileTabs` — nav pill bar (links preserve `?tab=`).
                         <nav class="flex gap-1 overflow-x-auto rounded-xl border border-white/10 bg-brand-deep/80 p-1">
                             {["scores", "likes", "bookmarks", "minigames"].into_iter().map(|tb| {
                                 let tb_s = tb.to_string();
@@ -202,7 +190,6 @@ pub fn ProfilePage() -> impl IntoView {
                     </main>
                 </div>
 
-                // `LevelModal` — full XP breakdown on level-badge click.
                 {move || level_modal.get().then(|| {
                     view! {
                         <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -243,7 +230,6 @@ fn ProfileHeader(profile: RwSignal<Value>, on_level: impl Fn(leptos::ev::MouseEv
                 <section class="mb-6 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-brand-deep via-brand-midnight to-neutral-900 shadow-lg">
                     <div class="p-6 sm:p-8">
                         <div class="flex flex-col items-center gap-6 text-center sm:flex-row sm:items-start sm:text-left">
-                            // Avatar + level badge overlay (`UserAvatar` + `LevelBadge` click).
                             <div class="relative shrink-0">
                                 {if photo.is_empty() {
                                     view! {
@@ -274,7 +260,6 @@ fn ProfileHeader(profile: RwSignal<Value>, on_level: impl Fn(leptos::ev::MouseEv
                                 </h1>
                                 <p class="mt-1 text-sm text-white/50">{t("Member since")} " " {created}</p>
                             </div>
-                            // Team card (`profile.team` link block).
                             {p["team"].as_object().map(|tm| {
                                 let tid = tm["id"].as_i64().unwrap_or(0);
                                 let tname = tm["name"].as_str().unwrap_or("").to_string();
@@ -302,7 +287,6 @@ fn ProfileHeader(profile: RwSignal<Value>, on_level: impl Fn(leptos::ev::MouseEv
                             })}
                         </div>
 
-                        // PTS / ELO / Level stat cards.
                         <div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
                             <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-center">
                                 <p class="text-2xl font-black tabular-nums text-white">
@@ -322,7 +306,6 @@ fn ProfileHeader(profile: RwSignal<Value>, on_level: impl Fn(leptos::ev::MouseEv
                                 <p class="text-[10px] font-semibold uppercase tracking-wide text-white/45">{t("Level")}</p>
                             </div>
                         </div>
-                        // Rooms / Playlists / Bookmarks.
                         <div class="mt-3 grid grid-cols-3 gap-2">
                             {[
                                 ("Rooms", p["stats"]["rooms"].as_i64().unwrap_or(0)),
@@ -335,7 +318,6 @@ fn ProfileHeader(profile: RwSignal<Value>, on_level: impl Fn(leptos::ev::MouseEv
                                 </div>
                             }).collect::<Vec<_>>()}
                         </div>
-                        // Public / Community PTS.
                         <div class="mt-4 flex flex-wrap justify-center gap-4 text-xs text-white/55 sm:justify-start">
                             <span>
                                 {t("Public")} " " <strong class="text-white">{p["total_public_score"].as_f64().map(|v| format!("{v:.0}")).unwrap_or_else(|| "0".into())}</strong> " " {t("PTS")}
@@ -351,7 +333,6 @@ fn ProfileHeader(profile: RwSignal<Value>, on_level: impl Fn(leptos::ev::MouseEv
     }
 }
 
-/// `ProfilePerformanceBanner` — 5 stat cards + `#rank` ELO link.
 #[component]
 fn PerformanceBanner(perf: Value, rank: Value) -> impl IntoView {
     let position = rank["position"].as_i64();
@@ -396,7 +377,6 @@ fn PerformanceBanner(perf: Value, rank: Value) -> impl IntoView {
     }
 }
 
-/// `badge.icon` → inline Lucide path set (MIT — lucide.dev icons).
 fn badge_icon(name: &str) -> impl IntoView {
     let paths: Vec<&'static str> = match name {
         "crown" => vec![
@@ -453,7 +433,6 @@ fn badge_icon(name: &str) -> impl IntoView {
     }
 }
 
-/// `ProfileBadges` — earned pills with tooltips + top-3 in-progress bars.
 #[component]
 fn ProfileBadges(badges: Vec<Value>) -> impl IntoView {
     if badges.is_empty() {
@@ -525,7 +504,6 @@ fn ProfileBadges(badges: Vec<Value>) -> impl IntoView {
     }.into_any()
 }
 
-/// `ProfileTopRooms` — 3 room cards (photo, rank number, score, date).
 #[component]
 fn ProfileTopRooms(rooms: Vec<Value>, profile_id: String) -> impl IntoView {
     if rooms.is_empty() {
@@ -577,7 +555,6 @@ fn ProfileTopRooms(rooms: Vec<Value>, profile_id: String) -> impl IntoView {
     }.into_any()
 }
 
-/// `LevelInfo` — compact card (sidebar) or full XP breakdown (modal).
 #[component]
 fn LevelInfoCard(profile: RwSignal<Value>, compact: bool) -> impl IntoView {
     view! {
@@ -691,7 +668,6 @@ fn LevelInfoCard(profile: RwSignal<Value>, compact: bool) -> impl IntoView {
     }
 }
 
-/// `DonationHistoryList` (non-compact, own profile) — summary cards + rows.
 #[component]
 fn DonationHistoryList(items: Vec<Value>, summary: Value) -> impl IntoView {
     if items.is_empty() {
@@ -732,7 +708,6 @@ fn DonationHistoryList(items: Vec<Value>, summary: Value) -> impl IntoView {
     }.into_any()
 }
 
-/// `ProfileEvolutionChart` — cumulative daily score SVG line chart.
 #[component]
 fn ScoreEvolutionChart(points: RwSignal<Vec<(String, f64)>>) -> impl IntoView {
     view! {
@@ -847,8 +822,6 @@ fn LikesTab(
                 }.into_any();
             }
             let own = auth.user.get().map(|u| {
-                // own profile → the route id equals user id; simpler: show the
-                // action when authed (backend enforces ownership).
                 u.id
             });
             view! {
@@ -918,8 +891,6 @@ fn BookmarksTab(data: RwSignal<Value>) -> impl IntoView {
     }
 }
 
-/// `Profiles/partials/MinigamesTab.vue` — per-type totals cards, leaderboard
-/// rank chip, session history with "Load more".
 #[component]
 fn MinigamesTab(data: RwSignal<Value>, profile_id: String) -> impl IntoView {
     let rows = RwSignal::new(Vec::<Value>::new());

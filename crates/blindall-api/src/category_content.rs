@@ -1,11 +1,5 @@
-//! `CategoryContentService` — the `Category page *` generic templates
-//! and `Category slug {slug} {field}` overrides from `lang/fr.json`.
-//! `:category`, `:count`, `:rooms` placeholders are interpolated.
-
 pub struct CategoryContent {
     pub title: String,
-    /// `metaTitle()` — per-slug `meta_title` overrides (falls back to the
-    /// generic `Category page title` template); the document <title>.
     pub meta_title: String,
     pub meta_description: String,
     pub heading: String,
@@ -85,7 +79,6 @@ fn fill(t: &str, category: &str, count: i64, rooms: &str) -> String {
         .replace(":rooms", rooms)
 }
 
-/// `CategoryContentService::forCategory` + `metaTitle`/`metaDescription`.
 pub fn content(slug: &str, category: &str, count: i64, rooms: &str) -> CategoryContent {
     let title = fill(tpl("Blind test :category — quiz musical multijoueur gratuit | Blind'All Music", slug, "title"), category, count, rooms);
     let meta_title = fill(tpl("Blind test :category — quiz musical multijoueur gratuit | Blind'All Music", slug, "meta_title"), category, count, rooms);

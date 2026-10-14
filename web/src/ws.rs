@@ -1,7 +1,3 @@
-//! Realtime client — Echo-style API over our single-WS JSON protocol
-//! (`blindall-realtime::protocol`): subscribe to channels, listen to named
-//! events, presence sync/join/leave, heartbeat, auto-reconnect.
-
 use leptos::prelude::{ArcRwSignal, GetUntracked, Set};
 use serde_json::{json, Value};
 use std::cell::{Cell, RefCell};
@@ -20,19 +16,12 @@ pub struct Realtime(Rc<Inner>);
 struct Inner {
     url: String,
     ws: RefCell<Option<WebSocket>>,
-    /// Joined channels — resubscribed on reconnect.
     channels: RefCell<HashSet<String>>,
-    /// (channel, event) → handlers.
     listeners: RefCell<HashMap<(String, String), Vec<EventCallback>>>,
-    /// channel → presence handlers (kind: sync|join|leave, users).
     presence: RefCell<HashMap<String, Vec<PresenceCallback>>>,
-    /// Fired when the socket reconnects after a drop (not on first open).
     reconnect_hooks: RefCell<Vec<Rc<dyn Fn()>>>,
-    /// 'connected' | 'reconnecting' | 'closed'.
     pub conn_state: ArcRwSignal<&'static str>,
-    /// Bumps each successful open — lets `on_close` skip stale sockets.
     generation: Cell<u64>,
-    /// Don't run reconnect hooks on the very first successful open.
     ever_connected: Cell<bool>,
 }
 
@@ -80,7 +69,6 @@ impl Realtime {
         ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
         *inner.ws.borrow_mut() = Some(ws.clone());
 
-        // ---- open: resubscribe + hooks
         {
             let inner = inner.clone();
             let ws2 = ws.clone();
@@ -100,7 +88,6 @@ impl Realtime {
             onopen.forget();
         }
 
-        // ---- message: dispatch protocol ops
         {
             let inner = inner.clone();
             let onmessage = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
@@ -150,7 +137,6 @@ impl Realtime {
             onmessage.forget();
         }
 
-        // ---- close: flag + schedule reconnect
         {
             let rt = self.clone();
             let onclose = Closure::<dyn FnMut(CloseEvent)>::new(move |_e: CloseEvent| {
@@ -187,20 +173,15 @@ impl Realtime {
         }
     }
 
-    /// Echo.join(channel) — presence-capable subscription (resubscribed
-    /// automatically after a reconnect).
     pub fn join(&self, channel: &str) {
         self.0.channels.borrow_mut().insert(channel.to_string());
         self.send(&json!({"op": "subscribe", "channel": channel}));
     }
 
-    /// Echo.private(channel) — same transport here (authorization is
-    /// server-side per channel).
     pub fn subscribe(&self, channel: &str) {
         self.join(channel);
     }
 
-    /// Echo.leave(channel).
     pub fn leave(&self, channel: &str) {
         self.0.channels.borrow_mut().remove(channel);
         self.0.listeners.borrow_mut().retain(|(c, _), _| c != channel);
@@ -208,8 +189,6 @@ impl Realtime {
         self.send(&json!({"op": "unsubscribe", "channel": channel}));
     }
 
-    /// `.listen('EventName', cb)` — `event` may be "*" for all events on
-    /// the channel.
     pub fn listen(&self, channel: &str, event: &str, cb: EventCallback) {
         self.0
             .listeners
@@ -219,7 +198,6 @@ impl Realtime {
             .push(cb);
     }
 
-    /// `.here/.joining/.leaving` equivalent — `kind` ∈ sync|join|leave.
     pub fn on_presence(&self, channel: &str, cb: PresenceCallback) {
         self.0
             .presence
@@ -229,7 +207,6 @@ impl Realtime {
             .push(cb);
     }
 
-    /// Runs on every reconnect after the first (resync hook for pages).
     pub fn on_reconnect(&self, cb: Rc<dyn Fn()>) {
         self.0.reconnect_hooks.borrow_mut().push(cb);
     }
@@ -238,7 +215,6 @@ impl Realtime {
         self.0.conn_state.clone()
     }
 
-    /// 25s keepalive — mirrors the Echo ping cadence.
     pub fn start_heartbeat(&self) -> gloo_timers::callback::Interval {
         let rt = self.clone();
         gloo_timers::callback::Interval::new(25_000, move || {

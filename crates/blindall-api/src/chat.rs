@@ -1,7 +1,3 @@
-//! Room chat — `RoomMessageController` + `ChatModerationService` port.
-//! Moderation caches live in-process (PHP used Redis Cache — same
-//! semantics for a single node; move to Redis if we ever shard).
-
 use crate::auth::CurrentUser;
 use crate::auth_session::BAD_WORDS;
 use crate::state::AppState;
@@ -17,7 +13,6 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-// config/chat.php 'moderation' values.
 const ROOM_FLOOD_PER_MINUTE: usize = 8;
 const DUPLICATE_WINDOW: Duration = Duration::from_secs(30);
 const MIN_CROSS_ROOM_BODY_LEN: usize = 8;
@@ -39,16 +34,12 @@ struct Entry {
 
 #[derive(Default)]
 pub struct ChatModeration {
-    /// `chat:flood:{u}:room:{r}` — timestamps within the minute.
     flood: Mutex<HashMap<(i64, i64), Vec<Instant>>>,
-    /// `chat:duplicate:{u}:{r}:{sha}` — normalized bodies seen recently.
     duplicates: Mutex<HashMap<(i64, i64, u64), Instant>>,
-    /// `chat:cross-room:{u}:{sha}` — rooms the body was sent to.
     cross_room: Mutex<HashMap<(i64, u64), Vec<Entry>>>,
 }
 
 fn body_hash(s: &str) -> u64 {
-    // sha1 slot — a stable 64-bit hash is enough for dedup keys.
     use std::collections::hash_map::DefaultHasher;
     use std::hash::Hasher;
     let mut h = DefaultHasher::new();
@@ -57,7 +48,6 @@ fn body_hash(s: &str) -> u64 {
 }
 
 impl ChatModeration {
-    /// `filterBody` — word-boundary censor of each bad word (trimmed first).
     pub fn filter_body(body: &str) -> String {
         let mut out = body.to_string();
         for w in BAD_WORDS {
@@ -71,7 +61,6 @@ impl ChatModeration {
         out
     }
 
-    /// `normalizeBody` — lower + transliterate + drop whitespace/punct/symbols.
     fn normalize_body(body: &str) -> String {
         let trimmed = body.trim();
         if trimmed.is_empty() {
@@ -85,8 +74,6 @@ impl ChatModeration {
         WS_RE.replace_all(trimmed, "").into_owned()
     }
 
-    /// `assertCanSend` — returns Err(field message) like the PHP
-    /// ValidationException; may also apply the auto-ban side effect.
     pub async fn assert_can_send(
         &self,
         state: &AppState,
@@ -102,7 +89,6 @@ impl ChatModeration {
         if normalized.is_empty() {
             return Err("Chat message empty");
         }
-        // flood: ≥8 messages in the last minute for this user+room.
         {
             let mut flood = self.flood.lock().unwrap();
             let key = (user_id, room_id);
@@ -112,7 +98,6 @@ impl ChatModeration {
                 return Err("Chat message flood");
             }
         }
-        // duplicate in room within 30s.
         {
             let dups = self.duplicates.lock().unwrap();
             let key = (user_id, room_id, body_hash(&normalized));
@@ -125,7 +110,6 @@ impl ChatModeration {
         if LINK_RE.is_match(body) {
             return Err("Chat message links forbidden");
         }
-        // cross-room spam: same normalized body in ≥3 rooms within 300s.
         if self.cross_room_room_count(user_id, room_id, &normalized) >= CROSS_ROOM_MIN_ROOMS {
             if state.chat.is_banned(user_id).await {
                 return Err("Chat message rejected spam");
@@ -144,8 +128,6 @@ impl ChatModeration {
         Ok(())
     }
 
-    /// Distinct rooms where this normalized body was seen (window 300s,
-    /// plus the current room) — 0 when the body is too short to track.
     fn cross_room_room_count(&self, user_id: i64, room_id: i64, normalized: &str) -> usize {
         if normalized.chars().count() < MIN_CROSS_ROOM_BODY_LEN {
             return 0;
@@ -161,7 +143,6 @@ impl ChatModeration {
         rooms.len()
     }
 
-    /// `recordSentMessage` — fill the flood/duplicate/cross-room caches.
     pub fn record_sent(&self, user_id: i64, room_id: i64, body: &str) {
         let normalized = Self::normalize_body(body);
         if normalized.is_empty() {
@@ -204,9 +185,6 @@ fn err(field: &str, msg: &str) -> Response {
         .into_response()
 }
 
-/// `BannedUserMessageCleanupService` — PHP fires it on `Ban::created` for
-/// manual AND auto bans: soft-delete all user messages, broadcasting a
-/// `MessageDeleted` per message on each room channel.
 pub async fn cleanup_banned_user_messages(state: &AppState, user_id: i64) {
     match state.chat.soft_delete_user_messages(user_id).await {
         Ok(deleted) => {
@@ -241,7 +219,6 @@ async fn message_json(state: &AppState, msg_id: i64, room_id: i64) -> Value {
                 .await
                 .ok()
                 .and_then(|map| map.get(&m.user_id).cloned());
-            // `user.team` eager-loaded in PHP — team badge next to the name.
             let team = match info.as_ref().and_then(|p| p.team_id) {
                 Some(tid) => state
                     .teams
@@ -257,7 +234,6 @@ async fn message_json(state: &AppState, msg_id: i64, room_id: i64) -> Value {
                 json!({
                     "id": m.user_id,
                     "name": info.as_ref().map(|p| p.name.clone()).unwrap_or_default(),
-                    // `user.photo` accessor — full storage/ui-avatars URL.
                     "photo": crate::profiles::photo_url(
                         state,
                         info.as_ref().and_then(|p| p.photo.as_deref()).unwrap_or(""),
@@ -284,7 +260,6 @@ async fn message_json(state: &AppState, msg_id: i64, room_id: i64) -> Value {
     })
 }
 
-/// `POST /api/v1/rooms/{id}/messages` — `RoomMessageController::store`.
 pub async fn store(
     State(state): State<AppState>,
     Path(room_id): Path<i64>,
@@ -305,7 +280,6 @@ pub async fn store(
             .into_response();
     }
     if state.chat.is_banned(user.id).await {
-        // `isNotBanned` — silent 204 like PHP.
         return StatusCode::NO_CONTENT.into_response();
     }
     let is_staff = user.is_administrator || state.auth.is_public_moderator(user.id).await;
@@ -328,7 +302,6 @@ pub async fn store(
     };
     state.chat_moderation.record_sent(user.id, room_id, body_text);
     let mut payload = message_json(&state, msg_id, room_id).await;
-    // `enrichMessagesForChat` — supporter flags on the user payload.
     crate::donations::enrich_messages(&state, std::slice::from_mut(&mut payload)).await;
     state
         .hub
@@ -337,8 +310,6 @@ pub async fn store(
     StatusCode::NO_CONTENT.into_response()
 }
 
-/// `GET /api/v1/chat/config` — the Inertia shared props the SPA can't
-/// inherit: `chat_reactions` emoji catalog + `publicModerators` ids.
 pub async fn config(State(state): State<AppState>) -> Response {
     let public_moderator_ids = state
         .auth
@@ -355,7 +326,6 @@ pub async fn config(State(state): State<AppState>) -> Response {
     .into_response()
 }
 
-/// `GET /api/v1/rooms/{id}/messages` — chat history for hydration.
 pub async fn history(State(state): State<AppState>, Path(room_id): Path<i64>) -> Response {
     match state.chat.room_messages(room_id, 30).await {
         Ok(mut msgs) => {
@@ -368,8 +338,6 @@ pub async fn history(State(state): State<AppState>, Path(room_id): Path<i64>) ->
 
 // ---- reactions (`MessageReactionController`) ---------------------------------
 
-/// `ChatReactionService` — catalog check + perk gate. `emoji` is required,
-/// ≤191 chars (StoreMessageReactionRequest).
 fn can_react(state: &AppState, user_is_supporter: bool, is_guest: bool, emoji: &str) -> Result<(), &'static str> {
     if emoji.is_empty() || emoji.chars().count() > 191 {
         return Err("validation");
@@ -385,7 +353,6 @@ fn can_react(state: &AppState, user_is_supporter: bool, is_guest: bool, emoji: &
     Err("invalid")
 }
 
-/// `GET /api/v1/messages/{id}/reactions` — `index`.
 pub async fn reactions(
     State(state): State<AppState>,
     Path(message_id): Path<i64>,
@@ -409,9 +376,6 @@ pub struct ReactionBody {
     emoji: String,
 }
 
-/// `POST /api/v1/messages/{id}/reactions` — `store`: toggle the
-/// (message, user, emoji) row, broadcast `MessageReactionUpdated` on
-/// `chat.message.{id}`.
 pub async fn toggle_reaction(
     State(state): State<AppState>,
     Path(message_id): Path<i64>,
@@ -421,7 +385,6 @@ pub async fn toggle_reaction(
     if user.is_guest {
         return StatusCode::FORBIDDEN.into_response();
     }
-    // `isSupporterEmoji` gate needs the SupporterReactions perk.
     let is_supporter = state
         .donations_repo
         .user_is_supporter(user.id, &blindall_db::donations::current_month_key())
@@ -479,7 +442,6 @@ pub async fn toggle_reaction(
     Json(json!({ if removed_flag { "removed" } else { "added" }: true })).into_response()
 }
 
-/// `POST /api/v1/messages/{id}/report` — `RoomMessageController::report`.
 pub async fn report(
     State(state): State<AppState>,
     Path(message_id): Path<i64>,
@@ -508,7 +470,6 @@ pub async fn report(
     StatusCode::NO_CONTENT.into_response()
 }
 
-/// `DELETE /api/v1/messages/{id}` — room moderator / public mod / admin.
 pub async fn destroy(
     State(state): State<AppState>,
     Path(message_id): Path<i64>,
@@ -531,7 +492,6 @@ pub async fn destroy(
     StatusCode::NO_CONTENT.into_response()
 }
 
-/// `PUT /api/v1/messages/{id}/restore` — public moderator / admin only.
 pub async fn restore(
     State(state): State<AppState>,
     Path(message_id): Path<i64>,
@@ -554,7 +514,6 @@ mod tests {
     #[test]
     fn filter_body_censors_word_boundaries() {
         assert_eq!(ChatModeration::filter_body("t'es un connard"), "t'es un *****");
-        // \b boundary: "connasse" contains "connas..." but not the word.
         let filtered = ChatModeration::filter_body("connasse");
         assert!(!filtered.contains("connasse") || filtered == "connasse");
         assert_eq!(ChatModeration::filter_body("bonjour"), "bonjour");
@@ -580,9 +539,7 @@ mod tests {
         for room in [1, 2] {
             m.record_sent(7, room, body);
         }
-        // rooms 1,2 recorded + current room 3 → 3 distinct.
         assert_eq!(m.cross_room_room_count(7, 3, &ChatModeration::normalize_body(body)), 3);
-        // short bodies aren't tracked.
         assert_eq!(m.cross_room_room_count(7, 9, "hi"), 0);
     }
 }

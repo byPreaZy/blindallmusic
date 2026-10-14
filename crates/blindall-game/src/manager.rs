@@ -1,9 +1,3 @@
-//! Registry of live room actors + boot recovery.
-//!
-//! One entry per active room (PHP equivalent: the set of rooms with an
-//! unfinished round on the Horizon queue). Actors are spawned lazily on
-//! first command and dropped via `Shutdown`.
-
 use crate::actor::{RoomActor, RoomCommand, RoomSnapshot};
 use crate::store::{GameStore, RoomConfig};
 use crate::store::{PresenceStore, ScoreStore};
@@ -18,8 +12,6 @@ pub struct GameManager {
     scores: Arc<dyn ScoreStore>,
     presence: Arc<dyn PresenceStore>,
     hub: Hub,
-    /// `storage.url("")` trimmed — handed to each actor so broadcast
-    /// payloads can carry accessor-resolved photo URLs.
     photo_prefix: String,
     actors: Arc<RwLock<HashMap<i64, mpsc::Sender<RoomCommand>>>>,
 }
@@ -42,8 +34,6 @@ impl GameManager {
         }
     }
 
-    /// Boot recovery: every unfinished round gets its actor back, resumed
-    /// at the next track boundary (blueprint §3.2 — never mid-track).
     pub async fn recover(&self) -> anyhow::Result<()> {
         let rounds = self.store.load_active_rounds().await?;
         for round in rounds {
@@ -55,7 +45,6 @@ impl GameManager {
         Ok(())
     }
 
-    /// Get (or lazily spawn) the actor for a room.
     pub async fn actor_for(&self, room: RoomConfig) -> mpsc::Sender<RoomCommand> {
         {
             let actors = self.actors.read().await;
@@ -83,7 +72,6 @@ impl GameManager {
         tx
     }
 
-    /// Convenience for the API layer: send a command to room's actor.
     pub async fn send(&self, room_id: i64, cmd: RoomCommand) -> anyhow::Result<()> {
         let room = self.store.room_config(room_id).await?;
         let tx = self.actor_for(room).await;
@@ -92,8 +80,6 @@ impl GameManager {
             .map_err(|_| anyhow::anyhow!("room actor gone"))
     }
 
-    /// Room ids whose actor is alive — the sweeper skips their rounds so it
-    /// never finishes a round an actor still owns.
     pub async fn live_room_ids(&self) -> Vec<i64> {
         let actors = self.actors.read().await;
         actors
@@ -103,8 +89,6 @@ impl GameManager {
             .collect()
     }
 
-    /// `rounds:force-clear` admin op — send `Stop` to every live actor.
-    /// Returns the room ids stopped.
     pub async fn stop_all(&self) -> Vec<i64> {
         let txs: Vec<(i64, mpsc::Sender<RoomCommand>)> = {
             let actors = self.actors.read().await;
@@ -119,7 +103,6 @@ impl GameManager {
         stopped
     }
 
-    /// Snapshot for `GET /rooms/{id}`-style reads.
     pub async fn snapshot(&self, room_id: i64) -> anyhow::Result<Option<RoomSnapshot>> {
         let tx = {
             let actors = self.actors.read().await;

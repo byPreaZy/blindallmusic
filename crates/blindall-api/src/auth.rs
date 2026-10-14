@@ -1,5 +1,3 @@
-//! `Authorization: Bearer {id}|{token}` extractor — Sanctum-compatible.
-
 use crate::state::AppState;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
@@ -18,8 +16,6 @@ impl CurrentUser {
 pub enum AuthError {
     Missing,
     Invalid,
-    /// banhammer `logout.banned` — the token is still valid but the user has
-    /// an active ban. Distinct 403 lets the SPA route to `/user/banned`.
     Banned,
 }
 
@@ -69,8 +65,6 @@ impl FromRequestParts<AppState> for CurrentUser {
     }
 }
 
-/// Optional variant — endpoints open to guests (they get a guest user row
-/// server-side when participating; WS presence uses the real id).
 #[derive(Debug, Clone)]
 pub struct OptionalUser(pub Option<User>);
 

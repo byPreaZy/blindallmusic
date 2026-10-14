@@ -1,14 +1,4 @@
 # syntax=docker/dockerfile:1
-# =============================================================================
-# blindall-rs — single-image build:
-#   stage 1  web    : Rust→WASM frontend (Leptos, trunk, tailwind)
-#   stage 2  server : cargo build --release -p blindall-server
-#   stage 3  runtime: debian-slim + binary + web/dist (SPA_DIR)
-#
-# Build context = blindall-rs/ (compose sets it).
-# NOTE: .cargo/config.toml is intentionally NOT copied — it hardcodes the
-# host's x86_64-pc-windows-gnullvm toolchain and Windows .libs path.
-# =============================================================================
 
 ARG RUST_IMAGE=rust:bookworm
 

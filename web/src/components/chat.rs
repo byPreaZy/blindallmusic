@@ -1,9 +1,3 @@
-//! Room chat — `Chat.vue` + `Message.vue` + `Moderation.vue` ports:
-//! `.chat-panel` with header (title + alert moderators + FAQ link), avatar
-//! messages newest-first (`flex-col-reverse`), composer, guest banner,
-//! per-message reactions (`chat.message.{id}` channel), report button,
-//! team badge, reports counter, moderation modal with BanForm.
-
 use crate::api;
 use crate::auth::use_auth;
 use crate::i18n::t;
@@ -17,8 +11,6 @@ use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::rc::Rc;
 
-/// `chat_reactions` + `publicModerators` shared props — fetched once per
-/// chat mount (`GET /api/v1/chat/config`).
 #[derive(Clone, Default)]
 struct ChatConfig {
     standard_emojis: Vec<String>,
@@ -26,7 +18,6 @@ struct ChatConfig {
     public_moderator_ids: HashSet<i64>,
 }
 
-/// `userHasSupporterReactions` — donor perk gate.
 fn can_use_supporter_reactions(perks: &[String], is_supporter: bool) -> bool {
     perks.iter().any(|p| p == "supporter_reactions")
         || (!perks.is_empty() && is_supporter)
@@ -37,13 +28,8 @@ fn can_use_supporter_reactions(perks: &[String], is_supporter: bool) -> bool {
 pub fn RoomChat(
     room_id: i64,
     rt: Realtime,
-    /// Public moderator / admin — can delete messages.
     can_delete: bool,
-    /// Guest users get the register/login banner instead of the composer.
-    /// Signal — the guest account can be created after mount.
     is_guest: Signal<bool>,
-    /// Room moderator ids — their messages get the accent styling + badge.
-    /// Signal — `show` payload can land after the first render.
     moderator_ids: Signal<HashSet<i64>>,
 ) -> impl IntoView {
     let auth = use_auth();
@@ -55,7 +41,6 @@ pub fn RoomChat(
     let config = RwSignal::new(ChatConfig::default());
     let channel = format!("chat-room.{room_id}");
 
-    // History once.
     {
         let messages = messages.clone();
         leptos::task::spawn_local(async move {
@@ -67,7 +52,6 @@ pub fn RoomChat(
         });
     }
 
-    // Emoji catalog + public moderator ids (Inertia shared props port).
     {
         let config = config;
         leptos::task::spawn_local(async move {
@@ -90,7 +74,6 @@ pub fn RoomChat(
         });
     }
 
-    // Live events.
     {
         let rt = rt.clone();
         rt.subscribe(&channel);
@@ -98,7 +81,6 @@ pub fn RoomChat(
         rt.listen(&ch, "NewMessage", Rc::new(move |data| {
             if let Some(m) = data.get("message") {
                 messages.update(|msgs| {
-                    // Dedupe by id (our own POST returns 204 — broadcast is source).
                     let id = m["id"].as_i64().unwrap_or_default();
                     if !msgs.iter().any(|x| x["id"].as_i64() == Some(id)) {
                         msgs.push(m.clone());
@@ -111,7 +93,6 @@ pub fn RoomChat(
         }));
         let ch = channel.clone();
         let messages2 = messages;
-        // `MessageReported` — replace the message in place (reports counter).
         rt.listen(&ch, "MessageReported", Rc::new(move |data| {
             if let Some(m) = data.get("message") {
                 let id = m["id"].as_i64().unwrap_or_default();
@@ -146,7 +127,6 @@ pub fn RoomChat(
         struct B {
             body: String,
         }
-        // `chat::store` answers 204 — no JSON body to parse.
         leptos::task::spawn_local(async move {
             match api::post_no_content(
                 &format!("/api/v1/rooms/{room_id}/messages"),
@@ -163,8 +143,6 @@ pub fn RoomChat(
         });
     };
 
-    // `AlertModeratorsModal.vue` — the button opens a modal with an optional
-    // comment, not a direct POST.
     let alerting = RwSignal::new(false);
     let alert_message = RwSignal::new(String::new());
     let alert = move |_| {
@@ -216,8 +194,6 @@ pub fn RoomChat(
             </div>
 
             <div class="chat-messages flex flex-1 flex-col-reverse gap-1 overflow-y-auto px-2 py-2">
-                // flex-col-reverse renders first-in-DOM at the bottom — feed
-                // messages newest-first so latest sits at the composer edge.
                 <For
                     each=move || {
                         let mut list = messages.get();
@@ -279,7 +255,6 @@ pub fn RoomChat(
                 }.into_any()
             }}
         </div>
-        // `AlertModeratorsModal.vue` — optional comment + danger submit.
         <Show when=move || alerting.get()>
             <div class="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4"
                 on:click=move |_| alerting.set(false)>
@@ -306,9 +281,6 @@ pub fn RoomChat(
     }
 }
 
-/// `Message.vue` port — one chat row: avatar (+mod crown), name (click →
-/// moderation modal for room/public mods), team badge, reports counter,
-/// time, body, reactions row, hover actions (react / report / delete).
 #[component]
 fn ChatMessage(
     message: Value,
@@ -317,8 +289,6 @@ fn ChatMessage(
     config: RwSignal<ChatConfig>,
     viewer: Signal<Option<crate::types::User>>,
 ) -> impl IntoView {
-    // `Realtime` is `Rc`-backed — pull it from context instead of threading
-    // it through the `<For>` `children` closure (which must be `Send`).
     let rt = use_context::<crate::app::SharedRealtime>()
         .expect("SharedRealtime")
         .get_untracked()
@@ -341,11 +311,8 @@ fn ChatMessage(
     let reporting = RwSignal::new(false);
     let reported_once = RwSignal::new(false);
     let moderate = RwSignal::new(false);
-    // Keep the latest message value for `MessageReported` updates handled by
-    // the parent; local signals only track what the parent doesn't resend.
     let _ = &message;
 
-    // Hydrate reactions when the payload didn't carry them (`hasHydratedReactions`).
     if !reactions_hydrated {
         let reactions = reactions;
         let user_reaction = user_reaction;
@@ -359,7 +326,6 @@ fn ChatMessage(
         });
     }
 
-    // `chat.message.{id}` — `MessageReactionUpdated` broadcast.
     {
         let rt = rt.clone();
         let ch = format!("chat.message.{msg_id}");
@@ -404,7 +370,6 @@ fn ChatMessage(
                 )
                 .await;
             }
-            // State updates come via the `MessageReactionUpdated` broadcast.
         });
     };
 
@@ -442,12 +407,9 @@ fn ChatMessage(
             .map(|u| u.is_public_moderator || config.get().public_moderator_ids.contains(&u.id))
             .unwrap_or(false)
     };
-    // `isModerator || userIsPublicModerator` — opens the Moderation modal.
     let viewer_can_moderate = move || viewer_is_room_mod() || viewer_is_public_mod();
-    // `shouldShowReportButton` — hidden on public-moderator messages.
     let author_is_public_mod = config.get().public_moderator_ids.contains(&uid);
     let from_mod = moderator_ids.get().contains(&uid);
-    // Supporter emoji gate — `userHasSupporterReactions`.
     let can_supporter = move || {
         viewer
             .get()
@@ -457,7 +419,6 @@ fn ChatMessage(
 
     view! {
         <div class="chat-message group">
-            // Hover actions — react + report (top-right).
             <div class="absolute right-2 top-2 z-20 hidden flex-row gap-1 group-hover:flex">
                 <button type="button" class="chat-icon-btn text-base" title="Réagir"
                     on:click=move |_| show_picker.update(|v| *v = !*v)>"😊"</button>
@@ -487,9 +448,6 @@ fn ChatMessage(
                 <div class="relative">
                     {match photo.clone() {
                         Some(p) => view! {
-                            // `user.photo` is a full URL (accessor); raw
-                            // storage paths from older payloads get the
-                            // /storage/ prefix.
                             <img src=if p.starts_with("http") { p.clone() } else { format!("/storage/{p}") } alt=name.get_value()
                                 class=format!(
                                     "h-10 w-10 rounded-full border-2 object-cover {}",
@@ -516,8 +474,6 @@ fn ChatMessage(
                 <div class="min-w-0 flex-1">
                     <div class="relative mb-1 flex items-center justify-between">
                         <div class="flex items-center gap-2 overflow-hidden">
-                            // Username — opens the moderation modal when the
-                            // viewer is a room/public moderator.
                             {move || if viewer_can_moderate() {
                                 let n = name.get_value();
                                 view! {
@@ -562,7 +518,6 @@ fn ChatMessage(
                     </div>
                     <p class="whitespace-pre-wrap break-words text-sm leading-relaxed text-white/90">{body.get_value()}</p>
 
-                    // Reactions row.
                     <div class="relative mt-2 flex flex-wrap items-center gap-1">
                         <For
                             each=move || reactions.get()
@@ -605,7 +560,6 @@ fn ChatMessage(
                 </div>
             </div>
 
-            // Emoji picker — `retro-dropdown-panel` floating above the message.
             {move || show_picker.get().then(|| {
                 let cfg = config.get();
                 let can_sup = can_supporter();
@@ -644,7 +598,6 @@ fn ChatMessage(
                 }
             })}
 
-            // `Moderation.vue` modal — room/public moderators only.
             {move || moderate.get().then(|| {
                 let author_is_room_mod = moderator_ids.get().contains(&uid);
                 view! {
@@ -663,7 +616,6 @@ fn ChatMessage(
     }
 }
 
-/// `Moderation.vue` port — modal over a message: quote, delete, BanForm.
 #[component]
 fn ChatModerationModal(
     #[prop(into)] name: String,
@@ -726,7 +678,6 @@ fn ChatModerationModal(
     }
 }
 
-/// `BanForm.vue` port — duration + reason selects → `POST moderation/users/{id}/ban`.
 #[component]
 fn ChatBanForm(
     user_id: i64,
@@ -736,7 +687,6 @@ fn ChatBanForm(
     let duration = RwSignal::new(Option::<i64>::None);
     let reason = RwSignal::new(String::new());
     let busy = RwSignal::new(false);
-    // `reasons` — same list as BanForm.vue.
     let reasons = [
         "Pseudonyme inapproprié.",
         "Langage inapproprié.",
@@ -756,8 +706,6 @@ fn ChatBanForm(
         let r = reason.get();
         let d = duration.get();
         leptos::task::spawn_local(async move {
-            // `user.ban` — PHP sends `expired_at` ("+1 day"…); the API takes
-            // minutes (`BanUserRequest` duration).
             if api::post::<Value, _>(
                 &format!("/api/v1/moderation/users/{user_id}/ban"),
                 &json!({"reason": r, "duration": d}),

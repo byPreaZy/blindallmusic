@@ -1,7 +1,3 @@
-//! Answer input + answer chips — port of `UserInput.vue` essentials:
-//! submit → `/rounds/{r}/tracks/{t}/check`, good/almost/bad/hint feedback,
-//! accumulated `words`, chips reveal, paste guard.
-
 use crate::api;
 use crate::components::feedback_sounds::play_feedback;
 use crate::i18n::t;
@@ -39,9 +35,6 @@ fn store_flag(key: &str, value: bool) {
     }
 }
 
-/// One queued submission — port of `useAnswerSubmissionQueue` items.
-/// Serial FIFO so rapid Enters never drop; each captures `currentTime` +
-/// the round/track it was typed against.
 struct QueueItem {
     text: String,
     round_id: i64,
@@ -55,23 +48,17 @@ pub fn AnswerInput(
     round: RwSignal<Option<Round>>,
     track: RwSignal<Option<Track>>,
     current_time: ReadSignal<f64>,
-    /// Shared volume — rendered as a slider in the settings dropdown and
-    /// consumed by `Player` + the feedback sounds (Volume.vue equivalent).
     volume: RwSignal<f64>,
 ) -> impl IntoView {
     let text = RwSignal::new(String::new());
     let words = RwSignal::new(Vec::<String>::new());
     let found = RwSignal::new(Vec::<GoodAnswer>::new());
-    // 'good' | 'almost' | 'bad' | 'hint' transient feedback.
     let flash = RwSignal::new(Option::<String>::None);
     let hint = RwSignal::new(Option::<String>::None);
-    // PHP `useAnswerSubmissionQueue`: input never waits on the network —
-    // submissions queue serially (fighting-game input buffer).
     let queue = Rc::new(RefCell::new(VecDeque::<QueueItem>::new()));
     let processing = Rc::new(Cell::new(false));
     let generation = Rc::new(Cell::new(0_u64));
     let input_ref = NodeRef::<Input>::new();
-    // Settings dropdown (`UserInput.vue` — auto-focus + answer sounds).
     let settings_open = RwSignal::new(false);
     let auto_focus = RwSignal::new(stored_flag("autoFocus", true));
     let answer_sounds = RwSignal::new(stored_flag("answerSounds", true));
@@ -85,9 +72,6 @@ pub fn AnswerInput(
 
     let disabled = Memo::new(move |_| round.get().is_none() || track.get().is_none());
 
-    // New track → reset input state + invalidate the queue (mirrors the
-    // TrackPlayed listener + queue `reset()` — generation bump makes any
-    // in-flight response for the old track stale).
     let last_track_id = RwSignal::new(Option::<i64>::None);
     let queue_reset = queue.clone();
     let generation_reset = generation.clone();
@@ -103,7 +87,6 @@ pub fn AnswerInput(
             flash.set(None);
             hint.set(None);
             if id.is_some() && auto_focus.get_untracked() {
-                // autofocus equivalent (best effort — browsers may block).
                 if let Some(el) = input_ref.get() {
                     let _ = el.focus();
                 }
@@ -129,7 +112,6 @@ pub fn AnswerInput(
         .forget();
     };
 
-    // Chip flash animation (`flashingAnswerIds` — 650ms pop on reveal).
     let flashing_ids = RwSignal::new(HashSet::<i64>::new());
     let flash_chips = move |ids: Vec<i64>| {
         flashing_ids.update(|s| s.extend(ids.iter().copied()));
@@ -143,8 +125,6 @@ pub fn AnswerInput(
         .forget();
     };
 
-    // Reactive mirror of `queue.len() + processing` for the submit
-    // button's `--busy`/`aria-busy` state (`pendingCount` in PHP).
     let pending_count = RwSignal::new(0_usize);
 
     let process_queue = {
@@ -164,9 +144,6 @@ pub fn AnswerInput(
             let flash_chips = flash_chips.clone();
             leptos::task::spawn_local(async move {
                 loop {
-                    // Pop the next fresh item; drop stale heads (PHP
-                    // `dropStaleHead`/`isStaleItem` — generation bump or
-                    // track/round change invalidates them).
                     let item = {
                         let mut q = queue.borrow_mut();
                         loop {
@@ -206,8 +183,6 @@ pub fn AnswerInput(
                     )
                     .await
                     {
-                        // Track/round changed mid-flight → discard the
-                        // response entirely (PHP `isStaleItem` re-check).
                         Ok(_) if item.generation != generation.get() => {}
                         Ok(resp) => {
                             if words.is_disposed() {
@@ -234,8 +209,6 @@ pub fn AnswerInput(
                             }
                         }
                         Err(e) => match e.status {
-                            // PHP: 409 (round ended/track mismatch) is silent;
-                            // other statuses flash 'bad' (network/429/400).
                             409 => {}
                             _ => flash_for("bad"),
                         },
@@ -261,7 +234,6 @@ pub fn AnswerInput(
     };
 
     let is_composing = RwSignal::new(false);
-    // `check()` — shared by the form submit and the Enter keydown.
     let do_submit = {
         let queue = queue.clone();
         let generation = generation.clone();
@@ -281,8 +253,6 @@ pub fn AnswerInput(
             let gen = generation.get();
             {
                 let mut q = queue.borrow_mut();
-                // `duplicatePending` — identical text already in flight on
-                // this track is dropped (double-Enter protection).
                 if q.iter().any(|it| {
                     it.text == submitted && it.generation == gen && it.track_id == tr.id
                 }) {
@@ -317,8 +287,6 @@ pub fn AnswerInput(
         <div class="room-user-input w-full space-y-2">
             <form class="m-0 flex w-full items-center justify-center p-0" on:submit=submit_form>
                 <div class="relative flex w-full flex-col">
-                    // a11y live region — `feedbackMessage` in PHP (Correct
-                    // answer / Almost! / Wrong!), sr-only.
                     <span class="sr-only" aria-live="polite" aria-atomic="true">
                         {move || match flash.get().as_deref() {
                             Some("good") => t("Correct answer").to_string(),
@@ -343,9 +311,6 @@ pub fn AnswerInput(
                                 on:compositionstart=move |_| is_composing.set(true)
                                 on:compositionend=move |_| is_composing.set(false)
                                 on:keydown=move |ev: ev::KeyboardEvent| {
-                                    // Enter submits even though the form's
-                                    // submit button may be disabled (PHP
-                                    // `@keydown.enter.prevent="check"`).
                                     if ev.key() == "Enter" {
                                         ev.prevent_default();
                                         submit_form_from_key();
@@ -364,7 +329,6 @@ pub fn AnswerInput(
                                     </svg>
                                 </button>
                                 <Show when=move || settings_open.get()>
-                                    // Backdrop closes on outside click (Dropdown.vue equivalent).
                                     <div class="fixed inset-0 z-40" on:click=move |_| settings_open.set(false)></div>
                                     <div class="retro-dropdown-panel absolute bottom-full right-0 z-50 mb-2 w-64 py-2">
                                         <div class="space-y-3 px-4 py-2">
@@ -466,8 +430,6 @@ pub fn AnswerInput(
                             } else {
                                 format!("{} ?", t(&a.name))
                             };
-                            // `type.svg_icon` — admin-managed icon before
-                            // the revealed value (PHP renders it v-html).
                             let icon = good
                                 .and_then(|g| g.answer_type.as_ref()?.svg_icon.clone())
                                 .unwrap_or_default();

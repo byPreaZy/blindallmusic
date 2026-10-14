@@ -1,5 +1,3 @@
-//! `DeezerService::searchTrack` port.
-
 use crate::types::{ProviderError, ProviderResult, ProviderTrack};
 use serde_json::Value;
 use std::time::Duration;
@@ -24,7 +22,6 @@ impl DeezerClient {
         }
     }
 
-    /// GET api.deezer.com/search/track?q=…&strict=on&limit=25 → readable only.
     pub async fn search_track(&self, term: &str) -> ProviderResult {
         if term.trim().is_empty() {
             return Ok(vec![]);
@@ -55,8 +52,6 @@ impl DeezerClient {
         Ok(tracks)
     }
 
-    /// `DeezerService::findPlaylist` — GET api.deezer.com/playlist/{id}
-    /// → {id, name, description, tracks_count, image}.
     pub async fn find_playlist(&self, playlist_id: &str) -> Result<Value, ProviderError> {
         let url = format!(
             "https://api.deezer.com/playlist/{}",
@@ -84,10 +79,6 @@ impl DeezerClient {
         }))
     }
 
-    /// `DeezerService::importPlaylist` — paginated GET of
-    /// /playlist/{id}/tracks following the `next` links (100/page).
-    /// Tracks are formatted `forStorage` → preview_url is the
-    /// `deezer://{id}` placeholder resolved live at playback.
     pub async fn playlist_tracks(&self, playlist_id: &str) -> Result<Vec<ProviderTrack>, ProviderError> {
         let mut url = format!(
             "https://api.deezer.com/playlist/{}/tracks?limit=100",
@@ -131,7 +122,6 @@ impl DeezerClient {
     }
 }
 
-/// `formatTrack($track, forStorage: false)` — real preview URL.
 pub fn format_track(t: &Value) -> ProviderTrack {
     ProviderTrack {
         provider: "deezer".to_string(),
@@ -142,22 +132,17 @@ pub fn format_track(t: &Value) -> ProviderTrack {
         track_name: t["title"].as_str().unwrap_or_default().to_string(),
         album_name: t["album"]["title"].as_str().map(str::to_string),
         preview_url: t["preview"].as_str().map(str::to_string),
-        // PHP: release_date => null (getReleaseDate too slow).
         release_date: None,
         artwork_url: t["album"]["cover_medium"].as_str().map(str::to_string),
     }
 }
 
-/// `formatTrack($track, forStorage: true)` — preview_url becomes the
-/// `deezer://{id}` placeholder, resolved via live API call at playback
-/// (`Track::audio()` in PHP, `resolver.rs` here).
 pub fn format_track_for_storage(t: &Value) -> ProviderTrack {
     let mut track = format_track(t);
     track.preview_url = Some(format!("deezer://{}", track.provider_id));
     track
 }
 
-/// `urlencode` (RFC 3986, spaces → %20 not +).
 pub fn urlencoded(s: &str) -> String {
     let mut out = String::with_capacity(s.len() * 3);
     for b in s.bytes() {

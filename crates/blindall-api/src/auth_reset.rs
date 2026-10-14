@@ -1,9 +1,3 @@
-//! `PasswordResetLinkController` + `NewPasswordController` +
-//! `EmailVerificationNotificationController` + `VerifyEmailController`.
-//!
-//! Token format identical to Laravel (HMAC-SHA256 with APP_KEY), so
-//! tokens issued by either stack work in the other.
-
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -20,7 +14,6 @@ pub struct ForgotBody {
     email: String,
 }
 
-/// `POST /api/v1/auth/forgot-password` — `Password::sendResetLink`.
 pub async fn forgot_password(
     State(state): State<AppState>,
     Json(body): Json<ForgotBody>,
@@ -30,7 +23,6 @@ pub async fn forgot_password(
         return err("email", "The email field must be a valid email address.");
     }
     let Some((user_id, name)) = state.auth.find_by_email(email).await.ok().flatten() else {
-        // `Password::INVALID_USER` — same 422 Laravel returns.
         return err("email", "passwords.user");
     };
     match state.password_resets.create_token(email).await {
@@ -43,8 +35,6 @@ pub async fn forgot_password(
             );
             let _ = user_id; // parity: link is emailed, never returned.
             if !state.mail.configured() {
-                // `MAIL_MAILER=log` parity — the link is recoverable from
-                // container logs in local dev (no Brevo key configured).
                 tracing::info!(to = email, %url, "password reset link (mail not configured)");
             }
             let html = format!(
@@ -80,7 +70,6 @@ pub struct ResetBody {
     password_confirmation: String,
 }
 
-/// `POST /api/v1/auth/reset-password` — `Password::reset`.
 pub async fn reset_password(
     State(state): State<AppState>,
     Json(body): Json<ResetBody>,
@@ -110,7 +99,6 @@ pub async fn reset_password(
     }
 }
 
-/// `POST /api/v1/auth/email/verification-notification` — resend verify link.
 pub async fn verification_notification(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
@@ -144,8 +132,6 @@ pub async fn verification_notification(
     Json(json!({"status": "verification-link-sent"})).into_response()
 }
 
-/// `URL::temporarySignedRoute('verification.verify', …)` — the link
-/// signs `GET /api/v1/auth/email/verify/{id}/{hash}?expires=…`.
 fn verification_url(state: &AppState, user_id: i64, email: &str) -> String {
     let expires = (chrono::Utc::now() + chrono::Duration::minutes(60)).timestamp();
     let hash = sha1_hex(email);
@@ -166,18 +152,12 @@ pub struct VerifyQuery {
     signature: String,
 }
 
-/// `GET /api/v1/auth/email/verify/{id}/{hash}` — `VerifyEmailController`.
-/// Signature check is HMAC over the URL minus the signature param
-/// (Laravel `URL::hasValidSignature`).
 pub async fn verify_email(
     State(state): State<AppState>,
     Path((user_id, hash)): Path<(i64, String)>,
     Query(q): Query<VerifyQuery>,
     headers: axum::http::HeaderMap,
 ) -> Response {
-    // Emailed links open in a browser (Accept: text/html) — redirect to the
-    // SPA route which re-validates through the API and renders a page, like
-    // Laravel's `VerifyEmailController` redirecting to the app.
     let wants_html = headers
         .get(axum::http::header::ACCEPT)
         .and_then(|v| v.to_str().ok())
@@ -265,8 +245,6 @@ mod tests {
 
     #[test]
     fn signed_url_roundtrip() {
-        // Same construction/verification as the handler: HMAC over
-        // `{base}?expires={ts}`, no signature param.
         let app_key = "base64:testkey";
         let app_url = "https://blindall.test";
         let (id, hash, expires) = (42i64, "abc123", 1_800_000_000i64);

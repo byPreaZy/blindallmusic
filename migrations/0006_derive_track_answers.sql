@@ -1,31 +1,3 @@
--- =============================================================================
--- 0006 — Types de réponses additionnels + enrichissement des extraits.
---
--- Le gameplay est data-driven (parité PHP) : le jeu demande exactement les
--- lignes `track_answers` présentes. La base migrée ne contient que les
--- réponses Artist/Title créées automatiquement ; en production, les
--- réponses Featuring/Movie/Anime/Video game/etc. ont été ajoutées par les
--- modérateurs au fil du temps. Cette migration reproduit cette curation :
---
---   1. Ajoute les types observés en production via les clés i18n
---      (lang/*.json) mais absents du seeder : Video game, Musical,
---      Character.
---   2. Dérive une réponse `Featuring` quand un titre/artiste contient
---      « (feat. X) », « (featuring X) », « (duet with X) »… — texte que le
---      sanitizer retire du titre (jamais demandable autrement).
---   3. Dérive une réponse média (Movie/Show/Anime/Cartoon/Video game) quand
---      le titre cite une œuvre entre parenthèses — « (De "Mulan") »,
---      « (From "Super Mario 64") », « (X Soundtrack) », « (Générique de X) »…
---      Le type est choisi d'après les noms des rooms puis de la playlist
---      (ex. room « Jeux vidéo » → Video game, « Anime » → Anime,
---      « Dessin animé » → Cartoon, « Série » → Show, sinon → Movie).
---      Sans signal de nom, on retombe sur Movie — la notation
---      « (De "…"/BO) » désigne presque toujours une œuvre audiovisuelle.
---
--- Idempotent : Featuring dédupliqué par valeur, média ignoré si le track
--- possède déjà une réponse de la famille média (curateur > dérivation).
--- =============================================================================
-
 -- 1) Types supplémentaires (ids après les 11 du seeder original).
 INSERT INTO answer_types (id, name, pronoun, svg_icon, created_at, updated_at)
 SELECT v.id, v.name, v.pronoun, v.svg_icon, v.created_at, v.updated_at
@@ -48,11 +20,6 @@ WHERE NOT EXISTS (SELECT 1 FROM answer_types a WHERE a.id = v.id);
 SELECT setval(pg_get_serial_sequence('answer_types', 'id'),
               GREATEST((SELECT max(id) FROM answer_types), 1), true);
 
--- 2) Featuring — extrait des parenthèses de titre/artiste.
---    « (feat. Pitbull) », « (featuring Jay-Z) », « (duet with X) »,
---    « (Album Version Featuring Jay-Z) » → Featuring « Pitbull ».
---    La version longue (« Aaron Pauley of Of Mice & Men ») devient l'alias
---    de la version courte (« Aaron Pauley ») : les deux formes complètent.
 WITH parens AS (
     SELECT ta.track_id AS tid, m[1] AS ptext
     FROM track_answers ta

@@ -1,14 +1,9 @@
-//! Port of `resources/js/Pages/Rooms/partials/FinishedRoundModal.vue` +
-//! `Podium.vue` — round-end modal with medal podium, players/teams tabs,
-//! ELO badges and the autostart countdown bar.
-
 use crate::i18n::t;
 use crate::types::RoomConfig;
 use leptos::prelude::*;
 use send_wrapper::SendWrapper;
 use serde_json::Value;
 
-/// `entry.user?.name ?? entry.team?.name`
 fn podium_name(entry: &Value) -> String {
     entry["user"]["name"]
         .as_str()
@@ -17,7 +12,6 @@ fn podium_name(entry: &Value) -> String {
         .to_string()
 }
 
-/// `entry.user?.photo ?? entry.team?.photo`
 fn podium_photo(entry: &Value) -> String {
     entry["user"]["photo"]
         .as_str()
@@ -26,7 +20,6 @@ fn podium_photo(entry: &Value) -> String {
         .to_string()
 }
 
-/// `entry.score ?? entry.total ?? 0`
 fn podium_score(entry: &Value) -> f64 {
     entry["score"]
         .as_f64()
@@ -34,12 +27,10 @@ fn podium_score(entry: &Value) -> f64 {
         .unwrap_or(0.0)
 }
 
-/// `EloBadge` compact variant.
 fn elo_badge(elo: i64) -> impl IntoView {
     view! { <crate::components::elo::EloBadge elo=elo size="sm" variant="compact"/> }
 }
 
-/// One medal column of the podium (rank 1-3).
 fn podium_spot(entry: &Value, rank: usize) -> impl IntoView {
     let medal_class = match rank {
         1 => "medal gold",
@@ -109,7 +100,6 @@ fn podium_spot(entry: &Value, rank: usize) -> impl IntoView {
     }
 }
 
-/// Runner-up row for podium positions 4 and 5.
 fn podium_extra(offset: usize, entry: &Value) -> impl IntoView {
     view! {
         <div class="flex min-w-0 max-w-full items-center gap-2.5 border border-white/10 bg-brand-midnight px-3 py-2 sm:gap-2 sm:py-1">
@@ -150,10 +140,8 @@ fn podium_extra(offset: usize, entry: &Value) -> impl IntoView {
 #[component]
 fn Podium(list: Vec<Value>) -> impl IntoView {
     if list.is_empty() {
-        // PHP `v-if="hasEntries"` — nothing rendered at all.
         return ().into_any();
     }
-    // PHP podiumOrder: [2nd,1st] for 2 entries, [3rd,1st,2nd] for 3+.
     let ordered: Vec<(usize, Value)> = match list.len() {
         1 => vec![(1, list[0].clone())],
         2 => vec![(2, list[1].clone()), (1, list[0].clone())],
@@ -208,8 +196,6 @@ pub fn FinishedRoundModal(
     let active_tab = RwSignal::new("players");
     let countdown = RwSignal::new(0_i64);
 
-    // `startCountdown` — runs when the modal opens, reset per opening like
-    // PHP's `watch(() => props.show)` + `onMounted`.
     let countdown_iv = StoredValue::new(None::<SendWrapper<gloo_timers::callback::Interval>>);
     Effect::new(move |_| {
         if show.get() {
@@ -292,8 +278,6 @@ pub fn FinishedRoundModal(
                                         each=move || users_podium.get()
                                         key=|u| u["user"]["id"].as_i64().or(u["user_id"].as_i64()).unwrap_or_default()
                                         children=move |u: Value| {
-                                            // Position = row index in the ordered podium array
-                                            // (PHP `v-for` index + 1); computed at render.
                                             let pos = users_podium
                                                 .get_untracked()
                                                 .iter()

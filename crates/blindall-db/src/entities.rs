@@ -1,8 +1,3 @@
-//! Row structs mirroring the existing MySQL schema — same tables, same
-//! columns, so the Rust server can run against the Laravel database
-//! unchanged. Rows are mapped manually (`sqlx-macros` is disabled on this
-//! toolchain: its proc-macro host link needs SDK libs we don't have).
-
 use chrono::{DateTime, Utc};
 use sqlx::postgres::PgRow;
 use sqlx::Row;
@@ -123,7 +118,6 @@ pub struct Track {
     pub provider_url: Option<String>,
     pub preview_url: String,
     pub artwork_url: String,
-    /// sic — the DB column is misspelled in the legacy schema.
     pub dificulty: Option<i64>,
     pub counter: Option<i64>,
     pub hint: Option<String>,
@@ -147,7 +141,6 @@ impl Track {
     }
 }
 
-/// User columns the game/auth paths need (not the full Laravel model).
 #[derive(Debug, Clone)]
 pub struct User {
     pub id: i64,

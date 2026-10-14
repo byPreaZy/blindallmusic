@@ -1,12 +1,3 @@
-//! Port of the pure math in `LevelCalculator::calculateLevelData`.
-//!
-//! XP sources (same caps as PHP):
-//!   score_public_rooms (uncapped) + min(minigames, 1000)
-//!   + min(months*50, 600) + min(rooms*100, 1000) + team 200
-//!   + min(playlists*20, 2000) + min(likes*5, 1000) + min(streak*10, 300)
-//!
-//! Level thresholds: 100, 150, 200, 250 … (+50 per level).
-
 #[derive(Debug, Clone, Copy, Default)]
 pub struct XpInputs {
     pub score_public_rooms: i64,
@@ -27,7 +18,6 @@ pub struct LevelData {
     pub xp_for_next_level: i64,
 }
 
-/// `calculateLevelData` — returns level/current/next-threshold for total XP.
 pub fn compute_level(i: &XpInputs) -> LevelData {
     let total_xp = i.score_public_rooms
         + i.minigame_scores_total.min(1000)
@@ -41,8 +31,6 @@ pub fn compute_level(i: &XpInputs) -> LevelData {
     level_from_total_xp(total_xp)
 }
 
-/// The while-loop of PHP `calculateLevelData`, closed-form equivalent kept
-/// as the same iteration for readability/parity.
 pub fn level_from_total_xp(total_xp: i64) -> LevelData {
     let mut level = 1i64;
     let mut xp_for_current = 0i64;
@@ -70,8 +58,6 @@ mod tests {
     #[test]
     fn thresholds_match_php_code() {
         // NOTE: the PHP code contradicts its own doc-comment — the loop
-        // produces L2@100, L3@200, L4@350, L5@550 (not 100/250/450/700).
-        // We replicate the CODE, which is what production runs.
         assert_eq!(level_from_total_xp(0).level, 1);
         assert_eq!(level_from_total_xp(99).level, 1);
         assert_eq!(level_from_total_xp(100).level, 2);

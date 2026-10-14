@@ -1,15 +1,8 @@
-//! Google AdSense port — `resources/js/ads/index.js` + `Components/Adsense.vue`.
-//!
-//! Slot visibility mirrors `shouldServeAds(path)` + `useAdsDisabled()`:
-//! excluded paths, donation-goal reached (`ads_disabled` — ads off for the
-//! whole community), or the `ad_free` donor perk.
-
 use crate::auth::use_auth;
 use leptos::prelude::*;
 use leptos_router::hooks::use_location;
 use wasm_bindgen::JsCast;
 
-/// `ads/index.js` — pages where no slot is ever served.
 fn excluded(path: &str) -> bool {
     const PREFIXES: &[&str] = &["/auth/", "/callback/", "/guest/", "/admin", "/moderation"];
     const EXACT: &[&str] = &[
@@ -26,7 +19,6 @@ fn excluded(path: &str) -> bool {
     if EXACT.contains(&path) || PREFIXES.iter().any(|p| path.starts_with(p)) {
         return true;
     }
-    // `/rooms/{slug}` (+ /edit) and `/playlists/{id}/edit`.
     if let Some(rest) = path.strip_prefix("/rooms/") {
         let _ = rest;
         return true;
@@ -39,17 +31,10 @@ fn excluded(path: &str) -> bool {
     false
 }
 
-/// `shouldServeAds(path, { adsDisabled })`.
 pub fn should_serve_ads(path: &str, ads_disabled: bool) -> bool {
     !ads_disabled && !excluded(path)
 }
 
-// Ads config — `(ads_disabled, adsense_client, adsense_slot)` fetched once
-// per session from the public donations progress payload. An empty client
-// means no AdSense account is configured ⇒ every slot stays hidden.
-// `ArcRwSignal` — no owner, so it can never be disposed (unlike `RwSignal`,
-// which dies with its component owner; even `Owner::new()` registers under
-// the current owner, so it was still torn down on navigation).
 fn ads_state_sig() -> ArcRwSignal<Option<(bool, String, String)>> {
     thread_local! {
         static SIG: ArcRwSignal<Option<(bool, String, String)>> = ArcRwSignal::new(None);
@@ -57,7 +42,6 @@ fn ads_state_sig() -> ArcRwSignal<Option<(bool, String, String)>> {
     SIG.with(|s| s.clone())
 }
 
-/// `(ads_disabled, client, slot)` — `(false, "", "")` until the fetch lands.
 fn ads_state() -> (bool, String, String) {
     let s = ads_state_sig();
     if s.get_untracked().is_none() {
@@ -76,8 +60,6 @@ fn ads_state() -> (bool, String, String) {
     s.get().unwrap_or_default()
 }
 
-/// Injects the AdSense loader once — `index.html` no longer ships a
-/// hardcoded `ca-pub`, the client id comes from server config.
 fn ensure_adsense_script(client: &str) {
     let Some(w) = web_sys::window() else { return };
     if js_sys::Reflect::get(&w, &wasm_bindgen::JsValue::from_str("__adsense_loaded"))
@@ -106,8 +88,6 @@ fn ensure_adsense_script(client: &str) {
     }
 }
 
-/// `pushAdsenseSlot()` — `(window.adsbygoogle ||= []).push({})`, swallowing
-/// errors exactly like the JS (blockers / script absent).
 fn push_adsense_slot() {
     if let Some(w) = web_sys::window() {
         let arr = js_sys::Reflect::get(&w, &wasm_bindgen::JsValue::from_str("adsbygoogle"))
@@ -129,20 +109,14 @@ fn push_adsense_slot() {
     }
 }
 
-/// `Adsense.vue` — `<ins class="adsbygoogle">` slot in the styled wrapper;
-/// pushes one slot on mount when visible. Renders nothing unless the
-/// server reports a configured `adsense_client`.
 #[component]
 pub fn Adsense(
-    /// `data-ad-slot` override — defaults to the server-configured
-    /// `ADSENSE_SLOT`.
     #[prop(optional)]
     ad_slot: Option<&'static str>,
     #[prop(optional, default = false)]
     compact: bool,
     #[prop(optional, default = "")]
     wrapper_class: &'static str,
-    /// Room lobby: `force-serve` allows the slot on `/rooms/{slug}`.
     #[prop(optional, default = false)]
     force_serve: bool,
 ) -> impl IntoView {
@@ -155,7 +129,6 @@ pub fn Adsense(
         if client.is_empty() {
             return false;
         }
-        // `userHasDonorPerk(user, 'ad_free')` — `donor_perks.includes`.
         let donor_ad_free = auth
             .user
             .get()

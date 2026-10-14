@@ -1,6 +1,3 @@
-//! Login / register — forms → Sanctum token + redirect. Also forgot/reset
-//! password, email verification, and OAuth (Socialite) flows.
-
 use crate::api;
 use crate::auth::use_auth;
 use crate::i18n::t;
@@ -10,7 +7,6 @@ use leptos_router::components::A;
 use leptos_router::hooks::{use_navigate, use_params_map, use_query_map};
 use serde_json::{json, Value};
 
-/// `Head::…->robots('noindex, nofollow')` on every auth page.
 fn auth_noindex() {
     crate::seo::set_meta("name", "robots", "noindex, nofollow");
 }
@@ -24,7 +20,6 @@ pub fn LoginPage() -> impl IntoView {
     let password = RwSignal::new(String::new());
     let error = RwSignal::new(Option::<String>::None);
     let busy = RwSignal::new(false);
-    // PHP `LoginForm` — `remember: true` by default.
     let remember = RwSignal::new(true);
     let navigate = use_navigate();
 
@@ -85,9 +80,6 @@ pub fn LoginPage() -> impl IntoView {
     }
 }
 
-/// Socialite provider buttons — `GET /auth/oauth/{provider}/redirect`
-/// returns the authorization URL; unconfigured providers surface a clean error.
-/// Blind'All Music keeps Google + Discord only.
 #[component]
 pub fn SocialButtons() -> impl IntoView {
     let error = RwSignal::new(Option::<String>::None);
@@ -218,7 +210,6 @@ pub fn RegisterPage() -> impl IntoView {
 
 // ---- forgot / reset password -------------------------------------------------
 
-/// `Auth/ForgotPassword` — email → `POST /auth/forgot-password`.
 #[component]
 pub fn ForgotPasswordPage() -> impl IntoView {
     crate::i18n::set_title_key("Forgot your password?");
@@ -263,7 +254,6 @@ pub fn ForgotPasswordPage() -> impl IntoView {
     }
 }
 
-/// `Auth/ResetPassword` — `/reset-password/:token?email=` (link from the mail).
 #[component]
 pub fn ResetPasswordPage() -> impl IntoView {
     crate::i18n::set_title_key("Reset Password");
@@ -333,7 +323,6 @@ pub fn ResetPasswordPage() -> impl IntoView {
 
 // ---- email verification ---------------------------------------------------------
 
-/// `Auth/VerifyEmail` — prompt + resend button (requires auth).
 #[component]
 pub fn VerifyEmailPage() -> impl IntoView {
     crate::i18n::set_title_key("Verify Email");
@@ -379,9 +368,6 @@ pub fn VerifyEmailPage() -> impl IntoView {
     }
 }
 
-/// `/verify-email/:id/:hash?expires&signature` — the mailed link hits the API
-/// directly for `Accept: json`, but for an HTML accept the API 302s here;
-/// this page also handles being opened with the signed query itself.
 #[component]
 pub fn VerifyEmailConfirmPage() -> impl IntoView {
     let params = use_params_map();
@@ -440,8 +426,6 @@ pub fn VerifyEmailConfirmPage() -> impl IntoView {
 
 // ---- oauth callback ---------------------------------------------------------
 
-/// `/oauth/:provider/callback?code&state` — forwards the provider response
-/// to `GET /auth/oauth/{provider}/callback`, stores the returned token.
 #[component]
 pub fn OAuthCallbackPage() -> impl IntoView {
     let params = use_params_map();

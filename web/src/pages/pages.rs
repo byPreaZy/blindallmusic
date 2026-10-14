@@ -1,6 +1,3 @@
-//! Static content page — `/pages/:slug`. Ports the CMS pages (terms, privacy,
-//! about…) served by `PageController`.
-
 use crate::api;
 use crate::i18n::t;
 use leptos::prelude::*;
@@ -19,7 +16,6 @@ pub fn StaticPage() -> impl IntoView {
         match api::get::<Value>(&format!("/api/v1/pages/{slug}")).await {
             Ok(v) => {
                 crate::i18n::set_title(v["page"]["title"].as_str());
-                // `PageController::show` — canonical on the public page URL.
                 crate::seo::set_canonical(&crate::seo::canonical_url(&format!("/pages/{slug}")));
                 crate::seo::apply_alternates(&format!("/pages/{slug}"));
                 page.set(v["page"].clone());

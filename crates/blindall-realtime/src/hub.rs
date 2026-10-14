@@ -1,10 +1,3 @@
-//! The hub: channels → connections, fan-out, presence bookkeeping.
-//!
-//! Presence channels (`room:{id}`) keep an in-memory member map — the real
-//! "who is here" source of truth (WS disconnects are detected by TCP
-//! close, so the PHP heartbeat trick is only mirrored to Redis for the
-//! HTTP-facing member count, in blindall-game).
-
 use crate::protocol::{PresenceKind, ServerOp};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -13,7 +6,6 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 
 pub type ConnId = u64;
-/// Capacity of a connection's outbound queue before it's considered dead.
 const OUTBOUND_CAP: usize = 512;
 
 #[derive(Clone)]
@@ -22,13 +14,11 @@ pub struct Outbound {
 }
 
 impl Outbound {
-    /// Non-blocking send; returns false if the client is too far behind.
     fn send(&self, op: ServerOp) -> bool {
         self.tx.try_send(op).is_ok()
     }
 }
 
-/// Handle given to a live connection — used to remove it on disconnect.
 pub struct Connection {
     pub id: ConnId,
     pub user_id: i64,
@@ -38,7 +28,6 @@ pub struct Connection {
 }
 
 impl Connection {
-    /// Deliver one frame to this socket.
     pub fn send(&self, op: ServerOp) -> bool {
         self.outbound.send(op)
     }
@@ -50,8 +39,6 @@ impl Drop for Connection {
         let id = self.id;
         let user_id = self.user_id;
         let subs = std::mem::take(&mut self.subscriptions);
-        // Spawn so Drop stays sync; ordering with respect to in-flight
-        // broadcasts is not required (leave is best-effort).
         tokio::spawn(async move {
             for ch in subs {
                 hub.detach(id, user_id, &ch).await;
@@ -61,9 +48,7 @@ impl Drop for Connection {
 }
 
 struct ChannelState {
-    /// conn_id → outbound socket
     conns: HashMap<ConnId, (i64, Outbound)>,
-    /// user_id → (member payload, open-conn count on this channel)
     members: HashMap<i64, (Value, usize)>,
     seq: u64,
 }
@@ -89,8 +74,6 @@ impl Hub {
         }
     }
 
-    /// Register a socket (post-auth). Returns its connection handle and the
-    /// receiver end the ws layer must drain into the TCP socket.
     pub fn connect(&self, user_id: i64) -> (Connection, mpsc::Receiver<ServerOp>) {
         let id = self.next_conn.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = mpsc::channel(OUTBOUND_CAP);
@@ -106,12 +89,6 @@ impl Hub {
         )
     }
 
-    /// `subscribe` — registers the socket and, for presence channels,
-    /// returns the member snapshot taken AFTER the joiner is added
-    /// (Pusher `.here` includes the joining member itself).
-    /// `presence:join` is announced to the *other* sockets only, and only
-    /// on the user's first socket (multi-tab connections do not
-    /// re-announce).
     pub async fn subscribe(
         &self,
         conn: &mut Connection,
@@ -145,7 +122,6 @@ impl Hub {
                 }
             }
 
-            // `.here` semantics: the sync snapshot includes self.
             snapshot = member.as_ref().map(|_| {
                 state
                     .members
@@ -170,14 +146,11 @@ impl Hub {
         snapshot
     }
 
-    /// `unsubscribe` — detach this socket only.
     pub async fn unsubscribe(&self, conn: &mut Connection, channel: &str) {
         conn.subscriptions.retain(|c| c != channel);
         self.detach(conn.id, conn.user_id, channel).await;
     }
 
-    /// Detach a conn from a channel; emits `presence:leave` when the user
-    /// has no remaining socket on it.
     pub async fn detach(&self, id: ConnId, user_id: i64, channel: &str) {
         let mut channels = self.channels.write().await;
         let Some(state) = channels.get_mut(channel) else {
@@ -209,8 +182,6 @@ impl Hub {
         }
     }
 
-    /// Broadcast a named event to every socket on `channel`.
-    /// `to_subscriber` events (Pusher `toOthers`) skip `except` when given.
     pub async fn broadcast(
         &self,
         channel: &str,
@@ -255,9 +226,6 @@ impl Hub {
         self.broadcast_presence_except(channel, kind, users, None).await;
     }
 
-    /// Presence announcements travel as structured `presence` frames, not
-    /// regular events, so clients can separate roster updates from game
-    /// events.
     async fn broadcast_presence_except(
         &self,
         channel: &str,
@@ -290,8 +258,6 @@ impl Hub {
         }
     }
 
-    /// Current presence members for a channel (for `joined` hydration or
-    /// diagnostics — the hub, not Redis, is the source of truth).
     pub async fn presence_members(&self, channel: &str) -> Vec<Value> {
         self.channels
             .read()
@@ -301,7 +267,6 @@ impl Hub {
             .unwrap_or_default()
     }
 
-    /// Number of open sockets on a channel.
     pub async fn channel_conn_count(&self, channel: &str) -> usize {
         self.channels
             .read()
@@ -311,7 +276,6 @@ impl Hub {
             .unwrap_or(0)
     }
 
-    /// Distinct member count on a presence channel.
     pub async fn presence_count(&self, channel: &str) -> usize {
         self.channels
             .read()

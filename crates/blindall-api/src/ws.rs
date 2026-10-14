@@ -1,5 +1,3 @@
-//! `GET /ws?token=…` — websocket upgrade + per-connection auth.
-
 use crate::authz::RoomChannelAuthorizer;
 use crate::state::AppState;
 use axum::extract::{Query, State, WebSocketUpgrade};
@@ -27,7 +25,6 @@ pub async fn handler(
         .await
         .map_err(|_| StatusCode::UNAUTHORIZED)?
         .ok_or(StatusCode::UNAUTHORIZED)?;
-    // banhammer — broadcasting auth goes through the banned check in PHP.
     if state.moderation.is_banned(user.id).await.unwrap_or(false) {
         return Err(StatusCode::FORBIDDEN);
     }

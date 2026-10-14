@@ -1,10 +1,3 @@
-//! Auth endpoints — parity with Laravel Breeze controllers:
-//! `RegisteredUserController::store`, `LoginRequest::authenticate`,
-//! `AuthenticatedSessionController::store/destroy`.
-//!
-//! Registration issues a Sanctum-compatible `{id}|{plain}` token so the
-//! SPA/mobile clients can call the API without the cookie session.
-
 use crate::auth::CurrentUser;
 use crate::state::AppState;
 use axum::extract::State;
@@ -17,7 +10,6 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-/// Laravel `RateLimiter` default: 5 attempts per 60s on `email|ip`.
 const MAX_ATTEMPTS: usize = 5;
 const DECAY: Duration = Duration::from_secs(60);
 
@@ -37,7 +29,6 @@ impl LoginThrottle {
             .collect()
     }
 
-    /// `RateLimiter::tooManyAttempts($key, 5)` — checked BEFORE hitting.
     pub fn too_many_attempts(&self, key: &str) -> Option<u64> {
         let a = self.attempts(key);
         if a.len() >= MAX_ATTEMPTS {
@@ -59,13 +50,10 @@ impl LoginThrottle {
     }
 }
 
-/// `Str::lower(email).'|'.$request->ip()`
 fn throttle_key(email: &str, ip: &str) -> String {
     format!("{}|{}", email.to_lowercase(), ip)
 }
 
-/// `ClientIp::from($request)` — CF-Connecting-IP, first XFF entry,
-/// X-Real-IP, fallback socket addr.
 pub(crate) fn client_ip(headers: &HeaderMap, fallback: &str) -> String {
     let h = |n: &str| {
         headers
@@ -85,8 +73,6 @@ pub(crate) fn client_ip(headers: &HeaderMap, fallback: &str) -> String {
     h("x-real-ip").unwrap_or(fallback).to_string()
 }
 
-/// Laravel validation error shape:
-/// `{"message": "...", "errors": {"field": ["msg"]}}` → 422.
 fn validation_error(field: &str, msg: &str) -> Response {
     (
         StatusCode::UNPROCESSABLE_ENTITY,
@@ -111,8 +97,6 @@ fn user_json(u: &blindall_db::entities::User, is_public_moderator: bool) -> Valu
     })
 }
 
-/// `enrichUserPayload` + the level fields of the `auth` Inertia prop —
-/// full `user` shape for `auth/me`, login and oauth responses.
 pub(crate) async fn enriched_user_json(
     state: &AppState,
     u: &blindall_db::entities::User,
@@ -124,7 +108,6 @@ pub(crate) async fn enriched_user_json(
         u.photo_path.as_deref().unwrap_or(""),
         &u.name,
     ));
-    // `user.team` — Team object (id/name), null when none.
     base["team"] = match u.team_id {
         Some(tid) => state
             .teams
@@ -136,14 +119,12 @@ pub(crate) async fn enriched_user_json(
             .unwrap_or(Value::Null),
         None => Value::Null,
     };
-    // `userLevel` — defaults match the migration / PHP `?? 1 / ?? 0`.
     let snap = state.levels.snapshot(u.id).await;
     base["level"] = snap.as_ref().and_then(|s| s["level"].as_i64()).map_or(json!(1), |v| v.into());
     base["current_xp"] = snap.as_ref().map(|s| s["current_xp"].clone()).unwrap_or(json!(0));
     base["xp_for_next_level"] = snap.as_ref().map(|s| s["xp_for_next_level"].clone()).unwrap_or(json!(100));
     base["total_xp"] = snap.as_ref().map(|s| s["total_xp"].clone()).unwrap_or(json!(0));
     base["level_metrics"] = snap.map(|s| s["level_metrics"].clone()).unwrap_or(Value::Null);
-    // DonorPerkService::enrichUserPayload.
     let is_supporter = !u.is_guest
         && state
             .donations_repo
@@ -160,8 +141,6 @@ pub(crate) async fn enriched_user_json(
     base
 }
 
-/// `App\Rules\Reserved` — static list, bad-word substring filter
-/// (`trans('bad-words')`, app locale = fr), moderator-name substring filter.
 pub(crate) fn validate_name(name: &str, moderator_names: &[String]) -> Result<(), &'static str> {
     const RESERVED: &[&str] = &[
         "admin", "admins", "mchev", "administrateur", "administrator", "superadmin",
@@ -185,8 +164,6 @@ pub(crate) fn validate_name(name: &str, moderator_names: &[String]) -> Result<()
 }
 
 fn valid_email(email: &str) -> bool {
-    // PHP `email:rfc,dns` — we enforce RFC shape; the DNS MX check is
-    // intentionally skipped (async DNS lookup not worth it at register).
     email.len() <= 255
         && email.matches('@').count() == 1
         && email.split('@').all(|p| !p.is_empty())
@@ -209,9 +186,6 @@ pub struct LoginBody {
     remember: Option<bool>,
 }
 
-/// `POST /api/v1/auth/register` — `RegisteredUserController::store`.
-/// name: required|max:25|Reserved|unique, email: required|email|unique,
-/// password: required|confirmed|min:8 (Password::defaults).
 pub async fn register(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -219,7 +193,6 @@ pub async fn register(
     Json(body): Json<RegisterBody>,
 ) -> Response {
     let ip = client_ip(&headers, &addr.ip().to_string());
-    // banhammer `ip.banned` middleware (register GET+POST in PHP).
     if state.auth.is_ip_banned(&ip).await {
         return (
             StatusCode::FORBIDDEN,
@@ -266,8 +239,6 @@ pub async fn register(
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
-    // `ProcessUserCreated` — welcome mail + Brevo contact (fire-and-forget,
-    // queued job in PHP).
     {
         let (http, mail, email, name) =
             (state.http.clone(), state.mail.clone(), email.to_string(), name.to_string());
@@ -296,8 +267,6 @@ pub async fn register(
     (StatusCode::CREATED, Json(json!({ "token": token, "user": user_json(&user, false) }))).into_response()
 }
 
-/// `POST /api/v1/auth/login` — `LoginRequest::authenticate` +
-/// `AuthenticatedSessionController::store` (token issue + ip update).
 pub async fn login(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -348,7 +317,6 @@ pub async fn login(
     Json(json!({ "token": token, "user": enriched_user_json(&state, &user, is_mod).await })).into_response()
 }
 
-/// `config/guests.php` rate limits — 3/min, 20/h, 50/day per IP.
 #[derive(Default)]
 pub struct GuestThrottle {
     hits: Mutex<HashMap<String, Vec<Instant>>>,
@@ -365,8 +333,6 @@ impl GuestThrottle {
             .collect()
     }
 
-    /// `TooManyRequestsHttpException($seconds)` — seconds until the
-    /// tightest violated window frees a slot.
     pub fn retry_after(&self, key: &str) -> Option<u64> {
         const LIMITS: &[(usize, Duration)] = &[
             (3, Duration::from_secs(60)),
@@ -391,16 +357,11 @@ impl GuestThrottle {
     }
 }
 
-/// `POST /api/v1/auth/guest` — `GuestJoinController`/`GuestAuthService` —
-/// already-authed users get their own payload back (bearer check is
-/// opportunistic here); anonymous visitors get a fresh `Guest-NNNNN`
-/// account + Sanctum token. Rate-limited like PHP (3/min, 20/h, 50/day).
 pub async fn guest(
     State(state): State<AppState>,
     headers: HeaderMap,
     axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<std::net::SocketAddr>,
 ) -> Response {
-    // `Auth::user() !== null` → same user back (PHP returns the session user).
     if let Some(t) = bearer_token_str(&headers) {
         if let Ok(Some(u)) = state.auth.user_for_token(&t).await {
             let is_mod = state.auth.is_public_moderator(u.id).await;
@@ -408,8 +369,6 @@ pub async fn guest(
         }
     }
     let ip = client_ip(&headers, &addr.ip().to_string());
-    // banhammer `ip.banned` — guest accounts are minted on the gated room/home
-    // pages in PHP, so an ip-banned client can't get one here either.
     if state.auth.is_ip_banned(&ip).await {
         return (
             StatusCode::FORBIDDEN,
@@ -429,8 +388,6 @@ pub async fn guest(
     use rand::distr::Alphanumeric;
     use rand::Rng;
     let name = format!("Guest-{}", rand::rng().random_range(10000..=99999));
-    // PHP `'guest-'.Str::random(8).'@bam.test'` — random alphanumerics; a
-    // UUIDv7 prefix would be near-constant (timestamp head) and collide.
     let email = format!(
         "guest-{}@bam.test",
         rand::rng()
@@ -468,7 +425,6 @@ pub async fn guest(
     (StatusCode::CREATED, Json(json!({ "token": token, "user": user_json(&user, false) }))).into_response()
 }
 
-/// `POST /api/v1/auth/logout` — revoke the bearer token used for the call.
 pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if let Some(t) = bearer_token_str(&headers) {
         let _ = state.auth.revoke_token(&t).await;
@@ -484,14 +440,11 @@ fn bearer_token_str(headers: &HeaderMap) -> Option<String> {
         .map(str::to_string)
 }
 
-/// `GET /api/v1/auth/me` — current user (Sanctum `/api/user` equivalent).
 pub async fn me(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
     let is_mod = state.auth.is_public_moderator(user.id).await;
     Json(enriched_user_json(&state, &user, is_mod).await).into_response()
 }
 
-/// `trans('bad-words')` for app locale `fr` (registration runs under the
-/// app locale — mirrors lang/fr/bad-words.php).
 pub(crate) const BAD_WORDS: &[&str] = &[
     "abruti", "andouille", "anal", "anus", "baise", "baltringue", "batard", "biatch",
     " bite", "bordel", "bouffon", "bouffonne", "bougnoul", "bougnoule", "branlette",
@@ -548,7 +501,6 @@ mod tests {
         assert!(t.too_many_attempts("a@b.c|1.2.3.4").is_some());
         t.clear("a@b.c|1.2.3.4");
         assert!(t.too_many_attempts("a@b.c|1.2.3.4").is_none());
-        // key is email|ip — a different ip is not throttled
         assert!(t.too_many_attempts("a@b.c|5.6.7.8").is_none());
     }
 

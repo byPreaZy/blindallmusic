@@ -1,12 +1,9 @@
-//! `AppleMusicService::searchTrack` port (provider key: `itunes`).
-
 use crate::types::{ProviderError, ProviderResult, ProviderTrack};
 use serde_json::Value;
 use std::time::Duration;
 
 pub struct ItunesClient {
     http: reqwest::Client,
-    /// `config('app.locale')` → `country` param.
     country: String,
 }
 
@@ -21,13 +18,10 @@ impl ItunesClient {
         }
     }
 
-    /// GET itunes.apple.com/search — query is transliterated to ASCII then
-    /// spaces→+ (PHP: htmlspecialchars + iconv TRANSLIT//IGNORE + str_replace).
     pub async fn search_track(&self, term: &str) -> ProviderResult {
         if term.trim().is_empty() {
             return Ok(vec![]);
         }
-        // iconv('UTF-8','ASCII//TRANSLIT//IGNORE') ≈ deunicode.
         let query = deunicode::deunicode(term.trim()).replace(' ', "+");
         let url = format!(
             "https://itunes.apple.com/search?term={}&country={}&media=music&limit=10&output=json",

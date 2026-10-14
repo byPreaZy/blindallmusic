@@ -1,6 +1,3 @@
-//! Room create (`/rooms/create`) + edit (`/rooms/:id/edit`) — main form,
-//! options form, playlists attach/detach, delete.
-
 use crate::api;
 use crate::i18n::t;
 use crate::types::{Category, IdName};
@@ -8,7 +5,6 @@ use leptos::prelude::*;
 use leptos_router::hooks::{use_navigate, use_params_map};
 use serde_json::{json, Value};
 
-/// PUT helper — gloo-net's Request::put with our auth header.
 async fn put(path: &str, body: Value) -> Result<(), String> {
     let req = gloo_net::http::Request::put(path).header("Content-Type", "application/json");
     let req = match api::stored_token() {
@@ -131,7 +127,6 @@ pub fn RoomEditPage() -> impl IntoView {
     let category_id = RwSignal::new(0i64);
     let playlists = RwSignal::new(Vec::<IdName>::new());
     let mods = RwSignal::new(Vec::<IdName>::new());
-    // Options
     let tracks_by_round = RwSignal::new(10i64);
     let track_duration = RwSignal::new(30i64);
     let pause_tracks = RwSignal::new(5i64);
@@ -196,15 +191,12 @@ pub fn RoomEditPage() -> impl IntoView {
                 );
                 room.set(Some(r.clone()));
             }
-            // Laravel error pages: "403 — This action is unauthorized.",
-            // "404 — Not found".
             Err(e) => err.set(Some(match e.status {
                 403 => "403 — This action is unauthorized.".into(),
                 404 => "404 — Page not found".into(),
                 _ => e.message,
             })),
         }
-        // `available_playlists` — all public playlists.
         if let Ok(v) = api::get::<Value>("/api/v1/playlists?scope=public").await {
             available.set(v["playlists"].as_array().cloned().unwrap_or_default());
         }
@@ -377,7 +369,6 @@ pub fn RoomEditPage() -> impl IntoView {
                         </div>
                     </form>
 
-                    // `HasPicture` — `rooms/{uniqid}.webp` 350×350 upload + delete.
                     <div class="mb-6 rounded-xl border border-white/10 bg-surface-raised/60 p-5">
                         <h2 class="mb-3 font-semibold text-white">{t("Photo")}</h2>
                         <div class="flex items-center gap-4">

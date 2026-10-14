@@ -1,8 +1,3 @@
-//! Sanctum-compatible token lookup. Personal access tokens are stored as
-//! `personal_access_tokens.token = sha256(plaintext)` where the client
-//! sends `{id}|{plaintext}` — the same lookup Laravel does, so existing
-//! tokens keep working.
-
 use crate::entities::User;
 use sqlx::postgres::PgPool;
 use sqlx::Row;
@@ -17,9 +12,6 @@ impl AuthRepo {
         Self { pool }
     }
 
-    /// `Authorization: Bearer {id}|{token}` → user. Mirrors
-    /// `Sanctum::personalAccessTokenModel()::findToken` (expires_at +
-    /// last_used_at update included).
     pub async fn user_for_token(&self, bearer: &str) -> Result<Option<User>, sqlx::Error> {
         let Some((id, plaintext)) = bearer.split_once('|') else {
             return Ok(None);
@@ -31,8 +23,6 @@ impl AuthRepo {
 
         let row = sqlx::query(
             // NB: `pat.expires_at` is NOT in the schema (Sanctum's optional
-            // expires_at migration is absent from this project — tokens live
-            // forever until revoked, same as Laravel here).
             "SELECT u.id, u.name, u.photo_path, u.elo, u.is_guest, \
              u.is_administrator, u.team_id, pat.id AS pat_id \
              FROM personal_access_tokens pat \
@@ -66,8 +56,6 @@ impl AuthRepo {
         }))
     }
 
-    /// `User::isPublicModerator` — user moderates at least one public
-    /// room (morph pivot `moderables` → rooms.is_public).
     pub async fn is_public_moderator(&self, user_id: i64) -> bool {
         sqlx::query_scalar::<_, i64>(
             "SELECT EXISTS(SELECT 1 FROM moderables m \
@@ -82,7 +70,6 @@ impl AuthRepo {
         .unwrap_or(false)
     }
 
-    /// Gate `sendSuggestion` inputs: `created_at` + total score across rooms.
     pub async fn created_at_and_total_score(
         &self,
         user_id: i64,
@@ -99,7 +86,6 @@ impl AuthRepo {
         Ok(row.map(|r| (r.get("created_at"), r.get("total"))))
     }
 
-    /// `User::publicModerators()` — users moderating ≥1 public room.
     pub async fn public_moderator_ids(&self) -> Result<Vec<i64>, sqlx::Error> {
         sqlx::query_scalar(
             "SELECT DISTINCT m.user_id FROM moderables m \
@@ -112,16 +98,10 @@ impl AuthRepo {
 
     // ---- login / register / token issue -----------------------------------
 
-    /// `LoginRequest::authenticate` — fetch by email for bcrypt check.
-    /// Returns user + raw password hash + banned flag (PHP's
-    /// `logout.banned` middleware blocks banned users afterwards).
     pub async fn find_for_login(
         &self,
         email: &str,
     ) -> Result<Option<(User, Option<String>, bool)>, sqlx::Error> {
-        // `isBanned()` (mchev/banhammer): non-deleted ban row with
-        // expired_at NULL or in the future. `users.banned_at` was dropped
-        // by the 2023 migration — do not select it.
         let row = sqlx::query(
             "SELECT u.id, u.name, u.photo_path, u.elo, u.is_guest, u.is_administrator, \
              u.team_id, u.password, \
@@ -152,9 +132,6 @@ impl AuthRepo {
         }))
     }
 
-    /// banhammer `ip.banned` middleware — an active (non-deleted, unexpired)
-    /// ban row carrying this `ip` blocks the request. Applied in PHP to
-    /// register, the home page and room show/public-state.
     pub async fn is_ip_banned(&self, ip: &str) -> bool {
         sqlx::query_scalar::<_, i64>(
             "SELECT EXISTS(SELECT 1 FROM bans WHERE ip = $1 AND deleted_at IS NULL \
@@ -183,9 +160,6 @@ impl AuthRepo {
             == 1)
     }
 
-    /// `User::filter(['search' => …])` — `Api\UserController::index`: name or
-    /// email LIKE %s%, exact/prefix matches first, `paginate(20)` — used by
-    /// the moderators pickers (`{id, name}` only, like `select('id','name')`).
     pub async fn search_users(
         &self,
         search: &str,
@@ -214,7 +188,6 @@ impl AuthRepo {
         Ok((rows, total))
     }
 
-    /// `Rule::unique('users')->ignore($user->id)` variants for profile updates.
     pub async fn name_taken_ignore(&self, name: &str, user_id: i64) -> Result<bool, sqlx::Error> {
         Ok(sqlx::query_scalar::<_, i64>(
             "SELECT EXISTS(SELECT 1 FROM users WHERE name = $1 AND id != $2)::int::bigint",
@@ -237,9 +210,6 @@ impl AuthRepo {
             == 1)
     }
 
-    /// `UserController::update` — `$user->update(['name' =>, 'email' =>])`.
-    /// Changing email clears `email_verified_at` (Laravel does NOT — it keeps
-    /// the column as-is; the request only fills name+email).
     pub async fn update_profile(
         &self,
         user_id: i64,
@@ -256,7 +226,6 @@ impl AuthRepo {
         Ok(())
     }
 
-    /// Raw `password` hash — `hasPassword()` is `filled(password)`.
     pub async fn password_hash(&self, user_id: i64) -> Result<Option<String>, sqlx::Error> {
         sqlx::query_scalar("SELECT password FROM users WHERE id = $1")
             .bind(user_id)
@@ -265,7 +234,6 @@ impl AuthRepo {
             .map(|o| o.flatten())
     }
 
-    /// `updatePassword` — `Hash::make` is done by the caller (bcrypt).
     pub async fn update_password(&self, user_id: i64, hash: &str) -> Result<(), sqlx::Error> {
         sqlx::query("UPDATE users SET password = $1, updated_at = $2 WHERE id = $3")
             .bind(hash)
@@ -276,7 +244,6 @@ impl AuthRepo {
         Ok(())
     }
 
-    /// `updateDonationPreferences`.
     pub async fn update_donation_preferences(
         &self,
         user_id: i64,
@@ -294,7 +261,6 @@ impl AuthRepo {
         Ok(())
     }
 
-    /// `users.name` lookup by id (team owner link, notification payloads…).
     pub async fn find_name(&self, user_id: i64) -> Result<Option<String>, sqlx::Error> {
         sqlx::query_scalar("SELECT name FROM users WHERE id = $1")
             .bind(user_id)
@@ -302,8 +268,6 @@ impl AuthRepo {
             .await
     }
 
-    /// `changeTeamPicture`/`changeRoomPicture` Gate — administrator, or
-    /// account older than 3 months with a total score over 2000.
     pub async fn can_change_picture(&self, user_id: i64) -> Result<bool, sqlx::Error> {
         sqlx::query_scalar::<_, bool>(
             "SELECT u.is_administrator OR (u.created_at < NOW() - INTERVAL '3 months' \
@@ -317,7 +281,6 @@ impl AuthRepo {
         .await
     }
 
-    /// `photo_path` (for the storage layer to delete the file).
     pub async fn photo_path(&self, user_id: i64) -> Result<Option<String>, sqlx::Error> {
         sqlx::query_scalar("SELECT photo_path FROM users WHERE id = $1")
             .bind(user_id)
@@ -326,7 +289,6 @@ impl AuthRepo {
             .map(|o| o.flatten())
     }
 
-    /// `deletePhoto` — clears `photo_path`; the file deletion is the caller's.
     pub async fn clear_photo(&self, user_id: i64) -> Result<(), sqlx::Error> {
         sqlx::query("UPDATE users SET photo_path = NULL, updated_at = $1 WHERE id = $2")
             .bind(chrono::Utc::now())
@@ -336,7 +298,6 @@ impl AuthRepo {
         Ok(())
     }
 
-    /// `updatePhoto` — `users/{uniqid}.webp`.
     pub async fn set_photo(&self, user_id: i64, photo_path: &str) -> Result<(), sqlx::Error> {
         sqlx::query("UPDATE users SET photo_path = $1, updated_at = $2 WHERE id = $3")
             .bind(photo_path)
@@ -347,7 +308,6 @@ impl AuthRepo {
         Ok(())
     }
 
-    /// `User::hasPassword` — `filled($user->getRawOriginal('password'))`.
     pub async fn has_password(&self, user_id: i64) -> Result<bool, sqlx::Error> {
         sqlx::query_scalar::<_, Option<String>>("SELECT password FROM users WHERE id = $1")
             .bind(user_id)
@@ -356,9 +316,6 @@ impl AuthRepo {
             .map(|p| p.flatten().is_some_and(|p| !p.is_empty()))
     }
 
-    /// `UserAccountDeletionService::delete` — photo file removal is the
-    /// caller's concern; here: rooms (soft), playlists, scores,
-    /// total_scores, then `forceDelete` (hard delete).
     pub async fn delete_account(&self, user_id: i64) -> Result<(), sqlx::Error> {
         let now = chrono::Utc::now();
         sqlx::query("UPDATE rooms SET deleted_at = $1, updated_at = $2 WHERE user_id = $3")
@@ -370,7 +327,6 @@ impl AuthRepo {
         for sql in [
             "DELETE FROM playlists WHERE user_id = $1",
             "DELETE FROM scores WHERE user_id = $1",
-            // `totalScores()` morphMany — no user_id column on the table.
             "DELETE FROM total_scores WHERE totalscorable_type = 'App\\Models\\User' AND totalscorable_id = $1",
         ] {
             sqlx::query(sql).bind(user_id).execute(&self.pool).await?;
@@ -382,7 +338,6 @@ impl AuthRepo {
         Ok(())
     }
 
-    /// `Reserved` rule part 3 — moderator names of public rooms + mchev.
     pub async fn reserved_moderator_names(&self) -> Result<Vec<String>, sqlx::Error> {
         let rows = sqlx::query_scalar::<_, String>(
             "SELECT DISTINCT u.name FROM moderables m \
@@ -399,7 +354,6 @@ impl AuthRepo {
 
     // ---- oauth / social -----------------------------------------------------
 
-    /// `User::where('provider_id', $id)` — find by social provider id.
     pub async fn find_by_provider_id(
         &self,
         provider: &str,
@@ -425,8 +379,6 @@ impl AuthRepo {
         }))
     }
 
-    /// Link an existing account (matched by email) to a provider —
-    /// `$email->provider = ...; $email->provider_id = ...`.
     pub async fn link_provider(
         &self,
         user_id: i64,
@@ -442,7 +394,6 @@ impl AuthRepo {
         Ok(())
     }
 
-    /// `User::create` for social auth — no password.
     pub async fn create_social_user(
         &self,
         name: &str,
@@ -467,7 +418,6 @@ impl AuthRepo {
         Ok(res)
     }
 
-    /// `RegisteredUserController::store` — User::create with bcrypt hash.
     pub async fn create_user(
         &self,
         name: &str,
@@ -492,8 +442,6 @@ impl AuthRepo {
         Ok(res)
     }
 
-    /// `GuestAuthService::ensureGuestSession` — guest account:
-    /// `Guest-NNNNN`, `guest-xxxxxxxx@bam.test`, no password, `guest_token` uuid.
     pub async fn create_guest(
         &self,
         name: &str,
@@ -518,8 +466,6 @@ impl AuthRepo {
         Ok(res)
     }
 
-    /// `AuthenticatedSessionController::store` — `$user->update(['ip'=>…])`.
-    /// `User::where('email', …)->first()` — for password reset links.
     pub async fn find_by_email(&self, email: &str) -> Result<Option<(i64, String)>, sqlx::Error> {
         sqlx::query("SELECT id, name FROM users WHERE email = $1 LIMIT 1")
             .bind(email)
@@ -528,7 +474,6 @@ impl AuthRepo {
             .map(|o| o.map(|r| (r.get("id"), r.get("name"))))
     }
 
-    /// `EmailVerificationRequest::fulfill` — set `email_verified_at` once.
     pub async fn mark_email_verified(&self, user_id: i64) -> Result<bool, sqlx::Error> {
         sqlx::query(
             "UPDATE users SET email_verified_at = $1 WHERE id = $2 AND email_verified_at IS NULL",
@@ -540,7 +485,6 @@ impl AuthRepo {
         .map(|r| r.rows_affected() > 0)
     }
 
-    /// User row for the verification hash (`sha1(email)`).
     pub async fn email_of(&self, user_id: i64) -> Result<Option<String>, sqlx::Error> {
         sqlx::query_scalar("SELECT email FROM users WHERE id = $1")
             .bind(user_id)
@@ -556,8 +500,6 @@ impl AuthRepo {
             .await;
     }
 
-    /// `createToken` — `{id}|{plain}` where token = sha256(plain).
-    /// Sanctum plaintext is 40 random [a-zA-Z0-9] chars.
     pub async fn issue_token(&self, user_id: i64, name: &str) -> Result<String, sqlx::Error> {
         let plain: String = {
             use rand::Rng;
@@ -582,7 +524,6 @@ impl AuthRepo {
         Ok(format!("{}|{plain}", res))
     }
 
-    /// `logout` — delete the token row used for this call.
     pub async fn revoke_token(&self, bearer: &str) -> Result<(), sqlx::Error> {
         if let Some((id, plain)) = bearer.split_once('|') {
             let hash = format!("{:x}", sha2_digest(plain.as_bytes()));
@@ -596,8 +537,6 @@ impl AuthRepo {
     }
 }
 
-/// SHA-256 digest (Sanctum stores `hash('sha256', $token)` — the generic
-/// array implements `LowerHex` for the `{:x}` format).
 fn sha2_digest(data: &[u8]) -> impl core::fmt::LowerHex {
     use sha2::Digest;
     sha2::Sha256::digest(data)

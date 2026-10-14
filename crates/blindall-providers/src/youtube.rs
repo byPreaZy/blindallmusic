@@ -1,10 +1,3 @@
-//! `YouTubeMusicService` (official API) + `YoutubeWithoutApiService`
-//! (HTML scraping fallback for public moderators).
-//!
-//! Quota/rate-limit state is process-local (`Mutex<Option<Instant>>`)
-//! instead of PHP's Cache entries — a restart re-allows the API, which
-//! is the same failure mode as PHP's cache TTL expiring.
-
 use crate::types::{ProviderError, ProviderResult, ProviderTrack};
 use serde_json::Value;
 use std::sync::Mutex;
@@ -12,11 +5,8 @@ use std::time::{Duration, Instant};
 
 const QUOTA_COOLDOWN: Duration = Duration::from_secs(24 * 3600);
 const RATE_LIMIT_COOLDOWN: Duration = Duration::from_secs(3600);
-/// PHP: 5 consecutive scrape failures → rate-limited for an hour.
 const SCRAPE_MAX_FAILURES: u32 = 5;
 
-/// Next midnight America/Los_Angeles (YouTube quota reset) as ISO 8601 —
-/// PHP `->setTimezone('America/Los_Angeles')->addDay()->startOfDay()->toISOString()`.
 fn quota_reset_iso() -> String {
     use chrono::TimeZone;
     let la = chrono_tz::America::Los_Angeles;
@@ -51,8 +41,6 @@ fn rate_limit_error() -> ProviderError {
     e
 }
 
-// ---------------------------------------------------------------- API client
-
 pub struct YouTubeApiClient {
     http: reqwest::Client,
     api_key: String,
@@ -85,7 +73,6 @@ impl YouTubeApiClient {
         *self.quota_blocked_until.lock().unwrap() = Some(Instant::now() + QUOTA_COOLDOWN);
     }
 
-    /// `searchTrack` — youtube/v3/search, music category, 5 results.
     pub async fn search_track(&self, term: &str) -> ProviderResult {
         if term.trim().is_empty() {
             return Ok(vec![]);
@@ -138,8 +125,6 @@ impl YouTubeApiClient {
         Ok(tracks)
     }
 }
-
-// ------------------------------------------------------- scraping client
 
 const USER_AGENTS: &[&str] = &[
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -194,7 +179,6 @@ impl YouTubeScrapeClient {
         }
     }
 
-    /// `searchTrack` — scrape youtube.com/results, parse ytInitialData.
     pub async fn search_track(&self, term: &str) -> ProviderResult {
         if term.trim().is_empty() {
             return Ok(vec![]);
@@ -262,15 +246,11 @@ impl YouTubeScrapeClient {
     }
 }
 
-/// `parseSearchResults` — extract `var ytInitialData = {…};` then walk
-/// contents→itemSectionRenderer→videoRenderer, take 5.
 fn parse_search_results(html: &str) -> Vec<ProviderTrack> {
     let marker = "var ytInitialData = ";
     let Some(start) = html.find(marker).map(|i| i + marker.len()) else {
         return vec![];
     };
-    // PHP regex `({.+?});` is lazy — find the matching closing brace by
-    // depth-counting instead (more robust than a lazy regex on nested JSON).
     let bytes = html.as_bytes();
     let mut depth = 0i32;
     let mut end = None;
@@ -339,7 +319,6 @@ fn parse_search_results(html: &str) -> Vec<ProviderTrack> {
     out
 }
 
-/// `formatTrack` — shared by API and scrape paths. Splits "Artist - Title".
 fn format_track(t: &Value) -> ProviderTrack {
     let title = t["snippet"]["title"].as_str().unwrap_or_default();
     let (artist, name) = match title.split_once(" - ") {
@@ -396,7 +375,6 @@ mod tests {
         assert_eq!(tracks[0].artist_name.as_deref(), Some("Artist"));
         assert_eq!(tracks[0].track_name, "Song");
         assert_eq!(tracks[0].artwork_url.as_deref(), Some("https://i.ytimg.com/t.jpg"));
-        // No " - " separator → artist falls back to channelTitle.
         assert_eq!(tracks[1].artist_name.as_deref(), Some("ChanB"));
         assert_eq!(tracks[1].track_name, "NoSeparator");
     }

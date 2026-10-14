@@ -1,7 +1,3 @@
-//! Answer feedback sounds — Rust port of `useAnswerFeedbackSounds.js`:
-//! short synthesized tones rendered into `AudioBuffer`s and played
-//! through a gain + compressor chain. No audio assets needed.
-
 use std::cell::RefCell;
 use std::f64::consts::PI;
 use std::rc::Rc;
@@ -99,8 +95,6 @@ fn audio_context() -> Option<Rc<AudioContext>> {
     })
 }
 
-/// Play a feedback tone (`send`/`good`/`almost`/`bad`) honoring the
-/// `answerSounds` toggle and master volume — `useAnswerFeedbackSounds`.
 pub fn play_feedback(kind: &str, answer_sounds: bool, volume: f64) {
     if !answer_sounds || volume <= 0.0 {
         return;
@@ -138,8 +132,6 @@ pub fn play_feedback(kind: &str, answer_sounds: bool, volume: f64) {
         };
         src.set_buffer(Some(&buffer));
         let _ = src.connect_with_audio_node(&gain);
-        // A started AudioBufferSourceNode is kept alive by the context
-        // until playback ends (WebAudio spec) — safe to drop the handle.
         let _ = src.start();
     }
 }

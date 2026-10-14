@@ -1,7 +1,3 @@
-//! Maintenance sweep loop — runs [`blindall_db::maintenance`] at boot then
-//! hourly. PHP runs these on separate cron entries; a single hourly pass is
-//! equivalent (the windows are age-based, not occurrence-based).
-
 use blindall_game::GameManager;
 use sqlx::PgPool;
 use std::path::{Component, Path, PathBuf};
@@ -63,8 +59,6 @@ async fn sweep_once(pool: &PgPool, manager: &GameManager, storage_root: &Path) {
     }
 }
 
-/// `Room::deletePhoto` — `Storage::delete($photo_path)`. Same traversal guard
-/// as `LocalStorage::resolve` (no absolute paths, no `..`).
 async fn delete_stored_file(storage_root: &Path, path: &str) {
     let rel = Path::new(path);
     if rel

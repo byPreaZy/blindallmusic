@@ -1,7 +1,3 @@
-//! Room CRUD + relations — ports `RoomController`, `RoomPlaylistController`,
-//! `RoomModeratorController`, `RoomBookmarkController` persistence, and the
-//! `RoomLeaderboardService` queries for `rooms/{room}/scores`.
-
 use serde::Serialize;
 use sqlx::postgres::PgPool;
 use sqlx::Row;
@@ -50,7 +46,6 @@ pub struct RoomOptions {
     pub is_autostart: bool,
     pub is_random: bool,
     pub color: Option<String>,
-    /// Admin-only field (`is_featured`); None = leave unchanged.
     pub is_featured: Option<bool>,
 }
 
@@ -93,8 +88,6 @@ impl RoomRepo {
         is_chat_active, is_playing, is_autostart, is_featured, color, password, \
         user_count, deleted_at";
 
-    /// Raw `password` column — needed by `show` to gate password rooms
-    /// (`RoomRow` only carries the `has_password` boolean).
     pub async fn password_of(&self, id: i64) -> Result<Option<String>, sqlx::Error> {
         sqlx::query_scalar::<_, Option<String>>("SELECT password FROM rooms WHERE id = $1")
             .bind(id)
@@ -111,7 +104,6 @@ impl RoomRepo {
             .map(|o| o.map(Self::map))
     }
 
-    /// `Room::resolveRouteBinding` — `{room}` resolves by slug (withTrashed).
     pub async fn find_by_slug(&self, slug: &str) -> Result<Option<RoomRow>, sqlx::Error> {
         sqlx::query(&format!("SELECT {} FROM rooms WHERE slug = $1", Self::COLS))
             .bind(slug)
@@ -136,7 +128,6 @@ impl RoomRepo {
         Ok(exists == 1)
     }
 
-    /// `Sluggable::slugify` — `Str::slug(name)` + `-{n}` suffix on collision.
     pub async fn unique_slug(&self, name: &str) -> Result<String, sqlx::Error> {
         let base = blindall_core::sanitize::str_slug(name, '-');
         let mut slug = base.clone();
@@ -158,7 +149,6 @@ impl RoomRepo {
             .map(|v| v == 1)
     }
 
-    /// `RoomController::store` — defaults from the migration + moderator attach.
     pub async fn create(&self, user_id: i64, name: &str, category_id: i64) -> Result<i64, sqlx::Error> {
         let slug = self.unique_slug(name).await?;
         let now = chrono::Utc::now();
@@ -180,7 +170,6 @@ impl RoomRepo {
         Ok(id)
     }
 
-    /// `RoomController::update` — name/description/category only.
     pub async fn update_fields(
         &self,
         id: i64,
@@ -198,8 +187,6 @@ impl RoomRepo {
         Ok(())
     }
 
-    /// `RoomController::updateOptions` — game options; password semantics:
-    /// `has_password` true → set to provided value, false → NULL.
     pub async fn update_options(&self, id: i64, o: &RoomOptions) -> Result<(), sqlx::Error> {
         sqlx::query(
             "UPDATE rooms SET tracks_by_round = $1, track_duration = $2, \
@@ -234,9 +221,6 @@ impl RoomRepo {
         Ok(())
     }
 
-    /// `updateUserCount` — presence heartbeat from the client (throttled).
-    /// `RoomController::searchTracks` — ids of tracks (from attached
-    /// playlists) whose answers match the `search` term, limit 10.
     pub async fn search_track_ids(
         &self,
         room_id: i64,
@@ -257,8 +241,6 @@ impl RoomRepo {
         Ok(rows.iter().map(|r| r.get("id")).collect())
     }
 
-    /// `HasPicture::updatePhoto` — set `photo_path`, return the previous
-    /// path so the caller can delete the old file.
     pub async fn set_photo(&self, id: i64, path: &str) -> Result<Option<String>, sqlx::Error> {
         let prev: Option<String> = sqlx::query_scalar("SELECT photo_path FROM rooms WHERE id = $1")
             .bind(id)
@@ -274,7 +256,6 @@ impl RoomRepo {
         Ok(prev)
     }
 
-    /// `HasPicture::deletePhoto` — clear `photo_path`, return the old path.
     pub async fn clear_photo(&self, id: i64) -> Result<Option<String>, sqlx::Error> {
         let prev: Option<String> = sqlx::query_scalar("SELECT photo_path FROM rooms WHERE id = $1")
             .bind(id)
@@ -298,7 +279,6 @@ impl RoomRepo {
         Ok(())
     }
 
-    /// `RoomController::destroy` — detach moderators + soft delete.
     pub async fn soft_delete(&self, id: i64) -> Result<(), sqlx::Error> {
         sqlx::query("DELETE FROM moderables WHERE moderable_type = 'App\\Models\\Room' AND moderable_id = $1")
             .bind(id)
@@ -312,7 +292,6 @@ impl RoomRepo {
         Ok(())
     }
 
-    /// `RoomController::restore`.
     pub async fn restore(&self, id: i64) -> Result<(), sqlx::Error> {
         sqlx::query("UPDATE rooms SET deleted_at = NULL WHERE id = $1")
             .bind(id)
@@ -336,7 +315,6 @@ impl RoomRepo {
         .unwrap_or(false)
     }
 
-    /// `hasRoomControl` — owner OR moderator OR administrator.
     pub async fn has_control(&self, room: &RoomRow, user_id: i64, is_admin: bool) -> bool {
         is_admin || room.user_id == user_id || self.is_moderator(room.id, user_id).await
     }
@@ -382,8 +360,6 @@ impl RoomRepo {
         .map(|rows| rows.iter().map(|r| (r.get("id"), r.get("name"))).collect())
     }
 
-    /// Moderators with photo for the show page (`room.moderators` prop).
-    /// Returns (id, name, photo_path).
     pub async fn moderators_detail(
         &self,
         room_id: i64,
@@ -404,7 +380,6 @@ impl RoomRepo {
         })
     }
 
-    /// `$room->tracks()->count()` — tracks reachable through attached playlists.
     pub async fn tracks_count(&self, room_id: i64) -> Result<i64, sqlx::Error> {
         sqlx::query_scalar::<_, i64>(
             "SELECT COUNT(DISTINCT t.id) FROM tracks t \
@@ -416,7 +391,6 @@ impl RoomRepo {
         .await
     }
 
-    /// `$room->rounds()->count()`.
     pub async fn rounds_count(&self, room_id: i64) -> Result<i64, sqlx::Error> {
         sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM rounds WHERE room_id = $1")
             .bind(room_id)
@@ -424,7 +398,6 @@ impl RoomRepo {
             .await
     }
 
-    /// `$room->bookmarks()->where('user_id', $id)->exists()`.
     pub async fn is_bookmarked(&self, user_id: i64, room_id: i64) -> Result<bool, sqlx::Error> {
         Ok(sqlx::query_scalar::<_, i64>(
             "SELECT EXISTS(SELECT 1 FROM bookmarks WHERE user_id = $1 \
@@ -437,8 +410,6 @@ impl RoomRepo {
             == 1)
     }
 
-    /// `public_rooms` prop — public, no password, not deleted, name-ordered.
-    /// Returns (slug, name, photo_path).
     pub async fn public_room_cards(
         &self,
     ) -> Result<Vec<(Option<String>, String, Option<String>)>, sqlx::Error> {
@@ -456,7 +427,6 @@ impl RoomRepo {
         })
     }
 
-    /// Owner of the room (`$room->owner`) — (id, name, photo_path).
     pub async fn owner(
         &self,
         room_id: i64,
@@ -471,7 +441,6 @@ impl RoomRepo {
         .map(|o| o.map(|r| (r.get("id"), r.get("name"), r.get("photo_path"))))
     }
 
-    /// Category name for the room (`$room->category`).
     pub async fn category_name(&self, category_id: i64) -> Result<Option<String>, sqlx::Error> {
         sqlx::query_scalar::<_, String>("SELECT name FROM categories WHERE id = $1")
             .bind(category_id)
@@ -479,7 +448,6 @@ impl RoomRepo {
             .await
     }
 
-    /// Category `(name, slug)` — SEO breadcrumbs (`$room->category->slug`).
     pub async fn category_name_slug(
         &self,
         category_id: i64,
@@ -492,9 +460,6 @@ impl RoomRepo {
         .await
     }
 
-    /// `RoomLandingService::similarRooms` — official SEO rooms in the same
-    /// category (public, no password, slug in the official list, not this
-    /// room), ordered by name, limited.
     pub async fn official_similar_rooms(
         &self,
         category_id: i64,
@@ -516,10 +481,6 @@ impl RoomRepo {
         .await
     }
 
-    /// `moderatedRooms()` + `scopeFilter` — rooms the user moderates, public
-    /// first, with the index-page filters (`search` on room or owner name,
-    /// `trashed` = with/only) and the row extras (`category` name,
-    /// `rounds_count`).
     pub async fn moderated_rooms(
         &self,
         user_id: i64,
@@ -578,7 +539,6 @@ impl RoomRepo {
         )
     }
 
-    /// `RoomPlaylistController::attach` — syncWithoutDetaching.
     pub async fn attach_playlist(&self, room_id: i64, playlist_id: i64) -> Result<(), sqlx::Error> {
         sqlx::query(
             "INSERT INTO playlist_room (playlist_id, room_id, created_at, updated_at) \
@@ -616,7 +576,6 @@ impl RoomRepo {
 
     // ---- bookmarks ---------------------------------------------------------
 
-    /// `bookmarkedRooms` — morphedByMany on `bookmarks`.
     pub async fn bookmark(&self, user_id: i64, room_id: i64) -> Result<(), sqlx::Error> {
         sqlx::query(
             "INSERT INTO bookmarks (user_id, bookmarkable_type, bookmarkable_id, \
@@ -660,7 +619,6 @@ impl RoomRepo {
             .map(|rows| rows.iter().map(|r| (r.get("id"), r.get("name"))).collect())
     }
 
-    /// `{category:slug}` route binding — id + name + slug.
     pub async fn category_by_slug(
         &self,
         slug: &str,
@@ -672,8 +630,6 @@ impl RoomRepo {
             .map(|o| o.map(|r| (r.get("id"), r.get("name"), r.get("slug"))))
     }
 
-    /// `HomeCatalogService::officialRoomsForCategory` — public rooms of the
-    /// category (no password, not trashed), playing first.
     pub async fn public_for_category(
         &self,
         category_id: i64,
@@ -699,8 +655,6 @@ impl RoomRepo {
 
     // ---- leaderboard (`RoomLeaderboardService`) -----------------------------
 
-    /// `leaderboardsForRoom` — lifetime (total_scores) + week (round_standings,
-    /// last 7 days) + teams. Each capped at 50 entries.
     pub async fn leaderboards(&self, room_id: i64) -> Result<serde_json::Value, sqlx::Error> {
         Ok(serde_json::json!({
             "lifetime": self.user_leaderboard(room_id, None).await?,
@@ -714,7 +668,6 @@ impl RoomRepo {
         room_id: i64,
         since_days: Option<i64>,
     ) -> Result<Vec<serde_json::Value>, sqlx::Error> {
-        // lifetimeTotals: total_scores by users; weekTotals: round_standings.
         let totals: Vec<(i64, f64)> = match since_days {
             None => sqlx::query(
                 "SELECT totalscorable_id AS user_id, ROUND(SUM(score)::numeric, 1)::float8 AS total \
@@ -747,7 +700,6 @@ impl RoomRepo {
         }
         let ids: Vec<i64> = totals.iter().map(|t| t.0).collect();
 
-        // users + levels (with('userLevel')).
         let users: std::collections::HashMap<i64, serde_json::Value> = sqlx::query(
             "SELECT u.id, u.name, u.photo_path, u.elo, u.is_guest, \
              l.level, l.total_xp, l.current_xp, l.xp_for_next_level \
@@ -780,7 +732,6 @@ impl RoomRepo {
             })
             .collect();
 
-        // standingStatsForUsers.
         let stats_q = format!(
             "SELECT user_id, COUNT(*) AS rounds_played, \
              ROUND(AVG(total_score)::numeric, 1)::float8 AS avg_score_per_round, \
@@ -863,7 +814,6 @@ impl RoomRepo {
             .collect())
     }
 
-    /// `userSnapshot` — rank in leaderboard or fallback total for the user.
     pub async fn user_snapshot(
         &self,
         room_id: i64,

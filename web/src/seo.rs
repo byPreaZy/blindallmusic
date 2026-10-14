@@ -1,9 +1,3 @@
-//! Client-side `Laravel\Head` parity — the PHP app renders title/description/
-//! canonical/OG/Twitter/JSON-LD server-side per page; the SPA does the same by
-//! patching `<head>` at runtime. Injected tags carry `data-seo-injected` and
-//! static tags temporarily overridden carry `data-seo-managed`, so `reset()`
-//! restores the `index.html` defaults on route change.
-
 use std::sync::OnceLock;
 use wasm_bindgen::JsCast;
 
@@ -11,8 +5,6 @@ fn document() -> Option<web_sys::Document> {
     web_sys::window()?.document()
 }
 
-/// Static `<head>` defaults captured at boot (selector → content); `reset()`
-/// replays them. Covers every static meta index.html ships.
 const STATIC_META: &[(&str, &str)] = &[
     ("name", "description"),
     ("name", "robots"),
@@ -47,8 +39,6 @@ fn head_el(doc: &web_sys::Document) -> Option<web_sys::Element> {
     doc.head().map(|h| h.unchecked_into::<web_sys::Element>())
 }
 
-/// Upsert `<meta attr="key" content="…">`. Static tags are flagged managed,
-/// missing ones are injected (removed by `reset`).
 pub fn set_meta(attr: &str, key: &str, content: &str) {
     let Some(doc) = document() else { return };
     let sel = format!("meta[{attr}=\"{key}\"]");
@@ -69,7 +59,6 @@ pub fn set_meta(attr: &str, key: &str, content: &str) {
     }
 }
 
-/// Upsert `<link rel="canonical">` (`LocaleUrl::canonical`).
 pub fn set_canonical(href: &str) {
     let Some(doc) = document() else { return };
     match doc.query_selector("link[rel=\"canonical\"]").ok().flatten() {
@@ -89,7 +78,6 @@ pub fn set_canonical(href: &str) {
     }
 }
 
-/// Upsert `<link rel="alternate" hreflang="…">` (`LocaleUrl::alternates`).
 pub fn set_hreflang(lang: &str, href: &str) {
     let Some(doc) = document() else { return };
     let sel = format!("link[rel=\"alternate\"][hreflang=\"{lang}\"]");
@@ -107,7 +95,6 @@ pub fn set_hreflang(lang: &str, href: &str) {
     }
 }
 
-/// Upsert a JSON-LD `<script>` keyed by `data-seo-ld="{id}"`.
 pub fn set_json_ld(id: &str, json: &serde_json::Value) {
     let Some(doc) = document() else { return };
     let sel = format!("script[data-seo-ld=\"{id}\"]");
@@ -127,13 +114,10 @@ pub fn set_json_ld(id: &str, json: &serde_json::Value) {
     }
 }
 
-/// `Head::hiddenFromRobots` for password-protected rooms.
 pub fn set_noindex() {
     set_meta("name", "robots", "noindex");
 }
 
-/// Restore `index.html` head state — remove injected tags, reset managed
-/// ones to their boot defaults. Runs on every route change.
 pub fn reset() {
     let Some(doc) = document() else { return };
     if let Ok(nodes) = doc.query_selector_all("[data-seo-injected]") {
@@ -151,9 +135,6 @@ pub fn reset() {
     }
 }
 
-/// `LocaleUrl` — canonical + hreflang alternates for the current locale.
-/// `path` is the locale-free path (`/rooms/x`); canonical gets the active
-/// locale prefix (`/en`, `/es`, `""` for fr).
 pub fn canonical_url(path: &str) -> String {
     let origin = web_sys::window()
         .and_then(|w| w.location().origin().ok())
@@ -166,8 +147,6 @@ pub fn canonical_url(path: &str) -> String {
     format!("{origin}{prefix}{path}")
 }
 
-/// `LocaleUrl::alternates` — fr/en/es + x-default (fr path, `x-default`
-/// points at the unprefixed URL).
 pub fn apply_alternates(path: &str) {
     let origin = web_sys::window()
         .and_then(|w| w.location().origin().ok())
@@ -178,8 +157,6 @@ pub fn apply_alternates(path: &str) {
     set_hreflang("x-default", &format!("{origin}{path}"));
 }
 
-/// Generic page head — every PHP `*Head` service does title + description +
-/// canonical; call after `i18n::set_title`.
 pub fn apply_page(path: &str, description: &str) {
     set_meta("name", "description", description);
     set_canonical(&canonical_url(path));
@@ -190,7 +167,6 @@ pub fn apply_page(path: &str, description: &str) {
     set_meta("property", "og:locale", og_locale());
 }
 
-/// `RoomHead::ogLocale`.
 pub fn og_locale() -> &'static str {
     match crate::i18n::locale() {
         "en" => "en_US",
@@ -199,7 +175,6 @@ pub fn og_locale() -> &'static str {
     }
 }
 
-/// Truncate like PHP `mb_substr($s, 0, 157).'...'` (160-char meta cap).
 pub fn truncate160(s: &str) -> String {
     let chars: Vec<char> = s.chars().collect();
     if chars.len() > 160 {

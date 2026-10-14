@@ -1,6 +1,3 @@
-//! Playlists + tracks persistence — mirrors PlaylistController /
-//! TrackController data access (manual row mapping, same schema).
-
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::postgres::PgPool;
@@ -82,7 +79,6 @@ impl PlaylistRepo {
         }))
     }
 
-    /// `isPlaylistModerator` — morph pivot lookup.
     pub async fn is_moderator(&self, playlist_id: i64, user_id: i64) -> bool {
         sqlx::query_scalar::<_, i64>(
             "SELECT EXISTS(SELECT 1 FROM moderables WHERE user_id = $1 \
@@ -96,14 +92,10 @@ impl PlaylistRepo {
         .unwrap_or(false)
     }
 
-    /// `canEditPlaylist` — owner || moderator || administrator.
     pub async fn can_edit(&self, p: &PlaylistRow, user_id: i64, is_admin: bool) -> bool {
         p.user_id == user_id || is_admin || self.is_moderator(p.id, user_id).await
     }
 
-    /// Playlists the user owns OR moderates (PHP `moderatedPlaylists`
-    /// actually returns only moderated ones — the owner is attached as a
-    /// moderator at creation, so the union collapses to the pivot).
     pub async fn list_for_user(
         &self,
         user_id: i64,
@@ -158,7 +150,6 @@ impl PlaylistRepo {
             .collect())
     }
 
-    /// `PlaylistController::store` — create + attach creator as moderator.
     pub async fn create(&self, user_id: i64, name: &str) -> Result<i64, sqlx::Error> {
         let mut tx = self.pool.begin().await?;
         let now = Utc::now();
@@ -187,8 +178,6 @@ impl PlaylistRepo {
         Ok(id)
     }
 
-    /// `PlaylistModeratorController::detach` — remove a moderator pivot.
-    /// `PlaylistModeratorController::attach` — `syncWithoutDetaching`.
     pub async fn attach_moderator(&self, playlist_id: i64, user_id: i64) -> Result<(), sqlx::Error> {
         sqlx::query(
             "INSERT INTO moderables (user_id, moderable_type, moderable_id, \
@@ -215,8 +204,6 @@ impl PlaylistRepo {
         Ok(())
     }
 
-    /// `PlaylistCsvExportService` — every track (ordered by id) with its
-    /// answers and up/down vote totals, for the CSV download.
     pub async fn export_tracks(
         &self,
         playlist_id: i64,
@@ -278,8 +265,6 @@ impl PlaylistRepo {
         Ok(())
     }
 
-    /// `destroy` — detach moderators, delete tracks (answers cascade),
-    /// delete playlist.
     pub async fn delete(&self, id: i64) -> Result<(), sqlx::Error> {
         let mut tx = self.pool.begin().await?;
         sqlx::query(
@@ -301,7 +286,6 @@ impl PlaylistRepo {
         Ok(())
     }
 
-    /// `has('rooms')` — used by the destroy guard (public + has rooms).
     pub async fn has_rooms(&self, playlist_id: i64) -> bool {
         sqlx::query_scalar::<_, i64>(
             "SELECT EXISTS(SELECT 1 FROM playlist_room WHERE playlist_id = $1)::int::bigint",
@@ -313,7 +297,6 @@ impl PlaylistRepo {
         .unwrap_or(false)
     }
 
-    /// `hasProviderTrack` — PHP checks provider_id ONLY (not provider).
     pub async fn provider_track_id(
         &self,
         playlist_id: i64,
@@ -328,8 +311,6 @@ impl PlaylistRepo {
         .await
     }
 
-    /// Paginated tracks + answers + vote sums. `votes.votes` is ±1
-    /// (`votable_type = Track`).
     pub async fn tracks_page(
         &self,
         playlist_id: i64,
@@ -402,8 +383,6 @@ impl PlaylistRepo {
             .collect())
     }
 
-    /// `TrackController::store` — firstOrNew(provider+provider_id) then
-    /// updateOrCreate answers 1 (Artist) & 2 (Title).
     pub async fn upsert_track(
         &self,
         playlist_id: i64,
@@ -464,7 +443,6 @@ impl PlaylistRepo {
         };
 
         for (type_id, value) in [(1i64, artist_name), (2i64, track_name)] {
-            // updateOrCreate(answer_type_id, value).
             let found = sqlx::query_scalar::<_, i64>(
                 "SELECT id FROM track_answers WHERE track_id = $1 AND answer_type_id = $2",
             )
@@ -502,7 +480,6 @@ impl PlaylistRepo {
         Ok(track_id)
     }
 
-    /// `TrackController::update` — dificulty / hint only.
     pub async fn update_track_meta(
         &self,
         track_id: i64,
@@ -519,8 +496,6 @@ impl PlaylistRepo {
         Ok(())
     }
 
-    /// `ProcessDeletedTrack` — answers then track (cascade covers both,
-    /// explicit delete keeps MySQL behaviour identical to PHP's two calls).
     pub async fn delete_track(&self, track_id: i64) -> Result<(), sqlx::Error> {
         let mut tx = self.pool.begin().await?;
         sqlx::query("DELETE FROM track_answers WHERE track_id = $1")
@@ -535,8 +510,6 @@ impl PlaylistRepo {
         Ok(())
     }
 
-    /// `destroyAll` — all track ids of a playlist (each goes through
-    /// `ProcessDeletedTrack` in PHP).
     pub async fn track_ids(&self, playlist_id: i64) -> Result<Vec<i64>, sqlx::Error> {
         sqlx::query_scalar("SELECT id FROM tracks WHERE playlist_id = $1 ORDER BY id")
             .bind(playlist_id)
@@ -556,8 +529,6 @@ impl PlaylistRepo {
         .unwrap_or(false)
     }
 
-    /// `answer_types` list (id, name) — PHP caches by locale; names are
-    /// raw keys here, translated client-side.
     pub async fn answer_types(&self) -> Result<Vec<(i64, String)>, sqlx::Error> {
         let rows = sqlx::query("SELECT id, name FROM answer_types ORDER BY id")
             .fetch_all(&self.pool)
@@ -568,8 +539,6 @@ impl PlaylistRepo {
             .collect())
     }
 
-    /// `Playlist::isPublic()->get()` — public/official playlists for the
-    /// room attach dropdown and discovery (`available_playlists` in PHP).
     pub async fn list_public(&self) -> Result<Vec<(i64, String, i64)>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT p.id, p.name, COUNT(t.id) AS tracks_count FROM playlists p \
@@ -585,7 +554,6 @@ impl PlaylistRepo {
             .collect())
     }
 
-    /// `Playlist::rooms` — rooms using this playlist (edit page section).
     pub async fn rooms_for_playlist(
         &self,
         playlist_id: i64,
@@ -604,7 +572,6 @@ impl PlaylistRepo {
             .collect())
     }
 
-    /// `Playlist::difficulties` — COUNT grouped by `dificulty` bucket.
     pub async fn difficulty_counts(
         &self,
         playlist_id: i64,
@@ -636,7 +603,6 @@ impl PlaylistRepo {
         .await
     }
 
-    /// Which playlist owns a track — used by the answers CRUD authz.
     pub async fn track_playlist_id(&self, track_id: i64) -> Result<Option<i64>, sqlx::Error> {
         sqlx::query_scalar::<_, i64>("SELECT playlist_id FROM tracks WHERE id = $1")
             .bind(track_id)
@@ -644,8 +610,6 @@ impl PlaylistRepo {
             .await
     }
 
-    /// `TrackAnswerController::store` — value required/max 255,
-    /// score 0..=99, up to 20 aliases (validated in the API layer).
     pub async fn create_answer(
         &self,
         track_id: i64,
@@ -719,7 +683,6 @@ impl PlaylistRepo {
         Ok(())
     }
 
-    /// `Auth::user()->getUpVotedItems(Track::class)` — Blind'All Music Likes source.
     pub async fn upvoted_track_ids(&self, user_id: i64) -> Result<Vec<i64>, sqlx::Error> {
         sqlx::query_scalar::<_, i64>(
             "SELECT votable_id FROM votes \
@@ -730,9 +693,6 @@ impl PlaylistRepo {
         .await
     }
 
-    /// `BlindallLikesService::importPlaylist` — copy a track (provider fields +
-    /// all answers) into a playlist, skipping existing provider+provider_id.
-    /// Returns Some(new_track_id) or None when already present/source missing.
     pub async fn duplicate_track(
         &self,
         playlist_id: i64,
@@ -788,8 +748,6 @@ impl PlaylistRepo {
         Ok(Some(new_id))
     }
 
-    /// Invalidate the `room_{id}_tracks_count` cache keys for every room
-    /// using this playlist (PHP does the same on track mutations).
     pub async fn room_ids_for_playlist(&self, playlist_id: i64) -> Vec<i64> {
         sqlx::query_scalar::<_, i64>(
             "SELECT room_id FROM playlist_room WHERE playlist_id = $1",

@@ -1,7 +1,3 @@
-//! Room listing + state + management endpoints.
-//! Ports `RoomController`, `RoomPlaylistController`, `RoomModeratorController`,
-//! `RoomBookmarkController`, `RankingController::roomScores`.
-
 use crate::auth::{CurrentUser, OptionalUser};
 use crate::state::AppState;
 use axum::extract::{Path, Query, State};
@@ -17,7 +13,6 @@ fn forbidden() -> Response {
     (StatusCode::FORBIDDEN, Json(json!({"error": "unauthorized"}))).into_response()
 }
 
-/// banhammer `ip.banned` 403 — `config/ban.php` `messages.ip`.
 fn ip_banned_response() -> Response {
     (
         StatusCode::FORBIDDEN,
@@ -34,15 +29,12 @@ fn validation(field: &str, msg: &str) -> Response {
         .into_response()
 }
 
-/// PHP `not.guest` middleware equivalent.
 fn require_not_guest(user: &blindall_db::entities::User) -> Option<Response> {
     user.is_guest.then(|| {
         (StatusCode::FORBIDDEN, Json(json!({"error": "guest_forbidden"}))).into_response()
     })
 }
 
-/// `GET /api/v1/rooms` — public rooms currently playing (homepage).
-/// Minimal port of HomeController's room list; full catalog later.
 pub async fn list(State(state): State<AppState>) -> Json<Value> {
     let rooms = state.store.public_playing_rooms().await.unwrap_or_default();
     let now = chrono::Utc::now().timestamp();
@@ -65,13 +57,8 @@ pub async fn list(State(state): State<AppState>) -> Json<Value> {
     Json(json!({ "rooms": out }))
 }
 
-/// `GET /api/v1/rooms/{id-or-slug}` — room config + live game snapshot
-/// (equivalent of what `Show.vue` hydrates with on first load).
-/// Laravel resolves `{room}` by slug; accept a numeric id too.
 #[derive(serde::Deserialize)]
 pub struct ShowParams {
-    /// `?password=` — room password for protected rooms (PHP reads it from
-    /// the request input before rendering the show page).
     password: Option<String>,
 }
 
@@ -83,7 +70,6 @@ pub async fn show(
     axum::extract::Query(params): axum::extract::Query<ShowParams>,
     user: OptionalUser,
 ) -> Result<Json<Value>, Response> {
-    // banhammer `ip.banned` + `auth.banned` middleware — `rooms.{room}` show.
     let ip = crate::auth_session::client_ip(&headers, &addr.ip().to_string());
     if state.auth.is_ip_banned(&ip).await {
         return Err(ip_banned_response());
@@ -105,11 +91,6 @@ pub async fn show(
         .await
         .map_err(|_| StatusCode::NOT_FOUND.into_response())?;
 
-    // PHP `RoomController::show`: password rooms redirect until the right
-    // `password` input is supplied — without it nothing is rendered. The API
-    // answer is a 403, which is the honest equivalent (previously the whole
-    // payload leaked past the lock). `Rooms/Password.vue` still shows the
-    // room name, so the error body carries that non-sensitive field.
     let room_password = state.rooms.password_of(id).await.ok().flatten();
     if let Some(expected) = &room_password {
         if params.password.as_deref() != Some(expected.as_str()) {
@@ -124,8 +105,6 @@ pub async fn show(
         }
     }
 
-    // `RoomParticipationService::grantAccess` — PHP grants on every
-    // successful show (guests included); joined/check/scores verify it.
     if let Some(u) = &user.0 {
         let _ = state.presence.grant_participation(id, u.id).await;
     }
@@ -202,12 +181,6 @@ pub async fn show(
         })
         .collect();
 
-    // `RoomController::show` SEO payload — `isOfficialSeoRoom` (public, no
-    // password, slug whitelisted in `official_room_seo`) gates the whole
-    // `RoomSeoPanel`: breadcrumbs / intro copy / stats / similar official
-    // rooms. Content strings are the configured FR texts (PHP `intros` only
-    // ships `fr`); the SPA falls back to the translated `Room page *` keys
-    // for other locales exactly like `RoomContentService::configuredText`.
     let seo = if row.is_public && room_password.is_none() && crate::official_seo::is_official_slug(&slug)
     {
         let mut breadcrumbs = vec![json!({"label": "Home", "href": "/"})];
@@ -307,9 +280,6 @@ pub async fn show(
 
 // ---- presence + hydration ---------------------------------------------------
 
-/// `formatUserForRoom` / `Broadcast::channel('rooms.{id}')` — the full
-/// member shape: team object, level + XP, public-round count for the ELO
-/// "N/A" state, level metrics, per-round score total and donor perks.
 pub(crate) fn player_info_json(
     state: &AppState,
     p: &PlayerInfo,
@@ -381,8 +351,6 @@ async fn room_state(state: &AppState, room_id: i64) -> Value {
         scores.insert(uid.to_string(), json!(s));
     }
 
-    // Donor perks for this month's supporters (`enrichUserPayloadWithMap`
-    // — all-or-nothing perk list per configured month key).
     let supporter_ids: std::collections::HashSet<i64> = state
         .donations_repo
         .supporter_ids(&member_ids, &blindall_db::donations::current_month_key())
@@ -443,9 +411,6 @@ async fn broadcast_public_state(state: &AppState, cfg: &blindall_game::store::Ro
         .await;
 }
 
-/// `GET /api/v1/rooms/{id}/joined` — `RoomController::joined`.
-/// Hydrates the room page: autostart dispatch, round/track snapshot,
-/// presence-scored state, played track cards.
 pub async fn joined(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -460,9 +425,6 @@ pub async fn joined(
         .await
         .map_err(|_| (StatusCode::NOT_FOUND, Json(json!({"error": "room_not_found"}))))?;
 
-    // PHP `RoomController::joined` → `ensureCanParticipate` — 403 until the
-    // user went through `show` (which grants participation + checks the
-    // room password).
     if !state
         .presence
         .has_participation(id, user.id())
@@ -475,8 +437,6 @@ pub async fn joined(
         ));
     }
 
-    // PHP: !is_playing && is_autostart → StartRound::dispatch (actor no-ops
-    // if a round is already running).
     if !row.is_playing && cfg.is_autostart {
         let _ = state
             .manager
@@ -495,9 +455,6 @@ pub async fn joined(
             for tid in &s.played_track_ids {
                 if let Ok(Some(t)) = state.store.load_track(*tid).await {
                     let mut p = blindall_game::events::track_playlist_payload(&t);
-                    // Broadcast payloads carry `user_voted_*: false`; hydrate
-                    // the requester's real vote state (PHP passes $user to
-                    // playlistPayloadForRoom in the same spot).
                     if let Ok(vp) = state.votes.payload(*tid, user.id()).await {
                         p["user_voted_up"] = vp["user_voted_up"].clone();
                         p["user_voted_down"] = vp["user_voted_down"].clone();
@@ -549,7 +506,6 @@ pub async fn joined(
     })))
 }
 
-/// `POST /api/v1/rooms/{id}/presence-joined` — heartbeat add + broadcasts.
 pub async fn presence_joined(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -581,7 +537,6 @@ pub async fn presence_joined(
     })))
 }
 
-/// `POST /api/v1/rooms/{id}/presence-left` — heartbeat remove + broadcasts.
 pub async fn presence_left(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -598,7 +553,6 @@ pub async fn presence_left(
     Ok(Json(json!({"ok": true})))
 }
 
-/// `GET /api/v1/rooms/{id}/public-state` — `RoomController::publicState`.
 pub async fn public_state(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -606,7 +560,6 @@ pub async fn public_state(
     axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<std::net::SocketAddr>,
     user: OptionalUser,
 ) -> Result<Json<Value>, StatusCode> {
-    // banhammer `ip.banned` + `auth.banned` — `rooms.{room}/public-state`.
     let ip = crate::auth_session::client_ip(&headers, &addr.ip().to_string());
     if state.auth.is_ip_banned(&ip).await {
         return Err(StatusCode::FORBIDDEN);
@@ -671,8 +624,6 @@ async fn load_room(state: &AppState, id: i64) -> Result<blindall_db::RoomRow, Re
         .ok_or_else(|| StatusCode::NOT_FOUND.into_response())
 }
 
-/// Laravel binds `{room}` by slug; numeric ids still work (edit links and
-/// old bookmarks use both).
 async fn load_room_by_key(state: &AppState, key: &str) -> Result<blindall_db::RoomRow, Response> {
     let row = match key.parse::<i64>() {
         Ok(id) => state.rooms.find(id).await,
@@ -682,9 +633,6 @@ async fn load_room_by_key(state: &AppState, key: &str) -> Result<blindall_db::Ro
         .ok_or_else(|| StatusCode::NOT_FOUND.into_response())
 }
 
-/// `GET /api/v1/rooms/{id-or-slug}/edit` — `RoomController::edit` payload:
-/// full room + moderators + attached playlists + `owned` flag
-/// (playlist attach/detach is owner/admin only in PHP).
 pub async fn edit(
     State(state): State<AppState>,
     Path(key): Path<String>,
@@ -718,7 +666,6 @@ pub struct CreateRoom {
     category_id: i64,
 }
 
-/// `POST /api/v1/rooms` — `RoomController::store`.
 pub async fn store(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
@@ -743,7 +690,6 @@ pub async fn store(
     }
     match state.rooms.create(user.id, name, body.category_id).await {
         Ok(id) => {
-            // PHP `UpdateUserLevel::dispatch($user, 'rooms_count')`.
             state
                 .levels
                 .dispatch(user.id, blindall_db::LevelTrigger::RoomsCount);
@@ -768,7 +714,6 @@ pub struct UpdateRoom {
     category_id: i64,
 }
 
-/// `PUT /api/v1/rooms/{id}` — `RoomController::update` (moderator only).
 pub async fn update(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -790,7 +735,6 @@ pub async fn update(
         return validation("name", "The name field is required and must not exceed 25 characters.");
     }
     let mods = state.auth.reserved_moderator_names().await.unwrap_or_default();
-    // `new Reserved` allows keeping the current name.
     if !name.eq_ignore_ascii_case(&room.name)
         && crate::auth_session::validate_name(name, &mods).is_err()
     {
@@ -827,9 +771,6 @@ pub struct UpdateOptions {
     is_featured: Option<bool>,
 }
 
-/// `PUT /api/v1/rooms/{id}/options` — `RoomController::updateOptions`.
-/// PHP lacks an authz check here (any authed user could change options);
-/// we require room control — deliberate fix of an upstream hole.
 pub async fn update_options(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -873,7 +814,6 @@ pub async fn update_options(
     };
     match state.rooms.update_options(id, &options).await {
         Ok(()) => {
-            // Hot-reload game config for live actors.
             if let Ok(cfg) = state.store.room_config(id).await {
                 let _ = state
                     .manager
@@ -886,8 +826,6 @@ pub async fn update_options(
     }
 }
 
-/// `DELETE /api/v1/rooms/{id}` — `RoomController::destroy`
-/// (PHP also lacks the check; we require control).
 pub async fn destroy(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -903,8 +841,6 @@ pub async fn destroy(
     if !state.rooms.has_control(&room, user.id, user.is_administrator).await {
         return forbidden();
     }
-    // PHP `destroy` runs `deletePhoto()` first — remove the stored file
-    // before `soft_delete` nulls the path.
     if let Some(p) = room.photo_path.as_deref() {
         if !p.is_empty() {
             state.storage.delete(p).await;
@@ -916,7 +852,6 @@ pub async fn destroy(
     }
 }
 
-/// `PUT /api/v1/rooms/{id}/restore`.
 pub async fn restore(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -938,7 +873,6 @@ pub async fn restore(
     }
 }
 
-/// `GET /api/v1/rooms/mine` — `RoomController::index` (moderated rooms).
 pub async fn mine(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
@@ -984,7 +918,6 @@ pub struct PlaylistIdBody {
     playlist_id: i64,
 }
 
-/// `POST /api/v1/rooms/{id}/playlists/attach` — owner or admin only.
 pub async fn attach_playlist(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -1007,7 +940,6 @@ pub async fn attach_playlist(
     }
 }
 
-/// `DELETE /api/v1/rooms/{id}/playlists/detach` — owner or admin only.
 pub async fn detach_playlist(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -1032,7 +964,6 @@ pub struct UserIdBody {
     user_id: i64,
 }
 
-/// `POST /api/v1/rooms/{id}/moderators/attach` — owner or admin.
 pub async fn attach_moderator(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -1055,7 +986,6 @@ pub async fn attach_moderator(
     }
 }
 
-/// `DELETE /api/v1/rooms/{id}/moderators/detach` — moderator or admin.
 pub async fn detach_moderator(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -1076,7 +1006,6 @@ pub async fn detach_moderator(
     }
 }
 
-/// `POST /api/v1/rooms/{id}/bookmark` — `RoomBookmarkController::store`.
 pub async fn bookmark(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -1091,7 +1020,6 @@ pub async fn bookmark(
     }
 }
 
-/// `DELETE /api/v1/rooms/{id}/bookmark`.
 pub async fn unbookmark(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -1103,7 +1031,6 @@ pub async fn unbookmark(
     }
 }
 
-/// `GET /api/v1/rooms/{id}/scores` — `RankingController::roomScores`.
 pub async fn scores(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -1132,7 +1059,6 @@ pub struct UserCountBody {
     count: i64,
 }
 
-/// `POST /api/v1/rooms/{id}/user-count` — `updateUserCount`.
 pub async fn update_user_count(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -1144,7 +1070,6 @@ pub async fn update_user_count(
     }
 }
 
-/// `GET /api/v1/categories` — for the room create/edit forms.
 pub async fn categories(State(state): State<AppState>) -> Response {
     match state.rooms.categories().await {
         Ok(rows) => Json(json!({
@@ -1155,9 +1080,6 @@ pub async fn categories(State(state): State<AppState>) -> Response {
     }
 }
 
-/// `GET /api/v1/categories/{slug}/landing` — `CategoryController::show`:
-/// SEO landing = category + official public rooms + `CategoryContentService`
-/// copy. 404 when the category has no official public rooms (PHP parity).
 pub async fn category_landing(
     State(state): State<AppState>,
     Path(slug): Path<String>,
@@ -1215,9 +1137,6 @@ pub async fn category_landing(
 
 // ---- track votes --------------------------------------------------------------
 
-/// `TrackVoted` broadcast on `rooms.{id}` — our channel `room:{id}`.
-/// PHP serializes the whole track; the client only reads
-/// `e.track.{id,upvotes,downvotes}` (Answers.vue listener).
 async fn broadcast_track_voted(state: &AppState, room_id: i64, track_id: i64) {
     let track = state
         .votes
@@ -1242,7 +1161,6 @@ async fn broadcast_track_voted(state: &AppState, room_id: i64, track_id: i64) {
         .await;
 }
 
-/// `POST /api/v1/rooms/{room}/tracks/{track}/upvote` — `TrackController::upvote`.
 pub async fn upvote_track(
     State(state): State<AppState>,
     Path((room_id, track_id)): Path<(i64, i64)>,
@@ -1254,7 +1172,6 @@ pub async fn upvote_track(
     if let Err(_) = state.votes.apply_upvote(user.id, track_id).await {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
-    // PHP `UpdateUserLevel::dispatch($user, 'likes_count')`.
     state
         .levels
         .dispatch(user.id, blindall_db::LevelTrigger::LikesCount);
@@ -1279,8 +1196,6 @@ const DOWNVOTE_REASONS: &[&str] = &[
     "other",
 ];
 
-/// `POST /api/v1/rooms/{room}/tracks/{track}/downvote` —
-/// `DownvoteTrackRequest` + `TrackDownvoteService` semantics.
 pub async fn downvote_track(
     State(state): State<AppState>,
     Path((room_id, track_id)): Path<(i64, i64)>,
@@ -1298,11 +1213,9 @@ pub async fn downvote_track(
     }
     match state.votes.apply_downvote(user.id, track_id, reason).await {
         Ok(Ok(())) => {}
-        // No prior downvote + no reason → PHP's 422.
         Ok(Err(())) => return validation("reason", "A downvote reason is required."),
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
-    // PHP `UpdateUserLevel::dispatch($user, 'likes_count')`.
     state
         .levels
         .dispatch(user.id, blindall_db::LevelTrigger::LikesCount);
@@ -1315,7 +1228,6 @@ pub async fn downvote_track(
 
 // ---- alerts / suggestions -----------------------------------------------------
 
-/// `d/m/Y H:i` — the PHP notification `created_at` format.
 fn notif_timestamp() -> String {
     chrono::Utc::now().format("%d/%m/%Y %H:%M").to_string()
 }
@@ -1325,8 +1237,6 @@ pub struct AlertBody {
     message: Option<String>,
 }
 
-/// `POST /api/v1/rooms/{id}/alert` — `RoomController::alert`:
-/// notifies every public moderator (`NewRoomAlert`).
 pub async fn alert(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -1376,9 +1286,6 @@ pub struct SuggestionBody {
     suggestion: String,
 }
 
-/// `POST /api/v1/rooms/{id}/suggestion` — `RoomController::sendSuggestion`:
-/// `sendSuggestion` gate (admin OR account >2mo AND total score >500),
-/// notifies the room moderators (`NewSuggestion`).
 pub async fn suggestion(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -1392,7 +1299,6 @@ pub async fn suggestion(
     if body.suggestion.is_empty() {
         return validation("suggestion", "The suggestion field is required.");
     }
-    // Gate::define('sendSuggestion') — admin || (created_at < -2mo && sum(total_scores) > 500).
     let allowed = user.is_administrator || {
         match state.auth.created_at_and_total_score(user.id).await {
             Ok(Some((Some(created), total))) => {
@@ -1436,8 +1342,6 @@ pub async fn suggestion(
 
 // ---- room photo (`HasPicture`) + track search ---------------------------------
 
-/// `POST /api/v1/rooms/{id}/photo` — `RoomController::update` photo branch:
-/// `photo` image ≤2048KB → contain 350×350 webp at `rooms/{uniqid}.webp`.
 pub async fn update_photo(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -1482,7 +1386,6 @@ pub async fn update_photo(
     }
 }
 
-/// `DELETE /api/v1/rooms/{id}/picture` — `RoomController::deletePicture`.
 pub async fn delete_picture(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -1511,8 +1414,6 @@ pub struct TrackSearchQuery {
     search: Option<String>,
 }
 
-/// `GET /api/v1/rooms/{id}/tracks/search?search=` — `RoomController::searchTracks`:
-/// ids (+ answers) of attached-playlist tracks matching the term, limit 10.
 pub async fn search_room_tracks(
     State(state): State<AppState>,
     Path(id): Path<i64>,

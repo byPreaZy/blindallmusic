@@ -1,10 +1,3 @@
-//! `UploadTrack.vue` — local-track upload with a client-side 30s segment
-//! picker: decode via `AudioContext`, waveform bars, draggable window,
-//! peak-normalize to -1dB then MP3-encode through `window.lamejs`
-//! (`/js/lame.all.js`, same CDN build the Blade template loads).
-//! Multipart POST `/api/v1/local-tracks` (audio ~30s ±1s ≤1MB, artwork
-//! image ≤2MB, artist_name + track_name).
-
 use crate::{api, i18n::t};
 use leptos::prelude::*;
 use serde_json::Value;
@@ -37,7 +30,6 @@ pub fn UploadTrack(
     let processing = RwSignal::new(false);
     let err = RwSignal::new(Option::<String>::None);
     let wave_box = NodeRef::<leptos::html::Div>::new();
-    // (dragging, grab_offset_seconds)
     let drag = RwSignal::new(Option::<f64>::None);
 
     let fmt = |s: f64| format!("{}:{:02}", (s / 60.0) as i64, (s % 60.0) as i64);
@@ -100,7 +92,6 @@ pub fn UploadTrack(
         }
     };
 
-    // seconds -> pointer event clientX mapping
     let x_to_time = move |client_x: f64| -> f64 {
         let Some(el) = wave_box.get() else { return 0.0 };
         let rect = el.get_bounding_client_rect();
@@ -210,7 +201,6 @@ pub fn UploadTrack(
                                             let t = x_to_time(ev.client_x() as f64);
                                             let s = seg_start.get();
                                             if t >= s && t <= s + SEGMENT {
-                                                // grab the window — keep grab offset
                                                 drag.set(Some(t - s));
                                                 if let Some(el) = wave_box.get() {
                                                     let _ = el.set_pointer_capture(ev.pointer_id());
@@ -249,14 +239,12 @@ pub fn UploadTrack(
                                                 }
                                             />
                                         </div>
-                                        // 30s window
                                         <div class="absolute inset-y-0 cursor-grab border-2 border-yellow-400 bg-yellow-300/20 active:cursor-grabbing"
                                             style=move || {
                                                 let d = duration.get().max(1.0);
                                                 format!("left:{}%;width:{}%", seg_start.get() / d * 100.0, SEGMENT.min(d) / d * 100.0)
                                             }>
                                         </div>
-                                        // playhead
                                         <Show when=move || playing.get()>
                                             <div class="absolute bottom-0 top-0 w-0.5 bg-white"
                                                 style=move || format!("left:{}%", cur_time.get() / duration.get().max(1.0) * 100.0)>
@@ -326,7 +314,6 @@ pub fn UploadTrack(
     }
 }
 
-/// Decode → (duration, 100-sample normalized waveform of channel 0).
 async fn decode_waveform(f: &web_sys::File) -> Result<(f64, Vec<f64>), String> {
     let buf = audio_buffer(f).await?;
     let dur = buf.duration();
@@ -358,8 +345,6 @@ async fn audio_buffer(f: &web_sys::File) -> Result<web_sys::AudioBuffer, String>
     decoded.dyn_into::<web_sys::AudioBuffer>().map_err(|_| "decode".into())
 }
 
-/// Extract `dur` seconds at `start`, peak-normalize to -1dB (0.89),
-/// encode stereo MP3 @128k via `window.lamejs.Mp3Encoder`.
 async fn extract_segment(f: &web_sys::File, start: f64, dur: f64) -> Result<web_sys::Blob, String> {
     let buf = audio_buffer(f).await?;
     let rate = buf.sample_rate() as usize;
@@ -444,7 +429,6 @@ fn int8_to_vec(v: &wasm_bindgen::JsValue) -> Vec<u8> {
     out
 }
 
-/// Multipart `POST /api/v1/local-tracks` — browser sets the boundary.
 async fn post_track(
     mp3: &web_sys::Blob,
     artwork: &web_sys::File,

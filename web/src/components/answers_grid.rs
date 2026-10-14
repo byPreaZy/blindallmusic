@@ -1,7 +1,3 @@
-//! Playlist panel — `Answers.vue` + `AnswerCardDesktop.vue` port:
-//! retro-card with "Track x/N" progress, vinyl-style played-track cards
-//! (artwork + answers + vote actions), empty state.
-
 use crate::api;
 use crate::i18n::t;
 use crate::types::Round;
@@ -27,8 +23,6 @@ struct DownvoteBody<'a> {
     reason: Option<&'a str>,
 }
 
-/// Applies the vote endpoint's JSON payload back onto the track's entry in
-/// the `played_tracks` signal (`applyTrackVotePayload` equivalent).
 fn apply_vote_payload(played_tracks: RwSignal<Vec<Value>>, track_id: i64, data: &Value) {
     played_tracks.update(|list| {
         if let Some(tp) = list
@@ -46,13 +40,9 @@ fn apply_vote_payload(played_tracks: RwSignal<Vec<Value>>, track_id: i64, data: 
 
 #[component]
 pub fn PlaylistPanel(
-    /// Revealed track cards (`joined.playedTracks` + `TrackEnded` pushes),
-    /// newest last — displayed reversed like `tracks.value.unshift`.
     played_tracks: RwSignal<Vec<Value>>,
     round: RwSignal<Option<Round>>,
     room_id: i64,
-    /// Any authenticated user sees vote buttons (`v-if="user"` in Vue).
-    /// Signal — the guest account is created after mount.
     can_vote: Signal<bool>,
 ) -> impl IntoView {
     let track_progress = move || {
@@ -69,12 +59,8 @@ pub fn PlaylistPanel(
             (c * 100 / total).min(100)
         }
     };
-    // Which track card's downvote menu is open + its anchor position in
-    // viewport px (right, bottom) — the menu is portaled to <body> like
-    // Dropdown.vue's teleport to `#dropdown` + Popper top-end.
     let menu_for = RwSignal::new(Option::<(i64, f64, f64)>::None);
 
-    // Dropdown.vue: Escape closes the menu (handle kept until unmount).
     {
         let h = SendWrapper::new(window_event_listener(leptos::ev::keydown, move |ev| {
             if ev.key() == "Escape" {
@@ -144,7 +130,6 @@ pub fn PlaylistPanel(
                                     </li>
                                 }.into_any();
                             }
-                            // Newest first — `tracks.value.unshift(e.track)`.
                             list.iter().rev().cloned().collect::<Vec<_>>().into_iter().map(|tp| {
                                 let tid = tp["id"].as_i64().unwrap_or_default();
                                 let artwork = tp["artwork_url"].as_str().map(str::to_string);
@@ -156,7 +141,6 @@ pub fn PlaylistPanel(
                                 view! {
                                     <li class="room-track-card">
                                         <div class="flex flex-row gap-0">
-                                            // Vinyl-style artwork.
                                             <div class="relative h-28 w-28 shrink-0">
                                                 <div class="absolute inset-0 z-0 m-2 rounded-full bg-black/50"></div>
                                                 <div class="absolute inset-0 z-10 m-3 flex items-center justify-center overflow-hidden rounded-full bg-brand-deep">
@@ -175,7 +159,6 @@ pub fn PlaylistPanel(
                                                     <div class="rotate-30 absolute bottom-1/4 right-1/3 z-20 h-2 w-8 transform rounded-full bg-white opacity-10"></div>
                                                 </div>
                                             </div>
-                                            // Revealed answers.
                                             <div class="min-w-0 flex-grow p-3">
                                                 <ul class="space-y-2">
                                                     {answers.into_iter().map(|a| {
@@ -197,7 +180,6 @@ pub fn PlaylistPanel(
                                                     }).collect_view()}
                                                 </ul>
                                             </div>
-                                            // Votes.
                                             <Show when=move || can_vote.get()>
                                                 <div class="flex flex-col items-center justify-center p-3">
                                                     <div class="room-track-votes room-track-votes--desktop">
@@ -233,12 +215,6 @@ pub fn PlaylistPanel(
                                                                         .current_target()
                                                                         .and_then(|tg| tg.dyn_into::<web_sys::Element>().ok())
                                                                     {
-                                                                        // Popper "top-end": menu's
-                                                                        // bottom-right anchors to the
-                                                                        // button's top-right. An
-                                                                        // empty rect means the click
-                                                                        // came from a hidden clone
-                                                                        // (mobile shell) — ignore it.
                                                                         let r = el.get_bounding_client_rect();
                                                                         if r.width() == 0.0 {
                                                                             return;
@@ -279,12 +255,8 @@ pub fn PlaylistPanel(
             </main>
         </section>
 
-        // Downvote reasons menu — teleported to <body> (Dropdown.vue
-        // `<teleport to="#dropdown">` + Popper `top-end`) so it is never
-        // clipped by the playlist's overflow scroll container.
         {move || menu_for.get().map(|(mtid, right, bottom)| view! {
             <Portal>
-                // Click-catcher — `:overlay="false"` → transparent.
                 <div class="fixed inset-0 z-[99998] bg-transparent"
                     on:click=move |_| menu_for.set(None)></div>
                 <div class="retro-dropdown-panel fixed z-[99999]"
@@ -319,8 +291,6 @@ fn display_votes(v: &Value) -> String {
     }
 }
 
-/// `TrackVoted` handler — call sites forward the event's `track` object
-/// here to sync counts on every client (Answers.vue listener).
 pub fn apply_track_voted(played_tracks: RwSignal<Vec<Value>>, event_track: &Value) {
     let tid = event_track["id"].as_i64().unwrap_or_default();
     played_tracks.update(|list| {

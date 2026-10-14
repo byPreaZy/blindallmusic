@@ -1,6 +1,3 @@
-//! Playlist edit (`/playlists/:id/edit`) — meta, track management
-//! (answers/difficulty/hint/delete), provider search, provider import.
-
 use crate::api;
 use crate::i18n::t;
 use crate::types::{IdName, PlaylistDetail, PlaylistTrack, ProviderResult};
@@ -39,7 +36,6 @@ pub fn PlaylistEditPage() -> impl IntoView {
         leptos::task::spawn_local(async move {
             match api::get::<PlaylistDetail>(&format!("/api/v1/playlists/{id}")).await {
                 Ok(d) => {
-                    // PHP `Head::title($playlist->name)`.
                     crate::i18n::set_title(Some(&d.playlist.name));
                     detail.set(Some(d));
                 }
@@ -166,7 +162,6 @@ pub fn PlaylistEditPage() -> impl IntoView {
     }
 }
 
-/// Name/description/owner form — `PUT /playlists/{id}` (owner/admin).
 #[component]
 fn MetaForm(
     detail: PlaylistDetail,
@@ -253,8 +248,6 @@ fn MetaForm(
     }
 }
 
-/// Tracks table — paginated; difficulty/hint inline edit; answers editor;
-/// delete. Mirrors `TracksManager.vue`.
 #[component]
 fn TrackList(
     tracks: RwSignal<Vec<PlaylistTrack>>,
@@ -305,8 +298,6 @@ fn TrackList(
         });
     };
 
-    // `playlists.tracks.clear` — PHP has a confirm modal; a native confirm
-    // keeps the same destructive-action gate.
     let clear_tracks = move |_| {
         let confirmed = web_sys::window()
             .map(|w| w.confirm_with_message(&t("Remove all tracks from this playlist")))
@@ -408,7 +399,6 @@ fn TrackList(
     }
 }
 
-/// Expanded track editor — difficulty select, hint input, answers CRUD.
 #[component]
 fn TrackEditor(
     track: PlaylistTrack,
@@ -546,8 +536,6 @@ fn TrackEditor(
     }
 }
 
-/// Provider search — `GET /playlists/{id}/tracks/search?term=&providers=`
-/// then `POST /playlists/{id}/tracks` per result.
 #[component]
 fn ProviderSearch(
     playlist_id: i64,
@@ -564,7 +552,6 @@ fn ProviderSearch(
 
     let all_providers = ["deezer", "spotify", "itunes", "audius"];
     let auth = crate::auth::use_auth();
-    // `LocalTrackRequest::authorize` — public moderators only.
     let can_upload = Memo::new(move |_| {
         auth.user.get().map(|u| u.is_public_moderator).unwrap_or(false)
     });
@@ -703,7 +690,6 @@ fn ProviderSearch(
     }
 }
 
-/// Provider playlist import — find → import. `blindall` = user likes.
 #[component]
 fn ProviderImport(
     playlist_id: i64,
@@ -809,10 +795,6 @@ fn ProviderImport(
     }
 }
 
-// ModeratorsSection → `crate::components::moderators` (shared with room edit).
-
-/// `GET /playlists/{id}/export` — fetch CSV with the bearer token, then
-/// download via object URL (`<a href>` can't carry the Authorization header).
 #[component]
 fn ExportButton(playlist_id: i64, name: String) -> impl IntoView {
     let busy = RwSignal::new(false);

@@ -1,6 +1,3 @@
-//! Minigames — `TrackPickerService` + `MinigameScoreService` port.
-//! Games: quiz, who_sang, album_cover, first_letter, anagram.
-
 use blindall_game::store::PreviewResolver;
 use serde::Serialize;
 use sqlx::postgres::PgPool;
@@ -28,7 +25,6 @@ pub struct MinigameTrack {
 pub struct ChoicesQuestion {
     pub track: MinigameTrack,
     pub choices: Vec<String>,
-    /// Not serialized to the client — used server-side only.
     #[serde(skip_serializing)]
     pub correct_value: String,
 }
@@ -45,7 +41,6 @@ impl MinigameRepo {
         Self { pool, resolver }
     }
 
-    /// `getRandomTrackWithChoices` — 1 correct + up to 3 wrong, shuffled.
     pub async fn track_with_choices(
         &self,
         game_type: &str,
@@ -72,7 +67,6 @@ impl MinigameRepo {
         }))
     }
 
-    /// `getRandomTrackWithTitle` — first_letter: title answer, sanitized.
     pub async fn track_with_title(&self) -> Result<Option<TitleQuestion>, sqlx::Error> {
         let Some(track) = self.pick_random_track(ANSWER_TYPE_TITLE, false).await? else {
             return Ok(None);
@@ -84,7 +78,6 @@ impl MinigameRepo {
         }))
     }
 
-    /// `getRandomArtistAnagram` — bundled `database/data/anagram_artists.json`.
     pub fn random_anagram(&self) -> Option<(String, String)> {
         let list = anagram_list();
         if list.is_empty() {
@@ -95,7 +88,6 @@ impl MinigameRepo {
         Some((anagram.to_string(), artist.to_string()))
     }
 
-    /// `answers->firstWhere('answer_type_id', …)->value` for a track.
     pub async fn answer_of(
         &self,
         track_id: i64,
@@ -110,8 +102,6 @@ impl MinigameRepo {
         .await
     }
 
-    /// `MinigameScoreService::record` — insert + return row id.
-    /// (`UpdateUserLevel::dispatch` stays in the API layer.)
     pub async fn record_score(
         &self,
         user_id: i64,
@@ -134,7 +124,6 @@ impl MinigameRepo {
         
     }
 
-    /// `getTotalsByTypeForUser` — per-game-type sums.
     pub async fn totals_for_user(&self, user_id: i64) -> Result<Vec<(String, i64)>, sqlx::Error> {
         sqlx::query(
             "SELECT game_type, CAST(COALESCE(SUM(score),0) AS bigint) AS total FROM minigame_scores \
@@ -150,8 +139,6 @@ impl MinigameRepo {
         })
     }
 
-    /// Profile minigames tab — paginated session history
-    /// (`ProfilePageService::minigames` history, 15/page).
     pub async fn history_for_user(
         &self,
         user_id: i64,
@@ -190,7 +177,6 @@ impl MinigameRepo {
         }))
     }
 
-    /// `getLeaderboard` — top N totals for a game type.
     pub async fn leaderboard(
         &self,
         game_type: &str,
@@ -218,8 +204,6 @@ impl MinigameRepo {
         })
     }
 
-    /// `pickRandomTrackWithAnswer` — public-playlist tracks, `id >= rand`
-    /// probing to avoid ORDER BY random(); live-resolves the preview URL.
     async fn pick_random_track(
         &self,
         answer_type_id: i64,
@@ -231,8 +215,6 @@ impl MinigameRepo {
         if max_id < 1 {
             return Ok(None);
         }
-        // rand::rng() (ThreadRng) is !Send — draw ids first, drop the rng
-        // before any .await.
         let random_ids: Vec<i64> = {
             use rand::Rng;
             let mut rng = rand::rng();
@@ -255,7 +237,6 @@ impl MinigameRepo {
         let Some((id, provider, provider_id, preview_url, artwork_url)) = found else {
             return Ok(None);
         };
-        // `$track->audio` — live resolution for signed/expiring URLs.
         let audio = self
             .resolver
             .resolve(&provider, &provider_id.unwrap_or_default(), &preview_url.unwrap_or_default())
@@ -267,8 +248,6 @@ impl MinigameRepo {
         }))
     }
 
-    /// First track row with `tracks.id >= from_id` matching the filters
-    /// (public playlist + typed answer + audio condition + artwork).
     async fn pick_one(
         &self,
         answer_type_id: i64,
@@ -305,8 +284,6 @@ impl MinigameRepo {
             })
     }
 
-    /// `getWrongChoices` — up to `count` distinct values from other
-    /// public-playlist tracks, random `answer.id >= rand` probing ×3.
     async fn wrong_choices(
         &self,
         exclude_track: i64,
@@ -364,13 +341,11 @@ impl MinigameRepo {
 
 }
 
-/// `collect([correct])->merge(wrong)->shuffle()` — PHP's shuffle.
 fn shuffle<T>(v: &mut [T]) {
     use rand::seq::SliceRandom;
     v.shuffle(&mut rand::rng());
 }
 
-/// Bundled `database/data/anagram_artists.json` — parsed once.
 fn anagram_list() -> &'static [(&'static str, &'static str)] {
     static LIST: std::sync::LazyLock<Vec<(&'static str, &'static str)>> =
         std::sync::LazyLock::new(|| {

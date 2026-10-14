@@ -1,8 +1,3 @@
-//! `LevelDisplay` + `LevelBadge` + `LevelModal`/`LevelInfo` port — circular
-//! progress badge (GeoGuessr-style ring) in the navbar, click opens the XP
-//! breakdown modal. Live values come from `auth.user` which `app.rs` keeps
-//! updated via the `UserLevelUpdated` broadcast.
-
 use crate::auth::use_auth;
 use crate::i18n::t;
 use leptos::prelude::*;
@@ -36,13 +31,11 @@ fn level_bg_class(level: i64) -> &'static str {
     }
 }
 
-/// `LevelBadge` — SVG progress ring around the level number.
 #[component]
 pub fn LevelBadge(
     #[prop(into)] level: Signal<i64>,
     #[prop(into)] current_xp: Signal<i64>,
     #[prop(into)] xp_for_next_level: Signal<i64>,
-    /// px size of the square badge (PHP sizes: sm=28, md/lg=40).
     #[prop(default = 40)]
     size: u32,
 ) -> impl IntoView {
@@ -82,7 +75,6 @@ pub fn LevelBadge(
     }
 }
 
-/// `LevelInfo` — XP progress + per-metric breakdown (LevelModal body).
 #[component]
 pub fn LevelInfo(
     level: i64,
@@ -96,7 +88,6 @@ pub fn LevelInfo(
     } else {
         (current_xp as f64 / xp_for_next_level as f64 * 100.0).min(100.0)
     };
-    // `metricsXp` — same labels/weights/caps as PHP LevelInfo.vue.
     let metrics: Vec<(String, String, i64, Option<i64>)> = level_metrics
         .map(|m| {
             let g = |k: &str| m[k].as_i64().unwrap_or(0);
@@ -195,7 +186,6 @@ pub fn LevelInfo(
     }
 }
 
-/// `LevelDisplay` — navbar badge + modal. Guests don't have levels.
 #[component]
 pub fn LevelDisplay() -> impl IntoView {
     let auth = use_auth();
@@ -214,7 +204,6 @@ pub fn LevelDisplay() -> impl IntoView {
                                 xp_for_next_level=Signal::derive(move || auth.user.get().map(|x| x.xp_for_next_level).unwrap_or(100))
                                 size=40 />
                         </div>
-                        // `LevelModal`
                         {move || show_modal.get().then(|| {
                             let u2 = auth.user.get();
                             view! {

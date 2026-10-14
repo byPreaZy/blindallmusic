@@ -1,7 +1,3 @@
-//! Notifications — Laravel `notifications` table access (database channel).
-//! Types keep the PHP FQCN strings (`App\Notifications\…`) so rows created by
-//! either stack stay compatible.
-
 use sqlx::{PgPool, Row};
 use serde_json::{json, Value};
 
@@ -15,7 +11,6 @@ impl NotificationRepo {
         Self { pool }
     }
 
-    /// `$user->notify(new X)` — insert one database-channel notification.
     pub async fn notify(
         &self,
         notifiable_id: i64,
@@ -39,7 +34,6 @@ impl NotificationRepo {
         Ok(id)
     }
 
-    /// Unread notifications for the navbar/dropdown (latest first).
     pub async fn unread(&self, user_id: i64, limit: i64) -> Result<Vec<Value>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT id, type, data, created_at FROM notifications \
@@ -78,7 +72,6 @@ impl NotificationRepo {
         .await
     }
 
-    /// `markNotificationAsRead` — single notification, own rows only.
     pub async fn mark_read(&self, user_id: i64, id: &str) -> Result<bool, sqlx::Error> {
         let res = sqlx::query(
             "UPDATE notifications SET read_at = NOW(), updated_at = NOW() \
@@ -91,8 +84,6 @@ impl NotificationRepo {
         Ok(res.rows_affected() > 0)
     }
 
-    /// `markNotificationAsDone` — mark every unread notification sharing the
-    /// same type AND `data.message` as read (PHP loops them).
     pub async fn mark_done(&self, user_id: i64, id: &str) -> Result<u64, sqlx::Error> {
         let row = sqlx::query(
             "SELECT type, data FROM notifications WHERE id = $1 AND notifiable_id = $2",
@@ -110,8 +101,6 @@ impl NotificationRepo {
             .and_then(|d| serde_json::from_str(&d).ok())
             .unwrap_or(json!({}));
         let message = data["message"].as_str().unwrap_or("").to_string();
-        // Fetch unread candidates of the same type and match on message —
-        // JSON_EXTRACT on data works too but LIKE is what the PHP loop does.
         let rows = sqlx::query(
             "SELECT id, data FROM notifications \
              WHERE notifiable_id = $1 AND type = $2 AND read_at IS NULL",

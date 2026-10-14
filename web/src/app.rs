@@ -37,21 +37,13 @@ use leptos_router::components::{Route, Router, Routes};
 use leptos_router::hooks::use_location;
 use leptos_router::path;
 
-/// Renders the footer except on the room gameplay page, which uses a
-/// full-height layout (`calc(100dvh - nav)`) like Laravel's RoomLayout.
-/// Lives inside `<Router>` — `use_location` needs the router context.
 #[component]
 fn AppFooter() -> impl IntoView {
     let location = use_location();
-    // `Laravel\Head` parity — every page rebuilds head server-side; the SPA
-    // restores the index.html defaults on route change, then each page
-    // re-applies its own tags (`seo::apply_page` / room head).
     Effect::new(move |_| {
         let _ = location.pathname.get();
         crate::seo::reset();
     });
-    // `Rooms/Show` uses RoomLayout (no footer/ads); every other page —
-    // including Rooms/Create — renders AppLayout with them.
     let is_room_show = move || {
         location
             .pathname
@@ -62,24 +54,15 @@ fn AppFooter() -> impl IntoView {
     };
     view! {
         <Show when=move || !is_room_show()>
-            // `AppLayout` mounts an AdSense slot just above the footer on
-            // every non-excluded page.
             <crate::ads::Adsense wrapper_class="mt-8 mb-4"/>
             <Footer/>
         </Show>
     }
 }
 
-/// Realtime socket shared app-wide (PHP opens one Echo connection for
-/// everything). `App` owns it for the `user:{id}` notification channel;
-/// `RoomPage` reuses it for room channels instead of opening a second socket.
 pub type SharedRealtime = RwSignal<Option<crate::ws::Realtime>, LocalStorage>;
 
-/// Notification feed shared between `App`'s realtime listener and the
-/// `Notifications` bell component.
 pub type NotificationFeed = RwSignal<Vec<serde_json::Value>>;
-/// `Notifications.vue` `popup` — top-of-screen flash on broadcast (PHP shows
-/// the `NewRoomAlert` card for 3s).
 pub type NotificationPopup = RwSignal<Option<serde_json::Value>>;
 
 #[component]
@@ -92,10 +75,6 @@ pub fn App() -> impl IntoView {
     let shared_rt = SharedRealtime::new_local(None);
     provide_context(shared_rt);
 
-    // `private-App.Models.User.{id}` — broadcast `BroadcastNotificationCreated`
-    // events land in the bell live (TrackDeleted, team requests, alerts…).
-    // Tracks BOTH auth.user and shared_rt: when the room page created the
-    // socket before login, we still attach the user subscription to it.
     let user_subscribed = RwSignal::new(Option::<i64>::None);
     Effect::new(move |_| {
         let _ = shared_rt.get(); // re-run if the room page created the socket
@@ -120,8 +99,6 @@ pub fn App() -> impl IntoView {
             "Illuminate\\Notifications\\Events\\BroadcastNotificationCreated",
             std::rc::Rc::new(move |data| {
                 notif_feed.update(|l| l.insert(0, data.clone()));
-                // `popup` flash — PHP sets it for every broadcast but only
-                // renders the NewRoomAlert card inside.
                 let ty = data["type"].as_str().unwrap_or("");
                 if ty.ends_with("NewRoomAlert") {
                     notif_popup.set(Some(data.clone()));
@@ -132,7 +109,6 @@ pub fn App() -> impl IntoView {
                 }
             }),
         );
-        // `.user.level.updated` — live XP/level on the navbar badge.
         let user_sig = auth.user;
         rt.listen(&ch, "UserLevelUpdated", std::rc::Rc::new(move |data| {
             user_sig.update(|u| {
@@ -178,8 +154,6 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/rooms/:id") view=RoomPage/>
                         <Route path=path!("/rooms/:id/edit") view=RoomEditPage/>
                         <Route path=path!("/rankings") view=RankingsPage/>
-                        // PHP `rankings.teams` / `rankings.minigames` — real
-                        // URLs, must beat the `/:sort` redirect below.
                         <Route path=path!("/rankings/teams") view=RankingsPage/>
                         <Route path=path!("/rankings/minigames") view=RankingsPage/>
                         <Route path=path!("/rankings/:sort") view=RankingSortRedirect/>
@@ -194,18 +168,13 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/contact") view=ContactPage/>
                         <Route path=path!("/banned") view=BannedPage/>
                         <Route path=path!("/profile/:id") view=ProfilePage/>
-                        // `me` → `Me/Show.vue` — the account page (SettingsPage),
-                        // not the public profile.
                         <Route path=path!("/me") view=SettingsPage/>
                         <Route path=path!("/teams") view=TeamsPage/>
                         <Route path=path!("/teams/:id") view=TeamShowPage/>
-                        // PHP mounts these under `/minigames` — keep `/games`
-                        // as an alias for convenience.
                         <Route path=path!("/minigames") view=GamesIndexPage/>
                         <Route path=path!("/minigames/:type") view=GamePlayPage/>
                         <Route path=path!("/games") view=GamesIndexPage/>
                         <Route path=path!("/games/:type") view=GamePlayPage/>
-                        // PHP `routes/minigames.php` URL aliases (indexed/external links).
                         <Route path=path!("/minigames") view=GamesIndexPage/>
                         <Route path=path!("/minigames/:type") view=GamePlayPage/>
                         <Route path=path!("/donations") view=DonationsPage/>
@@ -229,18 +198,11 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/moderation/trashed-messages") view=ModTrashedMessages/>
                         <Route path=path!("/moderation/moderators") view=ModModerators/>
                         <Route path=path!("/moderation/tracks") view=ModTracks/>
-                        // Locale prefixes + blind-test landings: matched LAST —
-                        // leptos_router picks the first matching route in
-                        // declaration order, so params/wildcards must trail
-                        // every static route.
                         <Route path=path!("/language/:lang") view=LanguageSwitch/>
                         <Route path=path!("/en") view=LocaleRedirect/>
                         <Route path=path!("/es") view=LocaleRedirect/>
                         <Route path=path!("/en/*path") view=LocaleRedirect/>
                         <Route path=path!("/es/*path") view=LocaleRedirect/>
-                        // Laravel `blind-test-{category:slug}` — a single URL
-                        // segment; the router can't mix static+param in one
-                        // segment so we match `/:cat` and filter inside.
                         <Route path=path!("/:cat") view=CategoryLandingPage/>
                     </Routes>
                 </main>

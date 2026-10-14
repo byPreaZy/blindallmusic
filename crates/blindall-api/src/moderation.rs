@@ -1,6 +1,3 @@
-//! Moderation API — `auth.moderator` (public-room moderator or admin) for
-//! most routes, `auth.administrator` for moderator management.
-
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -11,7 +8,6 @@ use serde_json::json;
 use crate::auth::CurrentUser;
 use crate::state::AppState;
 
-/// `auth.moderator` — admin or moderator of a public room.
 async fn require_moderator(state: &AppState, user: &blindall_db::entities::User) -> bool {
     user.is_administrator || state.auth.is_public_moderator(user.id).await
 }
@@ -36,7 +32,6 @@ impl ListQuery {
     }
 }
 
-/// `canViewSensitiveData` — only administrators see email/ip.
 fn sensitive(user: &blindall_db::entities::User) -> bool {
     user.is_administrator
 }
@@ -200,7 +195,6 @@ pub async fn user_show(
 #[derive(Deserialize)]
 pub struct BanBody {
     reason: String,
-    /// Ban duration in minutes; `null` = permanent (PHP `BanUserRequest`).
     duration: Option<i64>,
 }
 
@@ -230,7 +224,6 @@ pub async fn ban(
         )
             .into_response();
     }
-    // PHP: cannot ban staff (admin or public-room moderator).
     match state.moderation.is_staff(user_id).await {
         Ok(true) => {
             return (
@@ -242,7 +235,6 @@ pub async fn ban(
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         Ok(false) => {}
     }
-    // `ip` stored on the ban = the target's last-known ip.
     let ip = match state.moderation.user_detail(user_id, true).await {
         Ok(Some(v)) => v["ip"].as_str().map(|s| s.to_string()),
         _ => None,
@@ -253,7 +245,6 @@ pub async fn ban(
         .await
     {
         Ok(()) => {
-            // PHP `Ban::created` → BannedUserMessageCleanupService.
             crate::chat::cleanup_banned_user_messages(&state, user_id).await;
             Json(json!({"ok": true})).into_response()
         }

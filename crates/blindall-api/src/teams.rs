@@ -1,5 +1,3 @@
-//! Team endpoints — `TeamController` + `TeamRequestController` port.
-
 use crate::auth::{CurrentUser, OptionalUser};
 use crate::state::AppState;
 use axum::extract::{Path, Query, State};
@@ -21,7 +19,6 @@ fn validation(field: &str, msg: &str) -> Response {
         .into_response()
 }
 
-/// `alpha_dash` — letters, numbers, dashes, underscores.
 fn alpha_dash(s: &str) -> bool {
     !s.is_empty() && s.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
 }
@@ -32,10 +29,6 @@ pub struct ListQuery {
     page: Option<i64>,
 }
 
-/// `GET /api/v1/teams` — `TeamController::index`.
-/// Adds the PHP card fields: resolved `photo`, `seats` (fixed 8 — Team model
-/// property), `team_points_abbreviated` (`Number::abbreviate`) and the
-/// `viewer` request context (`auth.user` pending/declined request ids).
 pub async fn index(
     State(state): State<AppState>,
     OptionalUser(user): OptionalUser,
@@ -84,7 +77,6 @@ pub async fn index(
     }
 }
 
-/// Laravel `Number::abbreviate` — 1.5K / 2.3M / 4.1B style.
 fn abbreviate(n: f64) -> String {
     const UNITS: [(f64, &str); 3] = [(1e9, "B"), (1e6, "M"), (1e3, "K")];
     for (div, suffix) in UNITS {
@@ -107,7 +99,6 @@ pub struct TeamBody {
     name: String,
 }
 
-/// `POST /api/v1/teams` — `TeamController::store`.
 pub async fn store(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
@@ -136,8 +127,6 @@ pub async fn store(
     }
 }
 
-/// `GET /api/v1/teams/{id}` — `TeamController::show` (+ `viewer` like the
-/// Inertia `userRequest`/member props for the join/leave buttons).
 pub async fn show(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -148,8 +137,6 @@ pub async fn show(
     };
     match state.teams.team_show(id).await {
         Ok(mut v) => {
-            // `member.photo` — `User::photo` accessor (storage URL or
-            // ui-avatars fallback).
             if let Some(members) = v["members"].as_array_mut() {
                 for m in members.iter_mut() {
                     let path = m["photo"].as_str().unwrap_or("").to_string();
@@ -211,7 +198,6 @@ pub async fn show(
     }
 }
 
-/// `PUT /api/v1/teams/{id}` — `TeamController::update` (owner only).
 pub async fn update(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -243,9 +229,6 @@ pub async fn update(
     }
 }
 
-/// `POST /api/v1/teams/{id}/photo` — the `photo` branch of
-/// `TeamController::update` (`updatePhoto`): image ≤2048KB → contain 350×350
-/// webp at `teams/{uniqid}.webp`. Gated by `changeTeamPicture` + ownership.
 pub async fn update_photo(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -297,8 +280,6 @@ pub async fn update_photo(
     }
 }
 
-/// `DELETE /api/v1/teams/{id}` — owner only, and only when the team has a
-/// single member (`destroy`).
 pub async fn destroy(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -317,7 +298,6 @@ pub async fn destroy(
     }
 }
 
-/// `POST /api/v1/teams/{id}/leave`.
 pub async fn leave(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -341,7 +321,6 @@ pub async fn leave(
     }
 }
 
-/// `POST /api/v1/teams/{id}/owner/{uid}` — `switchOwner`.
 pub async fn switch_owner(
     State(state): State<AppState>,
     Path((id, uid)): Path<(i64, i64)>,
@@ -359,7 +338,6 @@ pub async fn switch_owner(
     }
 }
 
-/// `POST /api/v1/teams/{id}/members/{uid}/remove` — `removeMember`.
 pub async fn remove_member(
     State(state): State<AppState>,
     Path((id, uid)): Path<(i64, i64)>,
@@ -377,7 +355,6 @@ pub async fn remove_member(
     }
 }
 
-/// `POST /api/v1/teams/{id}/request` — `TeamRequestController::store`.
 pub async fn request_join(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -408,7 +385,6 @@ pub async fn request_join(
     }
     match state.teams.create_request(id, user.id).await {
         Ok(request_id) => {
-            // `$team->owner->notify(new NewTeamRequest($teamRequest))`.
             let _ = state
                 .notifications
                 .notify(
@@ -432,7 +408,6 @@ pub async fn request_join(
     }
 }
 
-/// `POST /api/v1/teams/{id}/request/cancel`.
 pub async fn cancel_request(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -449,14 +424,12 @@ pub struct RequestActionBody {
     notification_id: Option<String>,
 }
 
-/// PHP `markTeamRequestNotificationAsRead` — optional `notification_id` body.
 async fn mark_notification_read(state: &AppState, user_id: i64, body: &RequestActionBody) {
     if let Some(id) = body.notification_id.as_deref() {
         let _ = state.notifications.mark_read(user_id, id).await;
     }
 }
 
-/// `POST /api/v1/teams/requests/{req}/accept` — team owner only.
 pub async fn accept_request(
     State(state): State<AppState>,
     Path(request_id): Path<i64>,
@@ -478,8 +451,6 @@ pub async fn accept_request(
     }
     match state.teams.approve_request(request_id).await {
         Ok(true) => {
-            // `TeamRequestApproved` notification to the requester
-            // (`TeamRequest::approve` → `$this->user->notify(...)`).
             let data = json!({
                 "team": {"id": team.id, "name": team.name, "user_id": team.user_id},
                 "message": format!("Your request has been accepted!<br> Welcome to the team {}", team.name),
@@ -498,7 +469,6 @@ pub async fn accept_request(
                 )
                 .await;
             }
-            // PHP `TeamRequest::approve` → `UpdateUserLevel::dispatch($this->user)`.
             state
                 .levels
                 .dispatch(requester_id, blindall_db::LevelTrigger::Score);
@@ -509,7 +479,6 @@ pub async fn accept_request(
     }
 }
 
-/// `POST /api/v1/teams/requests/{req}/decline` — team owner only.
 pub async fn decline_request(
     State(state): State<AppState>,
     Path(request_id): Path<i64>,
@@ -531,7 +500,6 @@ pub async fn decline_request(
     }
     match state.teams.decline_request(request_id).await {
         Ok(()) => {
-            // `TeamRequestRejected` notification (`TeamRequest::reject`).
             let data = json!({
                 "team": {"id": team.id, "name": team.name, "user_id": team.user_id},
                 "message": "Your request has been declined",

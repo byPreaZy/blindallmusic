@@ -1,6 +1,3 @@
-//! Rankings — `/rankings` with the three PHP boards: Players (6 sorts + room
-//! scope), Teams and Minigames. Mirrors `Rankings/Players|Teams|Minigames`.
-
 use crate::api;
 use crate::i18n::t;
 use leptos::prelude::*;
@@ -24,8 +21,6 @@ pub fn RankingsPage() -> impl IntoView {
     crate::seo::apply_page("/rankings", t("Rankings meta description"));
     let auth = crate::auth::use_auth();
     let query = use_query_map();
-    // PHP serves the boards on distinct URLs (`rankings.index`,
-    // `rankings.teams`, `rankings.minigames`) — the router maps them here.
     let path = leptos_router::hooks::use_location()
         .pathname
         .get_untracked();
@@ -34,8 +29,6 @@ pub fn RankingsPage() -> impl IntoView {
         "/rankings/minigames" => "minigames",
         _ => "players",
     };
-    // `?sort=`/`?room=`/`?page=` initial state — `RankingController::index`
-    // reads the same query keys (`level` legacy routes redirect here).
     let initial = query.get_untracked();
     let initial_sort = initial
         .get("sort")
@@ -64,8 +57,6 @@ pub fn RankingsPage() -> impl IntoView {
     let payload = RwSignal::new(Value::Null);
     let loading = RwSignal::new(true);
 
-    // Guests can't see the authed boards — Laravel's `auth` middleware sends
-    // them to `/login`; mirror it once the auth probe resolved.
     let authed_tab = matches!(initial_tab, "teams" | "minigames");
     Effect::new(move |_| {
         if authed_tab && auth.ready.get() && auth.user.get().is_none() {
@@ -73,8 +64,6 @@ pub fn RankingsPage() -> impl IntoView {
         }
     });
 
-    // Query → signals sync — sort pills / room filter are `<A>` links, so the
-    // component stays mounted while `?sort=`/`?room=` change.
     Effect::new(move |_| {
         let q = query.get();
         if let Some(s) = q
@@ -101,7 +90,6 @@ pub fn RankingsPage() -> impl IntoView {
         }
     });
 
-    // Fetch on (tab, sort, room, page) change.
     let fetch = move || {
         let (tab_v, sort_v, room_v, page_v) =
             (tab.get(), sort.get(), room.get(), page.get());
@@ -121,13 +109,10 @@ pub fn RankingsPage() -> impl IntoView {
             loading.set(false);
         });
     };
-    // First load + reactive refetch via Effect.
     Effect::new(move |_| fetch());
 
     view! {
         <div class="mx-auto max-w-5xl px-4 py-4 sm:py-8">
-            // PHP `Players|Teams|Minigames.vue` shared header — centered
-            // gradient hero + SEO intro + docs link.
             <div class="mx-auto mb-6 text-center sm:mb-8">
                 <h1 class="mb-2 bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 bg-clip-text text-3xl font-extrabold text-transparent sm:mb-4 sm:text-5xl">
                     {t("Rankings")}
@@ -144,7 +129,6 @@ pub fn RankingsPage() -> impl IntoView {
                 </A>
             </div>
 
-            // Guest CTA — PHP renders it only for logged-out visitors.
             <Show when=move || crate::auth::use_auth().user.get().is_none()>
                 <div class="mb-6 rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4 sm:p-5">
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -164,8 +148,6 @@ pub fn RankingsPage() -> impl IntoView {
                 </div>
             </Show>
 
-            // `RankingTabs` — PHP uses underline tabs linking to the three
-            // board URLs; Teams/Mini-games only exist for logged-in users.
             <div class="mb-6 border-b border-white/10 sm:mb-8">
                 <nav class="-mb-px flex gap-2 overflow-x-auto" aria-label="Tabs">
                     {move || {
@@ -215,8 +197,6 @@ fn PlayersBoard(
 ) -> impl IntoView {
     view! {
         <div>
-            // Filters row — PHP renders sort pills (rounded-full, yellow
-            // active) + a labelled "Filter by room" select.
             <div class="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
                 <div class="flex flex-wrap gap-2">
                     {["level", "score", "elo", "week", "avg_time", "best_round"].into_iter().map(|s| {
@@ -273,8 +253,6 @@ fn PlayersBoard(
                 </label>
             </div>
 
-            // `PlayerUserPosition.vue` — gold position circle, name, "Your
-            // ranking", View Profile link + metric chips (active sort lit).
             {move || {
                 let auth = crate::auth::use_auth();
                 let pos = payload.get()["user_context"]["position"].as_i64();
@@ -332,8 +310,6 @@ fn PlayersBoard(
                 })
             }}
 
-            // `RankingList.vue` — card rows (medal/rank box, ringed avatar,
-            // per-sort sub-badges, right score) + level-sort LevelModal.
             {move || {
                 let p = payload.get();
                 let data = p["leaderboard"]["data"].as_array().cloned().unwrap_or_default();
@@ -354,9 +330,6 @@ fn PlayersBoard(
                 let first_page = cur_page == 1;
                 view! {
                     <div>
-                        // `PlayersLeaderboard.vue` — article cards: plain rank
-                        // box, avatar+name (guests unlinked), 3 metric chips
-                        // (active sort lit), stats dl grid.
                         <div class="space-y-2.5 sm:space-y-3">
                             {data.into_iter().enumerate().map(|(i, e)| {
                                 let u = e["user"].clone();
@@ -511,7 +484,6 @@ fn TeamsBoard(payload: RwSignal<Value>, loading: RwSignal<bool>, page: RwSignal<
                 let first_page = page.get() == 1;
                 view! {
                     <div>
-                        // `RankingList type="teams"` — same card rows.
                         <div class="space-y-2.5 sm:space-y-3">
                             {data.into_iter().enumerate().map(|(i, e)| {
                                 let team = e["team"].clone();
@@ -613,7 +585,6 @@ fn MinigamesBoard(payload: RwSignal<Value>, loading: RwSignal<bool>, page: RwSig
                 let first_page = page.get() == 1;
                 view! {
                     <div>
-                        // `RankingList type="minigames"` — player card rows.
                         <div class="space-y-2.5 sm:space-y-3">
                             {data.into_iter().enumerate().map(|(i, e)| {
                                 let u = e["user"].clone();
@@ -681,7 +652,6 @@ fn MinigamesBoard(payload: RwSignal<Value>, loading: RwSignal<bool>, page: RwSig
     }
 }
 
-/// `MetricTooltip.vue` — label + `?` that toggles an explanatory tooltip.
 #[component]
 fn MetricTip(label: &'static str, tip: &'static str) -> impl IntoView {
     let open = RwSignal::new(false);
@@ -705,8 +675,6 @@ fn MetricTip(label: &'static str, tip: &'static str) -> impl IntoView {
     }
 }
 
-/// `Pagination.vue` — Laravel paginator links (« Prev, 1..N, Next ») as real
-/// URLs carrying the current `?sort=`/`?room=`/`?tab=` params.
 #[component]
 fn Pagination(page: RwSignal<i64>, last: i64, total: i64) -> impl IntoView {
     let query = use_query_map();
@@ -738,7 +706,6 @@ fn Pagination(page: RwSignal<i64>, last: i64, total: i64) -> impl IntoView {
         <Show when=move || { last > 1 }>
             <div class="mt-4">
                 <div class="flex flex-wrap justify-center gap-1.5 sm:gap-2">
-                    // « Previous
                     {move || {
                         let p = cur();
                         if p > 1 {
@@ -748,9 +715,6 @@ fn Pagination(page: RwSignal<i64>, last: i64, total: i64) -> impl IntoView {
                             view! { <span class="retro-pagination-link cursor-default text-white/60">"«"</span> }.into_any()
                         }
                     }}
-                    // Laravel `UrlWindow` (onEachSide=3): full range when
-                    // `last < 14`, else first pair / ±3 slider / last pair
-                    // with "..." separators — never the raw 1..=last range.
                     {move || {
                         let (cur_p, last_p) = (cur(), last);
                         const SIDE: i64 = 3;
@@ -787,7 +751,6 @@ fn Pagination(page: RwSignal<i64>, last: i64, total: i64) -> impl IntoView {
                             }
                         }).collect_view()
                     }}
-                    // Next »
                     {move || {
                         let p = cur();
                         if p < last {

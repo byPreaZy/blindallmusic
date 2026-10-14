@@ -1,7 +1,3 @@
-//! `donations` — `DonationGoalService` + `DonorPerkService` port.
-//! Month keys are `Y-m` in `Europe/Paris`; the monthly goal carries surplus
-//! forward (`carryover`).
-
 use chrono::{Datelike, Duration, TimeZone};
 use chrono_tz::Europe::Paris;
 use serde_json::{json, Value};
@@ -13,7 +9,6 @@ pub struct DonationRepo {
     pool: PgPool,
 }
 
-/// `month_key` for a UTC instant in Europe/Paris.
 pub fn month_key(ts: chrono::DateTime<chrono::Utc>) -> String {
     ts.with_timezone(&Paris).format("%Y-%m").to_string()
 }
@@ -22,7 +17,6 @@ pub fn current_month_key() -> String {
     month_key(chrono::Utc::now())
 }
 
-/// First instant (UTC) of a `Y-m` month in Europe/Paris.
 fn month_start(key: &str) -> Option<chrono::DateTime<chrono::Utc>> {
     let (y, m) = key.split_once('-')?;
     Paris
@@ -31,7 +25,6 @@ fn month_start(key: &str) -> Option<chrono::DateTime<chrono::Utc>> {
         .map(|d| d.with_timezone(&chrono::Utc))
 }
 
-/// `Y-m` of the previous month.
 pub fn prev_month_key(key: &str) -> Option<String> {
     let start = month_start(key)?;
     let prev = start - Duration::days(1);
@@ -43,7 +36,6 @@ impl DonationRepo {
         Self { pool }
     }
 
-    /// `raisedCentsForMonth`.
     pub async fn raised_cents(&self, month_key: &str) -> Result<i64, sqlx::Error> {
         sqlx::query_scalar::<_, i64>(
             "SELECT CAST(COALESCE(SUM(amount_cents), 0) AS bigint) FROM donations WHERE month_key = $1",
@@ -53,8 +45,6 @@ impl DonationRepo {
         .await
     }
 
-    /// `carryoverCentsBeforeMonth` — walk from the first donation month to
-    /// `month_key`, accumulating `max(0, available - goal)`.
     pub async fn carryover_cents_before_month(
         &self,
         month_key: &str,
@@ -84,7 +74,6 @@ impl DonationRepo {
         Ok(carryover)
     }
 
-    /// `monthProgress` — raised + carryover + goal flags.
     pub async fn month_progress(
         &self,
         month_key: &str,
@@ -95,9 +84,6 @@ impl DonationRepo {
         Ok(progress_json(month_key, raised, carryover, goal_cents))
     }
 
-    /// `Donation::create` on `checkout.session.completed` — idempotent on
-    /// `stripe_checkout_session_id`. Returns `(id, is_new)`; duplicates give
-    /// `(existing_id, false)` so callers skip the thank-you notify like PHP.
     pub async fn record_checkout_session(
         &self,
         session_id: &str,
@@ -136,8 +122,6 @@ impl DonationRepo {
         .map(|r| (r, true))
     }
 
-    /// `resolveUser` — by `client_reference_id` then by lowercased email;
-    /// guests never match. Returns the user id.
     pub async fn resolve_donor(
         &self,
         client_reference_id: Option<&str>,
@@ -168,7 +152,6 @@ impl DonationRepo {
         .await
     }
 
-    /// `userIsSupporter`.
     pub async fn user_is_supporter(&self, user_id: i64, month_key: &str) -> Result<bool, sqlx::Error> {
         Ok(sqlx::query_scalar::<_, i64>(
             "SELECT EXISTS(SELECT 1 FROM donations \
@@ -181,7 +164,6 @@ impl DonationRepo {
             == 1)
     }
 
-    /// `perkMapForUserIds` — supporter ids among `user_ids` this month.
     pub async fn supporter_ids(
         &self,
         user_ids: &[i64],
@@ -200,9 +182,6 @@ impl DonationRepo {
         .await
     }
 
-    /// `monthlySupporters` — distinct users who donated this month, latest
-    /// first, plus carryover supporters (handled by caller via
-    /// `post_goal_supporters`).
     pub async fn month_donors(&self, month_key: &str) -> Result<Vec<Value>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT d.user_id, d.donated_at, u.name, u.photo_path \
@@ -227,8 +206,6 @@ impl DonationRepo {
             .collect())
     }
 
-    /// `postGoalSupporters` — donors whose contribution landed at/after the
-    /// goal line (running total including carryover), unique per user.
     pub async fn post_goal_supporters(
         &self,
         month_key: &str,
@@ -273,8 +250,6 @@ impl DonationRepo {
             .collect())
     }
 
-    /// `monthlyHistory` — per-month aggregates (desc), caller walks carryover
-    /// forward like PHP does.
     pub async fn month_aggregates(
         &self,
         since_key: &str,
@@ -298,7 +273,6 @@ impl DonationRepo {
             .collect())
     }
 
-    /// `recentDonations` — latest donations with optional user join.
     pub async fn recent_donations(&self, limit: i64) -> Result<Vec<Value>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT d.id, d.amount_cents, d.currency, d.month_key, d.donated_at, \
@@ -312,7 +286,6 @@ impl DonationRepo {
         Ok(rows.iter().map(donation_json).collect())
     }
 
-    /// `userDonationHistory`.
     pub async fn user_history(&self, user_id: i64, limit: i64) -> Result<Vec<Value>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT d.id, d.amount_cents, d.currency, d.month_key, d.donated_at, \
@@ -327,7 +300,6 @@ impl DonationRepo {
         Ok(rows.iter().map(donation_json).collect())
     }
 
-    /// `userDonationSummary` aggregates.
     pub async fn user_summary(&self, user_id: i64) -> Result<Value, sqlx::Error> {
         let r = sqlx::query(
             "SELECT CAST(COALESCE(SUM(amount_cents),0) AS bigint) AS total, COUNT(*) AS cnt, \
@@ -339,7 +311,6 @@ impl DonationRepo {
         .fetch_one(&self.pool)
         .await?;
         let first_at: Option<chrono::DateTime<chrono::Utc>> = r.get("first_at");
-        // `diffInMonths(first→now, floor)` — months between calendar months.
         let duration_months = first_at.map_or(0, |f| {
             let f = f.with_timezone(&Paris);
             let now = chrono::Utc::now().with_timezone(&Paris);
@@ -378,7 +349,6 @@ fn donation_json(r: &sqlx::postgres::PgRow) -> Value {
     v
 }
 
-/// `monthProgress` shape (shared by month_progress + history).
 pub fn progress_json(month_key: &str, raised: i64, carryover: i64, goal: i64) -> Value {
     let effective = carryover + raised;
     json!({
@@ -393,7 +363,6 @@ pub fn progress_json(month_key: &str, raised: i64, carryover: i64, goal: i64) ->
     })
 }
 
-/// `Y-m` of the month after `key`.
 pub fn next_month_key(key: &str) -> Option<String> {
     let start = month_start(key)?;
     let next = start + Duration::days(32);
@@ -406,7 +375,6 @@ mod tests {
 
     #[test]
     fn month_keys() {
-        // 2025-01-31 23:30 UTC = 2025-02-01 00:30 Paris → "2025-02".
         let ts = chrono::Utc.with_ymd_and_hms(2025, 1, 31, 23, 30, 0).unwrap();
         assert_eq!(month_key(ts), "2025-02");
         assert_eq!(prev_month_key("2025-03"), Some("2025-02".into()));

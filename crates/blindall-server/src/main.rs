@@ -1,6 +1,3 @@
-//! blindall-server — one process: MySQL pool + Redis client + WS hub +
-//! game manager (recovery at boot) + axum listener.
-
 use blindall_api::{router, AppState};
 use blindall_db::{AuthRepo, DbGameStore};
 use blindall_game::GameManager;
@@ -26,7 +23,6 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or_else(|_| "redis://127.0.0.1:6379".into());
     let bind = std::env::var("BIND").unwrap_or_else(|_| "0.0.0.0:8080".into());
 
-    // PostgreSQL (Supabase)
     let pool = blindall_db::connect(&database_url).await?;
     let app_key = std::env::var("APP_KEY").unwrap_or_default();
     if app_key.is_empty() {
@@ -34,12 +30,10 @@ async fn main() -> anyhow::Result<()> {
     }
     tracing::info!("postgres connected");
 
-    // Schema migrations (embedded SQL — no PHP anywhere in this stack).
     if std::env::var("SKIP_MIGRATIONS").as_deref() != Ok("1") {
         blindall_db::migrate(&pool).await?;
         tracing::info!("migrations applied");
     }
-    // Demo data is a runtime seed, not a migration — env-gated, idempotent.
     if std::env::var("SEED_DEMO")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false)
@@ -48,7 +42,6 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!("demo seed applied");
     }
 
-    // Redis (one shared client — fred pipelines internally)
     let redis_cfg = fred::types::config::Config::from_url_centralized(&redis_url)?;
     let redis = Client::new(redis_cfg, None, None, None);
     let _handle = redis.init().await?;
@@ -57,7 +50,6 @@ async fn main() -> anyhow::Result<()> {
     let scores = Arc::new(RoundScoreStore::new(redis.clone()));
     let presence = Arc::new(RoomPresenceStore::new(redis.clone()));
     let hub = Hub::new();
-    // `track.audio` live resolution (deezer/audius) via providers.
     let cache_prefix = std::env::var("CACHE_PREFIX")
         .unwrap_or_else(|_| "blindall_cache_".into());
     let audius_app_name = std::env::var("AUDIUS_APP_NAME")
@@ -65,7 +57,6 @@ async fn main() -> anyhow::Result<()> {
     let resolver = Arc::new(blindall_providers::ProviderResolver::new(
         redis.clone(), &cache_prefix, &audius_app_name,
     ));
-    // Provider search aggregator (Spotify/Deezer/iTunes/Audius/YouTube).
     let providers = std::sync::Arc::new(blindall_providers::MusicProviders::new(
         blindall_providers::ProvidersConfig {
             spotify_client_id: std::env::var("SPOTIFY_CLIENT_ID").unwrap_or_default(),
@@ -89,8 +80,6 @@ async fn main() -> anyhow::Result<()> {
         std::env::var("STORAGE_PUBLIC_PREFIX")
             .unwrap_or_else(|_| "/storage".into()),
     );
-    // `storage.url("")` → `{prefix}/` — trimmed, it's the prefix actors need
-    // to resolve `photo_path` into accessor URLs inside broadcasts.
     let photo_prefix = storage.url("").trim_end_matches('/').to_string();
     let manager = GameManager::new(
         store.clone(),
@@ -100,12 +89,10 @@ async fn main() -> anyhow::Result<()> {
         photo_prefix,
     );
 
-    // Boot recovery: re-arm actors for rounds left unfinished.
     if let Err(e) = manager.recover().await {
         tracing::error!(error = %e, "game recovery failed");
     }
 
-    // Periodic maintenance (the Laravel scheduler, ported).
     sweeper::spawn(
         pool.clone(),
         manager.clone(),
@@ -159,7 +146,6 @@ async fn main() -> anyhow::Result<()> {
         redis: redis.clone(),
         cache_prefix: cache_prefix.clone(),
         oauth: {
-            // services.php env names kept verbatim.
             let mut providers = std::collections::HashMap::new();
             for (name, id_vars, secret_vars, redirect_var) in [
                 ("google", &["GOOGLE_CLIENT_ID"][..], &["GOOGLE_CLIENT_SECRET"][..], "GOOGLE_REDIRECT_URI"),

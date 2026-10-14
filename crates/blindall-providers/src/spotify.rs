@@ -1,6 +1,3 @@
-//! `SpotifyService::searchTrack` port — client-credentials token cached
-//! in-process (the PHP lib does the same per-request; ours survives).
-
 use crate::types::{ProviderError, ProviderResult, ProviderTrack};
 use serde_json::Value;
 use std::sync::Mutex;
@@ -14,7 +11,6 @@ pub struct SpotifyClient {
     client_id: String,
     client_secret: String,
     market: String,
-    /// (token, fetched_at) — Spotify tokens live ~1h; refresh at 50min.
     token: Mutex<Option<(String, Instant)>>,
 }
 
@@ -32,7 +28,6 @@ impl SpotifyClient {
         }
     }
 
-    /// `Session::requestCredentialsToken` — Basic-auth client_credentials.
     async fn access_token(&self) -> Result<String, ProviderError> {
         if let Some((tok, at)) = self.token.lock().unwrap().as_ref() {
             if at.elapsed() < Duration::from_secs(3000) {
@@ -59,8 +54,6 @@ impl SpotifyClient {
         Ok(token)
     }
 
-    /// `searchTrack` — type track+artist, market, limit 50, keep playable
-    /// tracks with a valid preview_url.
     pub async fn search_track(&self, term: &str) -> ProviderResult {
         if term.trim().is_empty() {
             return Ok(vec![]);
@@ -106,7 +99,6 @@ impl SpotifyClient {
             })
             .unwrap_or_default();
 
-        // PHP: results exist but none playable → explicit 404 error object.
         if total > 0 && tracks.is_empty() {
             return Err(ProviderError::new(
                 "spotify",
@@ -117,8 +109,6 @@ impl SpotifyClient {
         Ok(tracks)
     }
 
-    /// `SpotifyService::findPlaylist` — GET /playlists/{id}
-    /// → {id, name, description, tracks_count, image}.
     pub async fn find_playlist(&self, playlist_id: &str) -> Result<Value, ProviderError> {
         let token = self.access_token().await?;
         let resp = self
@@ -146,8 +136,6 @@ impl SpotifyClient {
         }))
     }
 
-    /// `SpotifyService::importPlaylist` — paginate /playlists/{id}/tracks
-    /// (100/page via `next`), keep playable tracks with a preview_url.
     pub async fn playlist_tracks(
         &self,
         playlist_id: &str,

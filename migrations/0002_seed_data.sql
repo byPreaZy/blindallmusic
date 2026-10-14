@@ -1,8 +1,3 @@
--- =============================================================================
--- Données de référence — port de AnswerTypesSeeder + CategoriesSeeder.
--- Idempotent : INSERT IGNORE (ré-exécutable sans doublons).
--- =============================================================================
-
 INSERT INTO answer_types (id, name, pronoun, svg_icon, created_at, updated_at) VALUES
 (1, 'Artist', 'the', '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
   <path d="M5 3a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0V3z"/>

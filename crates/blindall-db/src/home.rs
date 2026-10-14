@@ -1,11 +1,3 @@
-//! Home catalog — port of `HomeCatalogService` + `WeeklyTopUsers`.
-//!
-//! Official tab: public rooms without password (`Room::isPublic`,
-//! `whereNull('password')`), community tab: private rooms without password
-//! (`isPrivate`), `mine`: user's moderated private rooms, `favorites`:
-//! bookmarked rooms. Popularity sort key — `[subscriptions, is_playing,
-//! rounds_count, id]` desc (`roomPopularitySortKey`).
-
 use serde_json::{json, Value};
 use sqlx::postgres::PgPool;
 use sqlx::Row;
@@ -16,8 +8,6 @@ pub struct HomeRepo {
     pool: PgPool,
 }
 
-/// Room row shaped for the homepage catalog (`Room::toHomepageArray` +
-/// category + owner + rounds_count + live `current_track_index`).
 #[derive(Debug)]
 pub struct CatalogRoom {
     pub id: i64,
@@ -37,7 +27,6 @@ pub struct CatalogRoom {
     pub owner_name: Option<String>,
     pub owner_photo_path: Option<String>,
     pub rounds_count: i64,
-    /// Filled post-query by the caller (live rounds + presence).
     pub current_track_index: i64,
     pub subscriptions: i64,
     pub tracks_count: Option<i64>,
@@ -82,8 +71,6 @@ impl HomeRepo {
         }
     }
 
-    /// `cachedPublicRooms` / community ids — password-less rooms of the given
-    /// visibility, ordered (final order comes from the popularity sort).
     pub async fn catalog_rooms(
         &self,
         is_public: bool,
@@ -101,7 +88,6 @@ impl HomeRepo {
         .map(|rows| rows.into_iter().map(Self::map).collect())
     }
 
-    /// `bookmarkedRooms` — favorites tab, newest bookmark first.
     pub async fn bookmarked_rooms(
         &self,
         user_id: i64,
@@ -121,7 +107,6 @@ impl HomeRepo {
         .map(|rows| rows.into_iter().map(Self::map).collect())
     }
 
-    /// `moderatedRooms()->isPrivate()` — "mine" tab.
     pub async fn moderated_private_rooms(
         &self,
         user_id: i64,
@@ -141,8 +126,6 @@ impl HomeRepo {
         .map(|rows| rows.into_iter().map(Self::map).collect())
     }
 
-    /// `searchRooms` — navbar search: rooms with playlists, no password,
-    /// `name LIKE %s% OR owner.name LIKE %s%`, 20 max, live-first order.
     pub async fn search_rooms(&self, search: &str) -> Result<Vec<CatalogRoom>, sqlx::Error> {
         let like = format!("%{search}%");
         sqlx::query(&format!(
@@ -162,7 +145,6 @@ impl HomeRepo {
         .map(|rows| rows.into_iter().map(Self::map).collect())
     }
 
-    /// `featuredRooms` — admin-flagged, visibility-agnostic.
     pub async fn featured_rooms(&self) -> Result<Vec<CatalogRoom>, sqlx::Error> {
         sqlx::query(&format!(
             "SELECT {} FROM rooms r {} \
@@ -176,8 +158,6 @@ impl HomeRepo {
         .map(|rows| rows.into_iter().map(Self::map).collect())
     }
 
-    /// `categoriesWithRoomCounts` — categories that own at least one room of
-    /// the given visibility (no password, not deleted).
     pub async fn categories_with_room_counts(
         &self,
         is_public: bool,
@@ -204,8 +184,6 @@ impl HomeRepo {
         })
     }
 
-    /// Live `current` track index for playing rooms (`overlayLiveRoomState`):
-    /// latest unfinished playing round per room.
     pub async fn live_track_indices(
         &self,
         room_ids: &[i64],
@@ -231,7 +209,6 @@ impl HomeRepo {
         Ok(out)
     }
 
-    /// Total imported tracks per room (private cards show `tracks_count`).
     pub async fn tracks_counts(
         &self,
         room_ids: &[i64],
@@ -254,8 +231,6 @@ impl HomeRepo {
         Ok(out)
     }
 
-    /// `WeeklyTopUsers` — top 10 by SUM(total_score) on public-room standings
-    /// over the last 7 days.
     pub async fn weekly_top_users(&self) -> Result<Vec<Value>, sqlx::Error> {
         sqlx::query(
             "SELECT rs.user_id, ROUND(SUM(rs.total_score)::numeric, 1)::float8 AS total_score, \

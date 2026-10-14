@@ -1,15 +1,3 @@
-//! RoomActor — one tokio task per active room. All mutations flow through
-//! a single mpsc inbox, so the room's state machine is serialized by
-//! construction (no DB row locks needed where PHP used `increment()` +
-//! `lockForUpdate`).
-//!
-//! Replaces the delayed-job chain:
-//!   PHP:  playNextTrack → Job.delay(track_duration) → Job.delay(pause)
-//!   Rust: Phase transitions + one timer. `pause` actually freezes the
-//!         countdown — in PHP, `pause()` sets is_playing=false which makes
-//!         the pending job a no-op and the chain dies silently (resume()
-//!         never re-arms it). Real pause/resume is a deliberate upgrade.
-
 use crate::events;
 use crate::finalize;
 use crate::store::{GameStore, GameTrack, PresenceStore, RoomConfig, RoundRow, ScoreStore};
@@ -25,13 +13,10 @@ use tokio::time::{sleep_until, Instant, Sleep};
 use std::pin::Pin;
 
 pub enum RoomCommand {
-    /// `StartRound` job — begin (or restart) a round for this room.
     Start { user_id: Option<i64> },
     Pause,
     Resume,
-    /// `round.stop()` — finish now, finalize scores, maybe auto-restart.
     Stop,
-    /// `RoundController::check` — full scoring pipeline via blindall-core.
     CheckAnswer {
         user_id: i64,
         track_id: i64,
@@ -40,13 +25,9 @@ pub enum RoomCommand {
         current_time: f64,
         reply: oneshot::Sender<CheckOutcome>,
     },
-    /// `RoundController::trackListened` — record listen without answer.
     TrackListened { user_id: i64, track_id: i64 },
-    /// Options changed (durations/pauses) — take effect immediately.
     UpdateConfig { cfg: RoomConfig },
-    /// Hydration snapshot for `GET /rooms/{id}/joined`-style reads.
     Snapshot { reply: oneshot::Sender<RoomSnapshot> },
-    /// Boot recovery — resume an unfinished round at the next boundary.
     Recover { round: RoundRow },
     Shutdown,
 }
@@ -57,20 +38,14 @@ pub struct RoomSnapshot {
     pub is_playing: bool,
     pub round: Option<RoundRow>,
     pub current_track: Option<GameTrack>,
-    /// Track ids already played this round (for `playedTracks` hydration).
     pub played_track_ids: Vec<i64>,
 }
 
 enum Phase {
-    /// No round.
     Idle,
-    /// Track playing; `ends_at` fires TrackEnded.
     Playing { ends_at: Instant },
-    /// Between tracks; `next_at` fires play_next_track.
     InterTrack { next_at: Instant },
-    /// Frozen — remaining time stored so resume re-arms the same deadline.
     Paused { resume_in: ResumeKind },
-    /// Round stopping: finalization runs as a detached task.
     Finalizing { restart_at: Instant },
 }
 
@@ -89,9 +64,6 @@ pub struct RoomActor {
     scores: Arc<dyn ScoreStore>,
     presence: Arc<dyn PresenceStore>,
     hub: Hub,
-    /// Storage public URL prefix (`storage.url("")` trimmed) — resolves
-    /// `photo_path` to the full URL the PHP `photo` accessor emits in
-    /// broadcast payloads.
     photo_prefix: String,
     inbox: mpsc::Receiver<RoomCommand>,
     timer: Pin<Box<Sleep>>,
@@ -124,8 +96,6 @@ impl RoomActor {
         tx
     }
 
-    /// Recover an in-flight round after a restart (blueprint §3.2 — skip
-    /// ahead to the next boundary rather than resuming mid-track).
     pub fn recover(&mut self, round: RoundRow) {
         self.round = Some(round);
         self.phase = Phase::InterTrack {
@@ -155,21 +125,17 @@ impl RoomActor {
             Phase::Playing { ends_at } => *ends_at,
             Phase::InterTrack { next_at } => *next_at,
             Phase::Finalizing { restart_at } => *restart_at,
-            // Idle/Paused: park the timer far in the future.
             _ => Instant::now() + Duration::from_secs(86400),
         };
         self.timer.as_mut().reset(deadline);
     }
 
-    /// Park the timer when bailing out without a new phase — an elapsed
-    /// `Sleep` stays Ready forever and would busy-loop the select!.
     fn park_timer(&mut self) {
         self.timer
             .as_mut()
             .reset(Instant::now() + Duration::from_secs(86400));
     }
 
-    /// Returns true to terminate the actor.
     async fn handle(&mut self, cmd: RoomCommand) -> bool {
         match cmd {
             RoomCommand::Start { user_id } => self.start_round(user_id).await,
@@ -206,9 +172,6 @@ impl RoomActor {
         false
     }
 
-    /// PHP `joined`: indices `0..=current-2` — the currently-playing track
-    /// (`tracks[current-1]`) is NOT in `playedTracks` (its answers would be
-    /// revealed while it plays).
     fn played_track_ids(&self) -> Vec<i64> {
         self.round
             .as_ref()
@@ -221,9 +184,7 @@ impl RoomActor {
 
     // ---- round lifecycle -------------------------------------------------
 
-    /// Port of `StartRound::handle`.
     async fn start_round(&mut self, user_id: Option<i64>) {
-        // Already an active round with tracks → no-op (PHP logs + returns).
         if let Some(r) = &self.round {
             if r.is_playing && !r.tracks.is_empty() && r.finished_at.is_none() {
                 return;
@@ -261,7 +222,6 @@ impl RoomActor {
         };
 
         if tracks.is_empty() {
-            // PHP aborts: mark round finished + room stopped + RoundFinished.
             let _ = self.store.finish_round(round_id, Utc::now()).await;
             let _ = self.store.set_room_playing(self.room.id, false).await;
             self.round = Some(RoundRow {
@@ -300,7 +260,6 @@ impl RoomActor {
         self.play_next_track().await;
     }
 
-    /// Port of `Round::playNextTrack` — recursion → loop.
     async fn play_next_track(&mut self) {
         loop {
             let Some(round) = self.round.as_mut() else {
@@ -318,7 +277,6 @@ impl RoomActor {
             }
             let track_id = round.tracks[idx];
 
-            // Persist the advance BEFORE broadcasting (PHP order).
             if let Err(e) = self.store.advance_round(round.id, Utc::now()).await {
                 tracing::error!(round = round.id, error = %e, "advance_round failed");
                 self.park_timer();
@@ -341,9 +299,6 @@ impl RoomActor {
                 }
             };
 
-            // Audio probe for non-youtube/local providers. Dead previews
-            // are queued-deleted (`ProcessDeletedTrack::dispatch` + next
-            // track), like the PHP Round::playNextTrack error paths.
             if !track.skips_probe() {
                 let dead = match &track.audio {
                     None => {
@@ -363,9 +318,6 @@ impl RoomActor {
                     let store = self.store.clone();
                     let hub = self.hub.clone();
                     tokio::spawn(async move {
-                        // `ProcessDeletedTrack` (auto) — then the
-                        // BroadcastNotificationCreated pushes, which PHP's
-                        // queue worker would send after the DB inserts.
                         let Ok(notified) = store.delete_track(track_id, None).await else {
                             return;
                         };
@@ -403,7 +355,6 @@ impl RoomActor {
         }
     }
 
-    /// Port of `Round::pause` — real freeze (see module docs).
     async fn pause(&mut self) {
         let now = Instant::now();
         let resume_in = match self.phase {
@@ -423,7 +374,6 @@ impl RoomActor {
         self.broadcast("TrackPaused", json!({"room_id": self.room.id})).await;
     }
 
-    /// Port of `Round::resume` — re-arms the same deadline (PHP can't).
     async fn resume(&mut self) {
         let now = Instant::now();
         self.phase = match self.phase {
@@ -442,7 +392,6 @@ impl RoomActor {
         self.broadcast("TrackResumed", json!({"room_id": self.room.id})).await;
     }
 
-    /// Port of `Round::stop` — the finalize + maybe-restart chain.
     async fn stop(&mut self) {
         let Some(round) = self.round.as_mut() else {
             return;
@@ -461,7 +410,6 @@ impl RoomActor {
         self.broadcast("RoundFinalizing", payload).await;
         self.broadcast_public_state().await;
 
-        // Finalization as detached task (PHP: ProcessRoundFinalization job).
         finalize::spawn(
             round_id,
             self.room.clone(),
@@ -472,8 +420,6 @@ impl RoomActor {
             self.photo_prefix.clone(),
         );
 
-        // PHP: ProcessRoundFinished.delay(pause_between_rounds) → restart if
-        // `!is_playing && subscriptions > 0 && is_autostart`.
         self.phase = Phase::Finalizing {
             restart_at: Instant::now() + Duration::from_secs(self.room.pause_between_rounds as u64),
         };
@@ -483,7 +429,6 @@ impl RoomActor {
     async fn on_timer(&mut self) {
         match self.phase {
             Phase::Playing { .. } => {
-                // ProcessTrackPlayed: TrackEnded + delay-or-immediate next.
                 if self.round.as_ref().map(|r| r.is_playing).unwrap_or(false) {
                     self.on_track_end().await;
                 } else {
@@ -491,11 +436,9 @@ impl RoomActor {
                 }
             }
             Phase::InterTrack { .. } => {
-                // ProcessTrackEnded → playNextTrack.
                 self.play_next_track().await;
             }
             Phase::Finalizing { .. } => {
-                // ProcessRoundFinished: restart if audience remains.
                 if self.room.is_autostart
                     && self.hub.channel_conn_count(&events::room_channel(self.room.id)).await > 0
                 {
@@ -510,15 +453,12 @@ impl RoomActor {
         }
     }
 
-    /// `ProcessTrackPlayed::handle` — broadcast TrackEnded then chain.
     async fn on_track_end(&mut self) {
         let Some(round) = self.round.as_ref() else {
             return;
         };
         let is_last = round.current as usize >= round.tracks.len();
 
-        // Prefetch next track for the payload (id + urls) — PHP does a
-        // second `Track::find` for this.
         let next_id = if !is_last {
             Some(round.tracks[round.current as usize])
         } else {
@@ -543,7 +483,6 @@ impl RoomActor {
         self.broadcast("TrackEnded", payload).await;
 
         if is_last {
-            // PHP dispatches ProcessTrackEnded immediately on last track.
             self.play_next_track().await;
         } else {
             self.phase = Phase::InterTrack {
@@ -556,8 +495,6 @@ impl RoomActor {
 
     // ---- scoring ----------------------------------------------------------
 
-    /// Wire `scoring::check` to Redis via the backend adapter, then fan out
-    /// the same broadcasts as PHP (`NewScore`, `UserHasFoundAllTheAnswers`).
     async fn check_answer(
         &mut self,
         user_id: i64,
@@ -596,10 +533,6 @@ impl RoomActor {
             total_track_answers: total_answers,
         };
 
-        // `scoring::check` is sync but the store is async — run it on the
-        // blocking pool where `Handle::block_on` is legal. Works on every
-        // runtime flavor (unlike `block_in_place`, which requires
-        // multi_thread and would break paused-time tests).
         let backend = RedisBackend {
             round_id,
             store: self.scores.clone(),
@@ -619,9 +552,6 @@ impl RoomActor {
             )
             .await;
             if *found_all {
-                // PHP broadcasts `{room, user}` — hydrate name/photo so the
-                // player markers can render avatar + name above the bar.
-                // `photo` is the accessor URL, like `User::photo`.
                 let (name, photo) = self
                     .store
                     .players_info(&[user_id])
@@ -642,7 +572,6 @@ impl RoomActor {
         outcome
     }
 
-    /// `isCurrentTrack` — tracks[current-1] === track_id.
     fn is_current_track(&self, track_id: i64) -> bool {
         self.round
             .as_ref()
@@ -651,7 +580,6 @@ impl RoomActor {
             .unwrap_or(false)
     }
 
-    /// `trackListened` — PHP writes history without an answer.
     async fn track_listened(&mut self, user_id: i64, track_id: i64) {
         let Some(round) = self.round.as_ref() else {
             return;
@@ -700,8 +628,6 @@ impl RoomActor {
             .await;
     }
 
-    /// Room payload embedded in round/track events — the PHP events
-    /// serialize `room->toArray()`; we send the fields the UI uses.
     async fn room_payload(&self) -> Value {
         json!({
             "id": self.room.id,
@@ -715,16 +641,9 @@ impl RoomActor {
     }
 }
 
-/// Adapter: the core `ScoreBackend` trait is synchronous (kept I/O-free for
-/// tests); the real store is async. It runs inside `spawn_blocking`, where
-/// `Handle::block_on` is legal on any runtime flavor. Safe because actor
-/// commands are already serialized by the inbox — no two `check` calls for
-/// one room can interleave, so there is no atomicity loss.
 struct RedisBackend {
     round_id: i64,
     store: Arc<dyn ScoreStore>,
-    /// Captured before entering `spawn_blocking` — `block_on` is only legal
-    /// outside an async context, i.e. on the blocking-pool thread.
     handle: tokio::runtime::Handle,
 }
 

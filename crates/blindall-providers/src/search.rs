@@ -1,11 +1,3 @@
-//! `MusicProvidersService::search` port — fans out to enabled providers
-//! concurrently, merges valid tracks, collects provider-level errors,
-//! caches the merged response for 300s.
-//!
-//! Cache: PHP keys are `music_search:{term}:{providers}` holding a PHP-
-//! serialized structure. We use a `rs:` namespace + JSON — safe
-//! coexistence, zero risk of unserializing foreign payloads.
-
 use crate::types::{ProviderError, ProviderTrack, ProvidersConfig};
 use crate::{audius::AudiusService, deezer::DeezerClient, itunes::ItunesClient,
             spotify::SpotifyClient, youtube::{YouTubeApiClient, YouTubeScrapeClient}};
@@ -20,9 +12,6 @@ struct CachedSearch {
     results: Vec<ProviderTrack>,
     errors: Vec<ProviderError>,
 }
-
-// `ProviderTrack`/`ProviderError` derive Serialize only — add Deserialize.
-// (kept as impl-free types; serde derives live on the structs)
 
 pub struct MusicProviders {
     cfg: ProvidersConfig,
@@ -57,9 +46,6 @@ impl MusicProviders {
         format!("rs:music_search:{term}:{}", providers.join(","))
     }
 
-    /// `search($user, $term, $providers)` — `is_public_moderator` selects
-    /// the scraper (PHP: youtube → isPublicModerator ? scrape : api).
-    /// `local` is handled by the API layer (DB search, not HTTP).
     pub async fn search(
         &self,
         term: &str,
@@ -77,7 +63,6 @@ impl MusicProviders {
             }
         }
 
-        // One future per enabled provider — PHP Http::pool equivalent.
         let mut futs: Vec<std::pin::Pin<Box<dyn std::future::Future<Output = crate::types::ProviderResult> + Send>>> =
             Vec::new();
         for p in providers {
@@ -90,7 +75,6 @@ impl MusicProviders {
                 "youtube" => futs.push(Box::pin(self.youtube_api.search_track(term))),
                 "spotify" => futs.push(Box::pin(self.spotify.search_track(term))),
                 "deezer" => futs.push(Box::pin(self.deezer.search_track(term))),
-                // `local` (DB) and unknown providers are skipped here.
                 _ => {}
             }
         }
@@ -100,7 +84,6 @@ impl MusicProviders {
         for res in futures::future::join_all(futs).await {
             match res {
                 Ok(tracks) => results.extend(
-                    // PHP filter: provider, provider_id, preview_url all set.
                     tracks.into_iter().filter(|t| {
                         !t.provider_id.is_empty() && t.preview_url.is_some()
                     }),
@@ -126,8 +109,6 @@ impl MusicProviders {
         &self.cfg
     }
 
-    /// `PlaylistController::findPlaylist` — provider playlist lookup.
-    /// `blindall` is handled in the API layer (DB, not HTTP).
     pub async fn find_playlist(
         &self,
         provider: &str,
@@ -140,9 +121,6 @@ impl MusicProviders {
         }
     }
 
-    /// `PlaylistController::importPlaylist` — fetch all tracks of a
-    /// provider playlist, formatted for storage (deezer:// placeholders).
-    /// `blindall` is handled in the API layer (DB, not HTTP).
     pub async fn playlist_tracks(
         &self,
         provider: &str,

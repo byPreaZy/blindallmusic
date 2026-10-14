@@ -1,7 +1,3 @@
-//! Docs section — `docs/*` Inertia pages ported as static Leptos pages:
-//! overview (progression systems), level, elo, glossary, howto,
-//! create-content, support (donation data reused), faq → `/faq`.
-
 use crate::api;
 use crate::i18n::t;
 use leptos::prelude::*;
@@ -31,7 +27,6 @@ fn bullet_list(items: &[&'static str]) -> impl IntoView {
 }
 
 fn link_card(href: &'static str, title: &'static str, sub: &'static str, color: &'static str) -> impl IntoView {
-    // Literal classes per color — Tailwind can't see `format!()` class names.
     let (icon_bg, icon_fg) = match color {
         "blue" => ("bg-blue-500/20 group-hover:bg-blue-500/30", "text-blue-400"),
         "purple" => ("bg-purple-500/20 group-hover:bg-purple-500/30", "text-purple-400"),
@@ -1022,8 +1017,6 @@ fn month_label(key: &str) -> String {
     format!("{} {}", MONTHS[m - 1], year)
 }
 
-/// `/docs/support` — donation goal + history(12) + recent(30) like
-/// `SupportController::index` (`DonationGoalService::monthlyHistory`).
 #[component]
 pub fn DocsSupportPage() -> impl IntoView {
     crate::i18n::set_title_key("Docs support title");
@@ -1155,8 +1148,6 @@ pub fn DocsSupportPage() -> impl IntoView {
 
 // ---- /blind-test-{slug} — category landing (`CategoryController::show`) --------------
 
-/// SEO landing page for a category: official rooms + generated copy.
-/// Mounted on `/:cat`; only serves URLs shaped `blind-test-{slug}`.
 #[component]
 pub fn CategoryLandingPage() -> impl IntoView {
     let params = leptos_router::hooks::use_params_map();
@@ -1173,8 +1164,6 @@ pub fn CategoryLandingPage() -> impl IntoView {
         match slug() {
             Some(s) => match api::get::<Value>(&format!("/api/v1/categories/{s}/landing")).await {
                 Ok(v) => {
-                    // PHP `CategoryHead` uses the service's `metaTitle` +
-                    // `metaDescription` + canonical.
                     crate::i18n::set_title(v["content"]["meta_title"].as_str());
                     if let Some(desc) = v["content"]["meta_description"].as_str() {
                         crate::seo::apply_page(&format!("/blind-test-{s}"), desc);
@@ -1215,7 +1204,6 @@ pub fn CategoryLandingPage() -> impl IntoView {
                 }).unwrap_or_default();
                 let rooms: Vec<Value> = d["rooms"].as_array().cloned().unwrap_or_default();
                 view! {
-                    // `Categories/Show` — breadcrumb Home / category.
                     <nav class="text-sm text-neutral-500" aria-label="Breadcrumb">
                         <ol class="flex flex-wrap items-center gap-2">
                             <li><A href="/" attr:class="transition-colors hover:text-yellow-400">{t("Home")}</A></li>
@@ -1287,7 +1275,6 @@ pub fn CategoryLandingPage() -> impl IntoView {
 
 // ---- /contact -------------------------------------------------------------------------
 
-/// `ContactController::index` + `send` — simple contact form → `POST /contact`.
 #[component]
 pub fn ContactPage() -> impl IntoView {
     crate::i18n::set_title_key("Contact");
@@ -1306,7 +1293,6 @@ pub fn ContactPage() -> impl IntoView {
                         <h3 class="text-xl font-bold text-white">{t("Send a message to")} " Blind'All Music"</h3>
                     </div>
                     <div class="p-5">
-                        // `Tip` — tracks requests go to moderators.
                         <p class="mb-3 rounded-lg bg-blue-900/40 px-4 py-3 text-sm text-blue-200">
                             {t("For any request to add or modify tracks in public playlists, please contact the moderators directly")}
                         </p>
@@ -1351,7 +1337,6 @@ pub fn ContactPage() -> impl IntoView {
                     </div>
                 </div>
             }>
-                // `Contact/Sent` — confirmation card + return home.
                 <div class="rounded-xl border border-white/10 bg-surface-raised/60">
                     <div class="border-b border-white/10 px-5 py-4">
                         <h3 class="text-xl font-bold text-white">{t("Message sent")} "!"</h3>
@@ -1368,8 +1353,6 @@ pub fn ContactPage() -> impl IntoView {
 
 // ---- legacy redirects -------------------------------------------------------------
 
-/// `/rankings/{level|score|elo|week}` → `/rankings?sort={sort}` —
-/// `routes/localizable.php` — `Route::redirect('faq', 'docs/faq', 301)`.
 #[component]
 pub fn FaqRedirect() -> impl IntoView {
     let navigate = leptos_router::hooks::use_navigate();
@@ -1379,7 +1362,6 @@ pub fn FaqRedirect() -> impl IntoView {
     view! { <div class="px-4 py-16 text-center text-white/60">{t("Loading")}"…"</div> }
 }
 
-/// PHP registers these as `Route::redirect()` (`routes/web.php`).
 #[component]
 pub fn RankingSortRedirect() -> impl IntoView {
     let params = leptos_router::hooks::use_params_map();
@@ -1395,16 +1377,11 @@ pub fn RankingSortRedirect() -> impl IntoView {
     view! { <div class="px-4 py-16 text-center text-white/60">{t("Loading")}"…"</div> }
 }
 
-/// `/en/...` and `/es/...` — Laravel registers every localizable route under
-/// locale prefixes. The prefix sets the UI locale (persisted), then we strip
-/// it and land on the same page.
 #[component]
 pub fn LocaleRedirect() -> impl IntoView {
     let location = leptos_router::hooks::use_location();
     let navigate = leptos_router::hooks::use_navigate();
     Effect::new(move |_| {
-        // Untracked reads; the effect can still re-fire on the same mount, so
-        // bail out explicitly when the path no longer carries a locale prefix.
         let path = location.pathname.get_untracked();
         let (rest, prefixed) = if path == "/en" || path == "/es" {
             ("/", true)
@@ -1420,8 +1397,6 @@ pub fn LocaleRedirect() -> impl IntoView {
         }
         crate::i18n::set_locale(if path.starts_with("/en") { "en" } else { "es" });
         let search = location.search.get_untracked();
-        // `/en` → rest "/" — `//{search}` would be a protocol-relative URL
-        // (invalid host) and stalls the navigation entirely.
         let rest = rest.trim_start_matches('/');
         let target = if rest.is_empty() {
             format!("/{search}")
@@ -1433,8 +1408,6 @@ pub fn LocaleRedirect() -> impl IntoView {
     view! { <div class="px-4 py-16 text-center text-white/60">{t("Loading")}"…"</div> }
 }
 
-/// `/language/{lang}` — `Route::get('language/{language}')`: applies the
-/// locale then goes home (PHP redirects back to the localizable referrer).
 #[component]
 pub fn LanguageSwitch() -> impl IntoView {
     let params = leptos_router::hooks::use_params_map();
@@ -1449,7 +1422,6 @@ pub fn LanguageSwitch() -> impl IntoView {
 
 // ---- /banned — `Pages/Banned.vue` -----------------------------------------------------
 
-/// `/banned` — current user's latest ban (or IP-ban fallback).
 #[component]
 pub fn BannedPage() -> impl IntoView {
     crate::i18n::set_title_key("You have been banned!");

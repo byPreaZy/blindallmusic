@@ -1,18 +1,3 @@
-//! `enrich_answers` — derives media/featuring `track_answers` from the Deezer
-//! API for themed rooms. Complements migration 0006 (parenthesized-title
-//! extraction) for tracks whose title does not cite the work:
-//!
-//! - Media answer: `album.title` cleaned of soundtrack suffixes
-//!   (« Spirited Away Soundtrack » → « Spirited Away »), typed from the
-//!   room/playlist name (video-game keywords → Video game, anime → Anime,
-//!   « anim » → Cartoon, series → Show, film/disney → Movie).
-//! - Featuring answer: extra `contributors` beyond the stored Artist value.
-//!
-//! Idempotent — tracks already carrying a media-family or equal-value answer
-//! are skipped. Usage:
-//!
-//!   DATABASE_URL=postgres://… cargo run -p blindall-e2e --bin enrich_answers -- [--dry-run] [--room=ID]
-
 use sqlx::postgres::PgPoolOptions;
 use sqlx::Row;
 use std::time::Duration;
@@ -64,11 +49,6 @@ fn contains_word(s: &str, words: &[&str]) -> bool {
     ok
 }
 
-/// Strip soundtrack/edition decorations from an album title, looping until
-/// stable: « Ponyo … Image Album » → « Ponyo on the Cliff by the Sea ».
-/// Cut at the first media marker anywhere in the string — « Laputa: Castle
-/// in the Sky Soundtrack -The Mystery…- » → « Laputa: Castle in the Sky »,
-/// « Nausicaä … Image Album: The Bird Man » → « Nausicaä … ».
 fn cut_at_marker(s: &str) -> String {
     let l = s.to_lowercase();
     for marker in [
@@ -86,9 +66,6 @@ fn cut_at_marker(s: &str) -> String {
     s.to_string()
 }
 
-/// Whole-value generic results — compilation series names (« Level 3 »,
-/// « Vol. 1 »), placeholder titles, or connector leftovers (« The Film »)
-/// that are never a work name.
 fn generic_whole(l: &str) -> bool {
     if ["unknown", "untitled", "the album", "album", "n/a", "none", "misc",
         "the film", "film", "the movie", "movie", "motion picture",
@@ -100,7 +77,6 @@ fn generic_whole(l: &str) -> bool {
     {
         return true;
     }
-    // « Level 3 », « Vol. 1 », « Volume 2 », « Track 4 », « Part 2 »
     let head = l.split(|c: char| c.is_ascii_digit()).next().unwrap_or("");
     let tail = l[head.len()..].trim_end_matches(|c: char| c.is_ascii_digit() || c == '.' || c == ' ');
     let numbered = matches!(
@@ -110,8 +86,6 @@ fn generic_whole(l: &str) -> bool {
     numbered && tail.is_empty() && l.len() > head.len()
 }
 
-/// Compilation-style album titles that carry no usable work name
-/// (« The Greatest Video Game Music », « Best of 8-Bit »…).
 fn bad_album(album: &str) -> bool {
     let l = album.to_lowercase();
     [
@@ -130,14 +104,11 @@ fn bad_album(album: &str) -> bool {
     .any(|k| l.contains(k))
 }
 
-/// Trailing volume markers: « Batman: Arkham Knight, Vol. 1 » → « … Knight ».
 fn strip_volume(s: &str) -> String {
     let l = s.to_lowercase();
     for pat in [", vol.", ", vol ", " vol.", " volume "] {
         if let Some(i) = l.rfind(pat) {
             let rest = l[i + pat.len()..].trim_end_matches(|c: char| c == ')' || c == ']');
-            // Digit run followed by end-of-string OR a subtitle separator
-            // (« …, Vol. 2: Friends With Benefit », « Vol. 3 - Bonus »).
             let digits = rest.trim_start_matches(|c: char| c.is_ascii_digit() || c == ' ' || c == '.');
             let all_digits = digits.is_empty() && rest.chars().any(|c| c.is_ascii_digit());
             let subtitled = digits.starts_with([':', '-', '–', '—', '(', '[', ',']);
@@ -153,8 +124,6 @@ fn clean_work_name(album: &str) -> String {
     let mut s = strip_prefix(&cut_at_marker(&strip_volume(album.trim())));
     loop {
         let prev = s.clone();
-        // Trailing (…)/( […] ) groups carrying soundtrack/edition keywords,
-        // or a bare year/decade: « (2003 Remaster) », « (1989) ».
         if let Some(i) = s.rfind(['(', '[']) {
             let tail = s[i..].to_lowercase();
             let inner = tail.trim_matches(|c: char| "()[] ".contains(c));
@@ -195,8 +164,6 @@ fn clean_work_name(album: &str) -> String {
     s.trim_matches(|c: char| " -–—,/'\"".contains(c)).trim().to_string()
 }
 
-/// Leading « Music from … », « Bande originale de … », « B.O. du film … » —
-/// the work name follows the connector.
 fn strip_prefix(s: &str) -> String {
     let l = s.to_lowercase();
     for (prefix, connectors) in [
@@ -221,8 +188,6 @@ fn strip_prefix(s: &str) -> String {
                     }
                 }
             }
-            // « Music from Braid » — no connector, the whole rest is the
-            // work name. Strip a leading « the » then take it wholesale.
             if prefix.contains("music") {
                 let bare = rest.strip_prefix("the ").unwrap_or(rest);
                 let out = s[s.len() - bare.len()..].trim_start().to_string();
@@ -315,7 +280,6 @@ fn strip_suffix(s: &str) -> String {
     out
 }
 
-/// Compilation/generic album names that are not a work title.
 fn generic_name(s: &str) -> bool {
     let l = s.to_lowercase();
     let l = l.trim();
@@ -340,9 +304,6 @@ fn generic_name(s: &str) -> bool {
             .any(|g| l == *g || l.starts_with(&format!("{g} ")) && l.len() < g.len() + 8)
 }
 
-/// The album title carries an explicit soundtrack/media marker — then a
-/// cleaned name equal to the track title is still a real work name
-/// (« Ponyo on the Cliff by the Sea Image Album »).
 fn has_media_marker(album: &str) -> bool {
     let l = album.to_lowercase();
     [
@@ -354,8 +315,6 @@ fn has_media_marker(album: &str) -> bool {
     .any(|k| l.contains(k))
 }
 
-/// Normalize for equality (mirrors `matching.rs` spirit): lowercase, keep
-/// alphanumerics only.
 fn norm(s: &str) -> String {
     s.chars()
         .filter(|c| c.is_alphanumeric())
@@ -370,8 +329,6 @@ async fn main() -> anyhow::Result<()> {
     let only_room: Option<i64> = args
         .iter()
         .find_map(|a| a.strip_prefix("--room=").and_then(|v| v.parse().ok()));
-    // `--except=1,2,3` — exclude rooms (e.g. already-enriched themed rooms on
-    // a featuring-only pass over the rest).
     let except: Vec<i64> = args
         .iter()
         .find_map(|a| a.strip_prefix("--except="))
@@ -383,12 +340,9 @@ async fn main() -> anyhow::Result<()> {
     let pool = PgPoolOptions::new().max_connections(4).connect(&db).await?;
     let http = reqwest::Client::builder().timeout(Duration::from_secs(8)).build()?;
 
-    // Media answer types that block enrichment (curated rows win).
     const MEDIA_FAMILY: &str =
         "('movie','show','anime','cartoon','video game','video games','videogame','jeu vidéo','jeux vidéo','game','musical','character','documentary','drama')";
 
-    // Candidate tracks: every deezer track attached to a room. Media answers
-    // require a themed name signal; Featuring dedup happens per value.
     let q = r#"
         SELECT t.id AS track_id, t.provider_id::text AS pid,
                array_agg(DISTINCT rn.name::text) AS names,
@@ -421,16 +375,12 @@ async fn main() -> anyhow::Result<()> {
         let title: Option<String> = row.get("title");
         let feats: Option<String> = row.get("feats");
 
-        // Non-themed rooms still get Featuring enrichment; media answers
-        // require a name signal (no blind Movie fallback — singles would
-        // produce wrong answers).
         let type_id = media_type_for(&names);
         if type_id.is_none() && feats.is_some() {
             skipped += 1;
             continue;
         }
 
-        // Deezer track lookup with one retry on rate-limit.
         let mut track_json = None;
         for attempt in 0..3 {
             let resp = http
@@ -459,20 +409,13 @@ async fn main() -> anyhow::Result<()> {
             continue;
         }
 
-        // — Media answer from album title —
         if let (Some(type_id), Some(album)) = (
             type_id,
             j["album"]["title"].as_str().filter(|a| !bad_album(a)),
         ) {
             let name = clean_work_name(album);
-            // Album == track title with no soundtrack marker → a single;
-            // nothing learned about the work → skip.
             let title_norm = title.as_deref().map(norm).unwrap_or_default();
             let is_single = norm(&name) == title_norm && !has_media_marker(album);
-            // Very short names (« XO », « NI ») are only a real work when the
-            // album carried a soundtrack marker (« Us (Original Motion
-            // Picture Soundtrack) »); bare short album titles are music
-            // releases, not works.
             let too_short = name.chars().count() < 3 && !has_media_marker(album);
             if !generic_name(&name) && !is_single && !too_short {
                 if dry_run {
@@ -495,7 +438,6 @@ async fn main() -> anyhow::Result<()> {
             }
         }
 
-        // — Featuring answers from extra contributors —
         let artist_norm = artist.as_deref().map(norm).unwrap_or_default();
         if let Some(contributors) = j["contributors"].as_array() {
             for c in contributors {

@@ -1,8 +1,3 @@
-//! `ModeratorsManager.vue` ×2 (Rooms + Playlists share the same UI):
-//! current moderators list + a debounced `/api/v1/users?search=` dropdown
-//! to attach by name. `attach_url`/`detach_url` take `{user_id}` JSON —
-//! playlist uses one URL for both verbs, room uses `/attach` + `/detach`.
-
 use crate::{api, i18n::t, types::IdName};
 use leptos::prelude::*;
 use serde_json::{json, Value};
@@ -81,7 +76,6 @@ pub fn ModeratorsSection(
     }
 }
 
-/// Debounced user autocomplete — `GET /api/v1/users?search=` → `{users.data}`.
 #[component]
 fn UserSearchPicker(
     on_pick: impl Fn(IdName) + 'static + Copy + Send + Sync,
@@ -91,7 +85,6 @@ fn UserSearchPicker(
     let searching = RwSignal::new(false);
     let open = RwSignal::new(false);
 
-    // 300ms debounce — last-write-wins on the term.
     Effect::new(move |_| {
         let q = term.get();
         if q.trim().len() < 2 {

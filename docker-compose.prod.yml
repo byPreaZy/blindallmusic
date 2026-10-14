@@ -1,11 +1,3 @@
-# Production overlay — run alongside the base file:
-#   docker compose --env-file .env.production \
-#     -f docker-compose.yml -f docker-compose.prod.yml up -d
-#
-# Starts db + redis + server + caddy only (Supabase/mysql extras are
-# profile-gated in the base file). Caddy owns 80/443 and terminates TLS;
-# db/redis/server ports are already loopback-bound in the base file.
-
 name: blindall
 
 services:

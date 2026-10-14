@@ -1,7 +1,3 @@
-//! SEO endpoints — `RobotsController`, `LlmsTxtController`,
-//! `SitemapController` ports. Text/XML responses with the same content and
-//! headers as the PHP views.
-
 use crate::state::AppState;
 use axum::{
     extract::State,
@@ -10,7 +6,6 @@ use axum::{
 };
 use std::fmt::Write as _;
 
-/// `LocaleUrl` port — fr is unprefixed, en/es get `/{locale}`.
 const LOCALES: [&str; 3] = ["fr", "en", "es"];
 
 fn localized_path(base: &str, path: &str, locale: &str) -> String {
@@ -34,7 +29,6 @@ fn text_response(content: String) -> Response {
     res
 }
 
-/// `GET /robots.txt`.
 pub async fn robots(State(state): State<AppState>) -> Response {
     let base = state.app_url.trim_end_matches('/');
     text_response(format!(
@@ -51,7 +45,6 @@ pub async fn robots(State(state): State<AppState>) -> Response {
     ))
 }
 
-/// `GET /llms.txt`.
 pub async fn llms(State(state): State<AppState>) -> Response {
     let base = state.app_url.trim_end_matches('/');
     text_response(format!(
@@ -96,7 +89,6 @@ fn atom(dt: chrono::DateTime<chrono::Utc>) -> String {
     dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }
 
-/// `GET /sitemap.xml` — same entries/priorities as the Blade view.
 pub async fn sitemap(State(state): State<AppState>) -> Response {
     let base = state.app_url.trim_end_matches('/').to_string();
     let now = atom(chrono::Utc::now());
@@ -109,7 +101,6 @@ pub async fn sitemap(State(state): State<AppState>) -> Response {
         );
     };
 
-    // Home + rankings per locale.
     for locale in LOCALES {
         entry(&localized_path(&base, "", locale), &now, "daily", "1.00");
     }

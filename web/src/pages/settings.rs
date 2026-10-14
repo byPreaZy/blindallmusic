@@ -1,9 +1,3 @@
-//! Settings — `/settings` (PHP "Account"): profile info, password, photo
-//! upload/delete, donation privacy toggle, account deletion.
-//! Endpoints: `GET /users/me`, `POST /users/{id}`, `PUT /users/{id}/password`,
-//! `POST|DELETE /users/{id}/photo`, `PATCH /users/{id}/donation-preferences`,
-//! `DELETE /users/{id}`.
-
 use crate::api::{self, ApiError};
 use crate::auth::use_auth;
 use crate::i18n::t;
@@ -16,7 +10,6 @@ use wasm_bindgen::JsCast;
 pub fn SettingsPage() -> impl IntoView {
     crate::i18n::set_title_key("My account");
     let auth = use_auth();
-    // `me` is `auth` + `not.guest` in Laravel.
     crate::auth::require_registered(auth);
     let account = RwSignal::new(Value::Null);
     let navigate = StoredValue::new(leptos_router::hooks::use_navigate());
@@ -41,7 +34,6 @@ pub fn SettingsPage() -> impl IntoView {
                     show_donations.set(a["show_donation_history_on_profile"].as_bool().unwrap_or(true));
                     account.set(v);
                 }
-                // `me` is an `auth` route — Laravel sends guests to `/login`.
                 Err(e) if e.status == 401 => {
                     navigate.get_value()("/login", Default::default());
                 }
@@ -152,8 +144,6 @@ pub fn SettingsPage() -> impl IntoView {
                 when=move || !loading.get()
                 fallback=move || view! { <div class="text-white/60">{t("Loading")}"…"</div> }
             >
-                // `AccountHeader` — avatar editor + name + supporter badge +
-                // member-for + public-profile link.
                 <section class="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-brand-deep via-brand-midnight to-neutral-900 shadow-lg">
                     <div class="flex flex-col gap-6 p-6 sm:flex-row sm:items-start sm:p-8">
                         <div class="flex flex-col items-center gap-3">
@@ -214,7 +204,6 @@ pub fn SettingsPage() -> impl IntoView {
                 <div class="grid gap-6 lg:grid-cols-12">
                 <div class="space-y-6 lg:col-span-7">
 
-                // Profile
                 <section class="rounded-xl border border-white/10 bg-surface-raised/60 p-6">
                     <h2 class="mb-4 text-lg font-semibold text-white">{t("Profile")}</h2>
                     <form class="space-y-4" on:submit=save_profile>
@@ -236,7 +225,6 @@ pub fn SettingsPage() -> impl IntoView {
                     </form>
                 </section>
 
-                // Password
                 <section class="rounded-xl border border-white/10 bg-surface-raised/60 p-6">
                     <h2 class="mb-4 text-lg font-semibold text-white">{t("Password")}</h2>
                     <form class="space-y-4" on:submit=save_password>
@@ -267,7 +255,6 @@ pub fn SettingsPage() -> impl IntoView {
                     </form>
                 </section>
 
-                // Danger zone
                 <section class="rounded-xl border border-red-500/30 bg-red-500/5 p-6">
                     <h2 class="mb-2 text-lg font-semibold text-red-300">{t("Danger zone")}</h2>
                     <p class="mb-4 text-sm text-white/50">
@@ -300,8 +287,6 @@ pub fn SettingsPage() -> impl IntoView {
                 </div>
                 <aside class="space-y-6 lg:col-span-5">
 
-                // `AccountSupporterPanel` — only when supporter or past
-                // donations (PHP `v-if="is_supporter || donation_count > 0"`).
                 {move || {
                     let a = account.get()["account"].clone();
                     let is_supporter = a["is_supporter"].as_bool().unwrap_or(false);
@@ -332,8 +317,6 @@ pub fn SettingsPage() -> impl IntoView {
                             {is_supporter.then(|| view! {
                                 <ul class="space-y-2">
                                     {[
-                                        // Lucide `circle-slash`, `crown`,
-                                        // `smile-plus` (path data inlined).
                                         (
                                             "circle-slash",
                                             "M4.9 4.9l14.2 14.2M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z",
@@ -388,8 +371,6 @@ pub fn SettingsPage() -> impl IntoView {
                     })
                 }}
 
-                // `AccountShortcuts` — link cards to profile tabs + owned
-                // sections, with stats chips where PHP shows them.
                 <section class="mb-6 space-y-3">
                     <div>
                         <h2 class="text-sm font-bold uppercase tracking-wider text-white/70">{t("Shortcuts")}</h2>
@@ -438,8 +419,6 @@ pub fn SettingsPage() -> impl IntoView {
     }
 }
 
-/// Multipart upload — `gloo-net` + `web_sys::FormData` (browser sets the
-/// multipart boundary; do NOT set Content-Type manually).
 async fn upload(user_id: i64, file: web_sys::File) -> Result<(), ApiError> {
     let form = web_sys::FormData::new().map_err(|e| ApiError {
         status: 0,

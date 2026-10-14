@@ -1,7 +1,3 @@
-//! `getMessage` pools — randomized encouragement strings the API returns
-//! after each check. FR pool ported verbatim; EN/ES pools follow the same
-//! key (other locales fall back to EN, like Laravel's fallback_locale).
-
 pub const GOOD_FR: &[&str] = &[
     "Bien joué !",
     "Félicitation !",
@@ -160,7 +156,6 @@ pub const BAD_EN: &[&str] = &[
     "Every fall is an opportunity to rise stronger.",
 ];
 
-/// `__('messages.'.$type)[array_rand(...)]` — pick one message.
 pub fn random_message(kind: &str, locale: &str, index: usize) -> &'static str {
     let pool: &[&str] = match (kind, locale) {
         ("good", "fr") => GOOD_FR,

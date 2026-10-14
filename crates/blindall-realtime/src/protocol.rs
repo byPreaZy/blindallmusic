@@ -1,16 +1,11 @@
-//! Wire protocol — JSON text frames. Replaces the Pusher/Echo protocol
-//! with a single multiplexed connection per client (blueprint §6).
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// Client → server.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum ClientOp {
     Subscribe {
         channel: String,
-        /// Correlates the `ack`/`error` response.
         req_id: Option<String>,
     },
     Unsubscribe {
@@ -22,24 +17,18 @@ pub enum ClientOp {
     },
 }
 
-/// Server → client.
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum ServerOp {
-    /// A broadcast event on a subscribed channel. `event` keeps the PHP
-    /// broadcast names verbatim (`TrackPlayed`, `NewScore`, …).
     Event {
         channel: String,
         event: String,
         data: Value,
-        /// Per-channel monotonically increasing sequence.
         seq: u64,
     },
-    /// Presence lifecycle on presence channels (`room:{id}`).
     Presence {
         channel: String,
         kind: PresenceKind,
-        /// `sync` carries the full member list; join/leave carry one member.
         users: Vec<Value>,
     },
     Ack {

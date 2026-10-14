@@ -1,7 +1,3 @@
-//! Live ranking — `Ranking.vue` port: retro-card with players badge +
-//! trophy (PodiumModal), rank squares, avatar, answer badges + ghosts,
-//! score in PTS.
-
 use crate::api;
 use crate::i18n::t;
 use crate::types::{RoomUser, Track};
@@ -14,15 +10,10 @@ use std::collections::HashMap;
 pub fn RankingPanel(
     users: RwSignal<Vec<RoomUser>>,
     scores: RwSignal<HashMap<i64, f64>>,
-    /// `roomState.answersByUser` — answer badges found this track per user.
     answers_by_user: RwSignal<HashMap<i64, Vec<Value>>>,
-    /// Current track — unfound answers render as ghost badges.
     track: RwSignal<Option<Track>>,
     room_id: i64,
-    /// Signal — `auth.user` can land after mount (guest account creation).
     me_id: Signal<Option<i64>>,
-    /// Podium modal visibility — shared with the RoomActions "Rankings"
-    /// button so both open the same modal.
     podium_open: RwSignal<bool>,
 ) -> impl IntoView {
     let sorted = Memo::new(move |_| {
@@ -44,8 +35,6 @@ pub fn RankingPanel(
     });
     let podium_data = RwSignal::new(Option::<Value>::None);
 
-    // Fetch scores whenever the modal opens — from this trophy button or
-    // the RoomActions "Rankings" button (both share `podium_open`).
     Effect::new(move |_| {
         if !podium_open.get() {
             return;
@@ -145,15 +134,10 @@ pub fn RankingPanel(
                                                 )>
                                                     <span class="text-base font-bold sm:text-lg">{i + 1}</span>
                                                 </div>
-                                                // `UserProfileBadge` badge
-                                                // variant — avatar + level
-                                                // bubble + crown + ELO/N-A.
                                                 <div class="relative inline-flex shrink-0 flex-col items-center justify-center">
                                                     <div class="relative flex items-center justify-center">
                                                         <span class="user-avatar inline-flex">
                                                             {u.photo.clone().map(|p| view! {
-                                                                // `photo` resolves to a full URL server-side
-                                                                // (Storage::url or ui-avatars fallback).
                                                                 <img src=p alt=u.name.clone() loading="lazy"
                                                                     class=format!("h-8 w-8 rounded-full object-cover object-center shadow-lg ring-2 sm:h-10 sm:w-10 {ring}")/>
                                                             })}
@@ -176,8 +160,6 @@ pub fn RankingPanel(
                                                         {u.is_supporter.then(|| view! {
                                                             <span class="text-[10px] font-semibold text-amber-300">{t("Supporter").to_string()}</span>
                                                         })}
-                                                        // `hasPlayed` — ELO 1500 with no counted rounds is
-                                                        // the unplayed default → "N/A".
                                                         {if u.elo == 0 || (u.elo == 1500 && u.public_rounds_played_count == 0) {
                                                             view! {
                                                                 <div class="text-[10px] font-medium text-neutral-500"
@@ -208,7 +190,6 @@ pub fn RankingPanel(
                                                                 </span>
                                                             }.into_any()
                                                         }}
-                                                        // `user.team` badge → team page (PHP Ranking.vue).
                                                         {u.team.clone().map(|tm| view! {
                                                             <A href=format!("/teams/{}", tm.id)
                                                                 attr:class="whitespace-nowrap border border-white/10 bg-brand-midnight px-1.5 py-0.5 text-[8px] uppercase text-white/70 transition-colors hover:border-white/20 sm:px-2 sm:text-[9px]">
@@ -270,7 +251,6 @@ pub fn RankingPanel(
                 </main>
             </section>
 
-            // PodiumModal — week + lifetime leaderboards.
             <Show when=move || podium_open.get()>
                 <div class="fixed inset-0 z-50 flex items-center justify-center px-4">
                     <div class="retro-modal-overlay" on:click=move |_| podium_open.set(false)></div>

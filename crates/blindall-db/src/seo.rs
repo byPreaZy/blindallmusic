@@ -1,5 +1,3 @@
-//! Sitemap queries — `SitemapController::index` data port.
-
 use sqlx::postgres::PgPool;
 use sqlx::Row;
 
@@ -20,7 +18,6 @@ pub struct SitemapCategory {
 
 pub struct SitemapPage {
     pub slug: String,
-    /// `revised_at ?? updated_at`.
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -29,8 +26,6 @@ impl SeoRepo {
         Self { pool }
     }
 
-    /// `Room::isPublic()->whereNull('password')->whereNull('deleted_at')
-    ///  ->withCount('rounds')->orderByDesc('rounds_count')`.
     pub async fn public_rooms(&self) -> Result<Vec<SitemapRoom>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT r.slug, r.updated_at FROM rooms r \
@@ -48,8 +43,6 @@ impl SeoRepo {
             .collect())
     }
 
-    /// `CategoryLandingService::indexableCategories` — not hidden, has at
-    /// least one public passwordless room.
     pub async fn indexable_categories(
         &self,
         hidden_ids: &[i64],
@@ -80,7 +73,6 @@ impl SeoRepo {
             .collect())
     }
 
-    /// `Page` unique by slug (latest `revised_at` wins).
     pub async fn pages(&self) -> Result<Vec<SitemapPage>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT p.slug, COALESCE(p.revised_at, p.updated_at) AS ts \

@@ -1,5 +1,3 @@
-//! blindall-api — JSON API (axum) under `/api/v1` + `/ws`.
-
 pub mod admin;
 pub mod auth;
 pub mod auth_reset;
@@ -40,15 +38,10 @@ use axum::Json;
 use axum::Router;
 use tower_http::services::{ServeDir, ServeFile};
 
-/// JSON 404 for unmatched `/api/*` paths — explicit routes still win.
 async fn api_not_found() -> impl IntoResponse {
     (StatusCode::NOT_FOUND, Json(serde_json::json!({"message": "Not Found"})))
 }
 
-/// `index.html` must revalidate every load — browsers otherwise heuristically
-/// cache it and request hashed assets that no longer exist after a rebuild
-/// (stale `_bg.wasm` → WASM magic-word failure → blank app). Hash-named
-/// assets keep their default cacheability; only `text/html` is marked.
 async fn html_no_cache(
     req: axum::extract::Request,
     next: axum::middleware::Next,
@@ -94,9 +87,6 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/v1/auth/oauth/{provider}/redirect", get(oauth::redirect))
         .route("/api/v1/auth/oauth/{provider}/callback", get(oauth::callback))
-        // PHP-compat OAuth URLs: `/auth/redirect/{provider}` 302s to the
-        // provider, and providers' registered `/callback/{provider}`
-        // redirects forward to the SPA `/oauth/{provider}/callback` page.
         .route("/auth/redirect/{provider}", get(oauth::redirect_compat))
         .route("/callback/{provider}", get(oauth::callback_compat))
         .route("/api/v1/home", get(home::index))
@@ -292,7 +282,6 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/admin/pages/{id}",
             axum::routing::put(admin::update_page).delete(admin::delete_page),
         )
-        // Local tracks (uploads) — public audio + provider search.
         .route("/api/v1/local-tracks", post(local_tracks::store))
         .route("/api/v1/local-tracks/{id}/audio", get(local_tracks::audio))
         .route(
@@ -307,8 +296,6 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/moderation/tracks/{id}",
             axum::routing::put(local_tracks::update).delete(local_tracks::destroy),
         )
-        // Public content + misc (pages, banned page, contact, FB deletion).
-        // Message reactions (api.php `auth:sanctum` group).
         .route(
             "/api/v1/messages/{id}/reactions",
             get(chat::reactions).post(chat::toggle_reaction),
@@ -316,7 +303,6 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/pages/{slug}", get(content::page))
         .route("/api/v1/user/banned", get(content::banned_user))
         .route("/api/v1/contact", post(content::contact))
-        // Donations — public progress + Stripe webhook (guest route in PHP).
         .route("/api/v1/donations/progress", get(donations::progress))
         .route("/api/v1/donations/history", get(donations::history))
         .route("/api/v1/donations/supporters", get(donations::supporters))
@@ -326,13 +312,9 @@ pub fn router(state: AppState) -> Router {
             get(donations::user_donations),
         )
         .route("/api/v1/stripe/webhook", post(donations::stripe_webhook))
-        // SEO (guest routes in PHP — same paths, no /api prefix needed there).
         .route("/robots.txt", get(seo::robots))
         .route("/llms.txt", get(seo::llms))
         .route("/sitemap.xml", get(seo::sitemap))
-        // PHP-path aliases — Stripe's dashboard and the contact form
-        // post to root-level URLs (no /api prefix in routes/guests.php).
-        // GET still serves the SPA (the Leptos router owns `/contact` too).
         .route(
             "/contact",
             post(content::contact)
@@ -395,7 +377,6 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/profile/likes/{track}",
             axum::routing::delete(profiles::unlike_track),
         )
-        // User account reads/writes (self-only; `destroy` allows admin).
         .route("/api/v1/users", get(users::index))
         .route("/api/v1/users/me", get(users::me))
         .route("/api/v1/users/notifications", get(users::notifications))
@@ -453,7 +434,6 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/playlists/{id}/tracks",
             get(playlists::tracks).post(playlists::store_track),
         )
-        // `playlists.tracks.clear` — literal segment wins over `{track}`.
         .route(
             "/api/v1/playlists/{id}/tracks/clear",
             axum::routing::delete(playlists::clear_tracks),
@@ -490,20 +470,12 @@ pub fn router(state: AppState) -> Router {
                 .delete(playlists::delete_answer),
         )
         .route("/ws", get(ws::handler))
-        // Liveness probe (docker HEALTHCHECK / k8s).
         .route("/healthz", get(|| async { "ok" }))
-        // Unknown API paths → JSON 404 (explicit routes above still win).
         .route("/api/{*rest}", axum::routing::any(api_not_found))
-        // Laravel `public` disk — uploaded files (room covers, avatars, …).
-        // Served through `state.storage` so the lazy upstream migration and
-        // the S3 backend both apply.
         .route(
             &format!("{}/{{*path}}", state.storage_prefix),
             get(storage::serve_stored),
         )
-        // Leptos SPA — static assets, `index.html` for client routes.
-        // `.fallback` (not `.not_found_service`) keeps the inner service's
-        // 200 status; `not_found_service` rewrites the response to 404.
         .fallback_service(
             ServeDir::new(&state.spa_dir)
                 .fallback(ServeFile::new(state.spa_dir.join("index.html"))),

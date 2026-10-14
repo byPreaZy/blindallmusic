@@ -1,9 +1,3 @@
-//! Channel authorization for the WS hub.
-//!
-//! - `room:{id}`   → presence channel for room players (authenticated)
-//! - `room.public:{id}` → public room state (anyone, no presence data)
-//! - everything else → denied for now (chat/user channels land later).
-
 use blindall_game::GameStore;
 use blindall_realtime::ws::{AuthzError, ChannelAuthorizer};
 use serde_json::{json, Value};
@@ -40,8 +34,6 @@ impl ChannelAuthorizer for RoomChannelAuthorizer {
                     let Some(p) = info else {
                         return Ok(None);
                     };
-                    // `Broadcast::channel('rooms.{id}')` — full member
-                    // shape: level/XP, team object, round score, perks.
                     let score_total = match self.app
                         .manager
                         .snapshot(room_id)
@@ -78,8 +70,6 @@ impl ChannelAuthorizer for RoomChannelAuthorizer {
                 _ => deny("room_not_found"),
             };
         }
-        // `Broadcast::channel('chat-room.{id}')` — any authenticated user
-        // may join a room's chat channel; returns presence info.
         if let Some(rest) = channel.strip_prefix("chat-room.") {
             return match rest.parse::<i64>() {
                 Ok(room_id) if self.room_exists(room_id).await => {
@@ -105,14 +95,12 @@ impl ChannelAuthorizer for RoomChannelAuthorizer {
                 _ => deny("room_not_found"),
             };
         }
-        // `Broadcast::channel('chat.message.{messageId}')` — authed users.
         if let Some(rest) = channel.strip_prefix("chat.message.") {
             return match rest.parse::<i64>() {
                 Ok(_) => Ok(None),
                 _ => deny("invalid_channel"),
             };
         }
-        // `PrivateChannel('App.Models.User.{id}')` — user can only join own.
         if let Some(rest) = channel.strip_prefix("user:") {
             return match rest.parse::<i64>() {
                 Ok(id) if id == user_id => Ok(None),

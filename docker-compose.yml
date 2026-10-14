@@ -1,36 +1,5 @@
 name: blindall
 
-# =============================================================================
-# Blind'All Music (Rust rewrite) on a self-hosted Supabase stack.
-#
-#   docker compose up --build          → full stack: supabase + redis + app (:8080)
-#   docker compose up db redis         → infra only (dev on host: cargo run +
-#                                        trunk serve → :8080 server, :4200 web)
-#   docker compose --profile migration up mysql db → run the MySQL→Postgres
-#                                        data migration (see volumes/migration/)
-#
-# Services (upstream supabase/docker layout):
-#   db        supabase/postgres  — PostgreSQL 17 + all Supabase schemas/roles
-#   kong      API gateway        — :8000 (auth/rest/realtime/storage/studio)
-#   auth      GoTrue             — auth.users lives in schema `auth` (separate
-#                                  from app users in `public`; the Rust API keeps
-#                                  its own Sanctum-style auth)
-#   rest      PostgREST          — /rest/v1 exposes schemas in PGRST_DB_SCHEMAS
-#   realtime  supabase/realtime  — postgres-change websockets
-#   storage   storage-api        — /storage/v1 (file backend in volumes/storage)
-#   imgproxy  darthsim/imgproxy  — image transforms for storage
-#   meta      postgres-meta      — used by Studio
-#   functions edge-runtime       — Deno edge functions (volumes/functions)
-#   studio    supabase/studio    — dashboard behind Kong basic-auth on :8000
-#   analytics logflare           — log ingestion on :4000 (internal)
-#   vector    timberio/vector    — ships container logs → analytics
-#   mail      inbucket           — SMTP catch-all (:2500 smtp / :9000 web)
-#   supavisor pooler             — session :5432 / transaction :6543 (host)
-#
-# The Rust server applies its own SQLx migrations (blindall-rs/migrations/)
-# into `public` at boot — no PHP anywhere.
-# =============================================================================
-
 services:
 
   # ---- app ----------------------------------------------------------------
@@ -47,9 +16,6 @@ services:
       SPA_DIR: /app/web/dist
       STORAGE_ROOT: /app/storage
       STORAGE_PUBLIC_PREFIX: /storage
-      # `local` (default, /app/storage volume) or `s3` (OVH/Contabo/Supabase
-      # Storage/AWS — Laravel `ovh`/`contabo` disks). OVH_* names accepted as
-      # aliases for the S3_* vars.
       STORAGE_DISK: ${STORAGE_DISK:-local}
       S3_ENDPOINT: ${S3_ENDPOINT:-${OVH_ENDPOINT:-}}
       S3_REGION: ${S3_REGION:-${OVH_DEFAULT_REGION:-}}
@@ -59,9 +25,6 @@ services:
       S3_URL: ${S3_URL:-${OVH_URL:-}}
       S3_PATH_STYLE: ${S3_PATH_STYLE:-false}
       S3_ACL: ${S3_ACL:-public-read}
-      # Lazy file migration: on a local miss, fetch from the OLD site's
-      # /storage (e.g. https://blindallmusic.com/storage) and persist the copy.
-      # Empty = disabled. Lets you cut over before rsyncing uploads.
       STORAGE_UPSTREAM_URL: ${STORAGE_UPSTREAM_URL:-}
       APP_URL: ${APP_URL:-http://localhost:8080}
       APP_LOCALE: ${APP_LOCALE:-fr}
@@ -173,10 +136,6 @@ services:
             -e "s|{{env \"PG_URI\"}}|$${PG_URI}|" \
             /mysql-to-pg.load > /tmp/mysql-to-pg.load \
         && exec pgloader --verbose /tmp/mysql-to-pg.load
-
-  # =========================================================================
-  # Supabase official self-hosted stack (ports/versions per upstream)
-  # =========================================================================
 
   studio:
     profiles: ["supabase"]
@@ -338,10 +297,6 @@ services:
 
   realtime:
     profiles: ["supabase"]
-    # Dotted hostname doubles as the realtime tenant id AND the DNS alias that
-    # kong.yml's upstream resolves (container_name is avoided on purpose: a
-    # globally-unique name would collide with other self-hosted Supabase
-    # projects on the same Docker host).
     hostname: realtime-dev.supabase-realtime
     networks:
       default:

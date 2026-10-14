@@ -1,7 +1,3 @@
-//! Chat persistence — `RoomMessageController` + `ChatModerationService` DB
-//! parts. Messages are polymorphic (`messagable_type = 'App\\Models\\Room'`),
-//! reports are downvotes in `votes`, auto-bans go to `bans`.
-
 use sqlx::postgres::PgPool;
 use sqlx::Row;
 
@@ -25,7 +21,6 @@ impl ChatRepo {
         Self { pool }
     }
 
-    /// `$room->messages()->create(...)` — morph type Room.
     pub async fn create_message(
         &self,
         room_id: i64,
@@ -71,16 +66,11 @@ impl ChatRepo {
         })
     }
 
-    /// Chat history for room hydration — latest N, oldest first, with the
-    /// `user` relation (`users.id/name/team_id/photo_path`).
     pub async fn room_messages(
         &self,
         room_id: i64,
         limit: i64,
     ) -> Result<Vec<serde_json::Value>, sqlx::Error> {
-        // PHP `latest_messages` — `whereDate(created_at, '>=', now-2h)`
-        // (i.e. today's messages, the date cast makes the 2h a day boundary)
-        // + `user.team` eager-loaded for the team badge.
         let rows = sqlx::query(
             "SELECT m.id, m.user_id, m.body, m.created_at, \
              u.name AS user_name, u.team_id, u.photo_path, t.name AS team_name, \
@@ -122,7 +112,6 @@ impl ChatRepo {
                         "team_id": team_id,
                         "team": team,
                         "photo_path": r.get::<Option<String>, _>("photo_path"),
-                        // `photo` accessor — the SPA prefixes /storage/ itself.
                         "photo": r.get::<Option<String>, _>("photo_path"),
                     },
                 })
@@ -130,9 +119,6 @@ impl ChatRepo {
             .collect())
     }
 
-    /// `Auth::user()->downVote($message)` — one vote row per user, votes=-1.
-    /// No unique index on (user, votable) → update in place or insert.
-    /// Returns the new `totalDownvotes` (negative sum).
     pub async fn down_vote(&self, message_id: i64, user_id: i64) -> Result<i64, sqlx::Error> {
         let now = chrono::Utc::now();
         let updated = sqlx::query(
@@ -162,7 +148,6 @@ impl ChatRepo {
         self.total_downvotes(message_id).await
     }
 
-    /// `totalDownvotes()` — sum of negative votes (0 when none).
     pub async fn total_downvotes(&self, message_id: i64) -> Result<i64, sqlx::Error> {
         sqlx::query_scalar::<_, i64>(
             "SELECT CAST(COALESCE(SUM(votes), 0) AS bigint) FROM votes \
@@ -176,7 +161,6 @@ impl ChatRepo {
 
     // ---- reactions (`message_reactions`) --------------------------------------
 
-    /// `groupedReactions` — [{emoji, count, users:[{id,name}]}].
     pub async fn grouped_reactions(
         &self,
         message_id: i64,
@@ -212,7 +196,6 @@ impl ChatRepo {
             .collect())
     }
 
-    /// `userReaction` — the viewer's first reaction emoji on the message.
     pub async fn user_reaction(
         &self,
         message_id: i64,
@@ -228,7 +211,6 @@ impl ChatRepo {
         .await
     }
 
-    /// Toggle off — returns rows deleted (0 or 1).
     pub async fn delete_reaction(
         &self,
         message_id: i64,
@@ -285,9 +267,6 @@ impl ChatRepo {
         Ok(())
     }
 
-    /// `BannedUserMessageCleanupService` — on `Ban::created`, every non-deleted
-    /// message of the user is soft-deleted (and broadcast). Returns
-    /// `(message_id, room_id)` of what was removed for the broadcast loop.
     pub async fn soft_delete_user_messages(
         &self,
         user_id: i64,
@@ -302,9 +281,6 @@ impl ChatRepo {
         .await
     }
 
-    /// `$user->ban([...])` — cybercog/laravel-ban inserts a `bans` row
-    /// (`users.banned_at` was dropped in 2023 — the bans table is authoritative).
-    /// PHP always stores `'ip' => $user->ip` (the victim's last-known IP).
     pub async fn ban_user(
         &self,
         user_id: i64,
@@ -333,7 +309,6 @@ impl ChatRepo {
         Ok(())
     }
 
-    /// `isBanned()` — an unexpired/non-deleted ban row exists.
     pub async fn is_banned(&self, user_id: i64) -> bool {
         sqlx::query_scalar::<_, i64>(
             "SELECT EXISTS(SELECT 1 FROM bans b WHERE b.bannable_type = 'App\\Models\\User' \

@@ -1,7 +1,3 @@
-//! Votes on tracks — `TrackUpvoteService`/`TrackDownvoteService` port.
-//! One vote row per (user, votable); `votes` = +1/-1; `downvote_reason`
-//! stores the enum value for downvotes.
-
 use sqlx::postgres::PgPool;
 
 #[derive(Clone)]
@@ -14,7 +10,6 @@ impl VoteRepo {
         Self { pool }
     }
 
-    /// The user's current vote on a track: Some(+1|-1) or None.
     async fn user_vote(&self, user_id: i64, track_id: i64) -> Result<Option<i64>, sqlx::Error> {
         sqlx::query_scalar::<_, i64>(
             "SELECT votes FROM votes WHERE user_id = $1 \
@@ -26,7 +21,6 @@ impl VoteRepo {
         .await
     }
 
-    /// `cancelVote` — delete the vote row.
     async fn cancel(&self, user_id: i64, track_id: i64) -> Result<(), sqlx::Error> {
         sqlx::query(
             "DELETE FROM votes WHERE user_id = $1 \
@@ -39,7 +33,6 @@ impl VoteRepo {
         Ok(())
     }
 
-    /// No unique index on (user, votable) — update in place or insert.
     async fn set_vote(&self, user_id: i64, track_id: i64, votes: i64, reason: Option<&str>) -> Result<(), sqlx::Error> {
         let now = chrono::Utc::now();
         let updated = sqlx::query(
@@ -73,8 +66,6 @@ impl VoteRepo {
         Ok(())
     }
 
-    /// `TrackUpvoteService::apply` — toggle: upvoted → cancel; downvoted →
-    /// switch; else insert +1.
     pub async fn apply_upvote(&self, user_id: i64, track_id: i64) -> Result<(), sqlx::Error> {
         match self.user_vote(user_id, track_id).await? {
             Some(1) => self.cancel(user_id, track_id).await,
@@ -82,12 +73,6 @@ impl VoteRepo {
         }
     }
 
-    /// `TrackDownvoteService::apply`:
-    /// - already downvoted + no reason → cancel (toggle off)
-    /// - already downvoted + reason → update reason
-    /// - not downvoted + no reason → caller must 422 (PHP ValidationException)
-    /// - else → -1 with reason (a prior upvote is replaced)
-    /// Returns Err(NeedsReason) mirroring the PHP validation error.
     pub async fn apply_downvote(
         &self,
         user_id: i64,
@@ -113,8 +98,6 @@ impl VoteRepo {
         }
     }
 
-    /// `TrackVotePayloadService::forTrack` —
-    /// {upvotes, downvotes, user_voted_up, user_voted_down}.
     pub async fn payload(&self, track_id: i64, user_id: i64) -> Result<serde_json::Value, sqlx::Error> {
         let up: i64 = sqlx::query_scalar(
             "SELECT CAST(COALESCE(SUM(votes), 0) AS bigint) FROM votes \
@@ -140,7 +123,6 @@ impl VoteRepo {
     }
 }
 
-/// `formatVoteNumbers` — ≥1000 → "X.Yk", else the raw int.
 fn format_votes(n: i64) -> serde_json::Value {
     if n >= 1000 {
         let k = ((n as f64 / 1000.0) * 10.0).round() / 10.0;

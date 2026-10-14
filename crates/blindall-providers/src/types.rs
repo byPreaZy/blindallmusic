@@ -1,6 +1,3 @@
-//! Shared formatted-track shape — every PHP `formatTrack` returns this
-//! same associative array; keys kept verbatim for the API responses.
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,8 +14,6 @@ pub struct ProviderTrack {
     pub artwork_url: Option<String>,
 }
 
-/// Provider-level failure — PHP returns a single `['error'=>true, …]`
-/// object in place of results.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderError {
     pub error: bool,
@@ -49,7 +44,6 @@ impl ProviderError {
 
 pub type ProviderResult = Result<Vec<ProviderTrack>, ProviderError>;
 
-/// Config carried by `MusicProviders` — env-bound at server boot.
 #[derive(Debug, Clone, Default)]
 pub struct ProvidersConfig {
     pub spotify_client_id: String,
@@ -57,8 +51,6 @@ pub struct ProvidersConfig {
     pub spotify_market: String,
     pub audius_app_name: String,
     pub youtube_api_key: String,
-    /// `config('app.url')` — YouTube Referer header.
     pub app_url: String,
-    /// `config('app.locale')` — iTunes `country` param.
     pub app_locale: String,
 }

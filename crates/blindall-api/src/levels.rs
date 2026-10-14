@@ -1,7 +1,3 @@
-//! `UpdateUserLevel` dispatch equivalent — dedup per user for 120s
-//! (Laravel `uniqueFor`), runs the recalc in a spawned task and
-//! broadcasts `UserLevelUpdated` on the user's private channel.
-
 use blindall_db::{LevelRepo, LevelTrigger};
 use blindall_realtime::Hub;
 use std::collections::HashMap;
@@ -25,7 +21,6 @@ impl LevelDispatcher {
         }
     }
 
-    /// Read-side passthrough — `auth.user` level snapshot.
     pub async fn snapshot(
         &self,
         user_id: i64,
@@ -33,8 +28,6 @@ impl LevelDispatcher {
         self.levels.snapshot(user_id).await.ok().flatten()
     }
 
-    /// Fire-and-forget equivalent of `UpdateUserLevel::dispatch`.
-    /// Skipped silently if a recalc ran for this user < 120s ago.
     pub fn dispatch(&self, user_id: i64, trigger: LevelTrigger) {
         {
             let mut map = self.last_dispatch.lock().unwrap();

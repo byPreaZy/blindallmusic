@@ -1,8 +1,3 @@
-//! OAuth — `SocialController` port (Socialite equivalents). Only Google and
-//! Discord are enabled on Blind'All Music. Stateless `state` values live
-//! in-process (PHP used the session); the redirect endpoint returns the
-//! provider URL as JSON so the SPA can navigate to it.
-
 use crate::auth_session::client_ip;
 use crate::state::AppState;
 use axum::extract::{Path, Query, State};
@@ -46,7 +41,6 @@ impl OAuthStates {
         state
     }
 
-    /// One-shot consumption like Socialite's session state.
     pub fn consume(&self, state: &str) -> bool {
         let mut map = self.issued.lock().unwrap();
         map.retain(|_, t| t.elapsed() < STATE_TTL);
@@ -72,8 +66,6 @@ fn provider_meta(name: &str) -> Option<(&'static str, &'static str, &'static str
     }
 }
 
-/// `GET /api/v1/auth/oauth/{provider}/redirect` — returns the provider
-/// authorization URL (Socialite `->redirect()`).
 pub async fn redirect(
     State(state): State<AppState>,
     Path(provider): Path<String>,
@@ -84,8 +76,6 @@ pub async fn redirect(
     }
 }
 
-/// `GET /auth/redirect/{provider}` — PHP `SocialController::redirect`
-/// compat: browsers land on a 302 to the provider instead of `{url}` JSON.
 pub async fn redirect_compat(
     State(state): State<AppState>,
     Path(provider): Path<String>,
@@ -96,9 +86,6 @@ pub async fn redirect_compat(
     }
 }
 
-/// `GET /callback/{provider}` — PHP's registered `redirect_uri`; the SPA
-/// handles the exchange on `/oauth/{provider}/callback`, so forward the
-/// query string there.
 pub async fn callback_compat(
     Path(provider): Path<String>,
     axum::extract::RawQuery(query): axum::extract::RawQuery,
@@ -153,9 +140,6 @@ pub struct CallbackQuery {
     error: Option<String>,
 }
 
-/// `GET /api/v1/auth/oauth/{provider}/callback` — exchange the code,
-/// fetch the provider profile, apply `createUser` semantics, return a
-/// Sanctum token.
 pub async fn callback(
     State(state): State<AppState>,
     Path(provider): Path<String>,
@@ -179,7 +163,6 @@ pub async fn callback(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "invalid_state"}))).into_response();
     }
 
-    // code → access_token.
     let token = match exchange_code(&state.http, cfg, token_url, &code).await {
         Ok(t) => t,
         Err(e) => {
@@ -187,7 +170,6 @@ pub async fn callback(
             return (StatusCode::BAD_GATEWAY, Json(json!({"error": "oauth_exchange_failed"}))).into_response();
         }
     };
-    // access_token → provider profile {id, email, name}.
     let info = match fetch_profile(&state.http, &provider, user_url, &token).await {
         Ok(i) => i,
         Err(e) => {
@@ -196,8 +178,6 @@ pub async fn callback(
         }
     };
     let Some(email) = info.email.filter(|e| !e.is_empty()) else {
-        // users.email is NOT NULL — PHP crashes the same way; return a
-        // clean error instead.
         return (
             StatusCode::UNPROCESSABLE_ENTITY,
             Json(json!({"error": "oauth_no_email"})),
@@ -205,8 +185,6 @@ pub async fn callback(
             .into_response();
     };
 
-    // `createUser` — provider_id match → login; email match → link + login;
-    // else create with a uniquified name.
     let user = match state.auth.find_by_provider_id(&provider, &info.id).await {
         Ok(Some(u)) => u,
         Ok(None) => {
@@ -223,8 +201,6 @@ pub async fn callback(
                         .await
                     {
                         Ok(id) => {
-                            // `ProcessUserCreated` — welcome mail + Brevo
-                            // contact (`provider` attribute = oauth driver).
                             let (http, mail) = (state.http.clone(), state.mail.clone());
                             let (e2, n2, p2) = (email.clone(), name.clone(), provider.clone());
                             tokio::spawn(async move {
@@ -273,7 +249,6 @@ struct SocialProfile {
     name: String,
 }
 
-/// `incrementUsername` — `name`, `name-0`, `name-1`, …
 async fn unique_name(state: &AppState, base: &str) -> String {
     let base = if base.trim().is_empty() { "Player" } else { base.trim() };
     let mut name = base.to_string();

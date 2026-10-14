@@ -1,7 +1,3 @@
-//! `GET /api/v1/providers/search?term=…&providers=a,b,c` — merged
-//! multi-provider search (PHP: `MusicProvidersService::search` +
-//! `TrackController::search`'s response shape).
-
 use crate::auth::CurrentUser;
 use crate::state::AppState;
 use axum::extract::{Query, State};
@@ -34,7 +30,6 @@ pub async fn search(
         return Json(json!({ "results": [], "errors": [] }));
     }
 
-    // PHP picks the YouTube scraper only for public-room moderators.
     let is_public_moderator = state.auth.is_public_moderator(user.id()).await;
 
     let (results, errors) = state

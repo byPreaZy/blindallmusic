@@ -1,7 +1,3 @@
-//! Notification bell + dropdown — ports `Components/Notifications/*`.
-//! Types: `NewTeamRequest` (accept/decline buttons), `NewSuggestion`,
-//! `NewRoomAlert`, `TeamRequestApproved/Rejected`, `TrackDeleted`.
-
 use crate::api;
 use crate::i18n::t;
 use leptos::prelude::*;
@@ -10,7 +6,6 @@ use serde_json::{json, Value};
 
 #[component]
 pub fn Notifications() -> impl IntoView {
-    // Shared feed — `App`'s `user:{id}` listener prepends live broadcasts.
     let items = use_context::<crate::app::NotificationFeed>()
         .unwrap_or_else(|| RwSignal::new(Vec::new()));
     let open = RwSignal::new(false);
@@ -62,8 +57,6 @@ pub fn Notifications() -> impl IntoView {
 
     let count = move || items.get().len();
 
-    // `popup` — top-of-screen flash on `BroadcastNotificationCreated`
-    // (`NewRoomAlert` only, mirrors `Notifications.vue`).
     let popup = use_context::<crate::app::NotificationPopup>()
         .unwrap_or_else(|| RwSignal::new(None));
 
@@ -116,7 +109,6 @@ pub fn Notifications() -> impl IntoView {
             </button>
 
             <Show when=move || open.get()>
-                // Click-away backdrop
                 <div class="fixed inset-0 z-40" on:click=move |_| open.set(false)/>
                 <div class="absolute right-0 z-50 mt-2 w-96 max-w-[90vw] rounded-xl border border-white/10 bg-surface-raised shadow-2xl">
                     <div class="max-h-96 overflow-y-auto p-2">
@@ -200,9 +192,6 @@ pub fn Notifications() -> impl IntoView {
                                                     </button>
                                                 </div>
                                             }.into_any(),
-                                            // `TeamRequestApproved` shows the static title in Vue
-                                            // (escaped `data.message` is unused there); rejected
-                                            // renders `data.message` (also escaped).
                                             "TeamRequestApproved" | "TeamRequestRejected" => {
                                                 let text = if short_ty == "TeamRequestApproved" {
                                                     t("Your request has been accepted!").to_string()

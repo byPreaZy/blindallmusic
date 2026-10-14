@@ -1,9 +1,3 @@
-//! Minigames API — `QuizController`, `WhoSangController`, `AnagramController`,
-//! `FirstLetterController`, `AlbumCoverController`, `MinigameController::index`.
-//!
-//! `not.guest` middleware equivalent: all routes require `CurrentUser`
-//! plus an explicit guest check (guests can't play).
-
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -26,7 +20,6 @@ pub const TYPE_ALBUM_COVER: &str = "album_cover";
 pub const TYPE_FIRST_LETTER: &str = "first_letter";
 pub const TYPE_ANAGRAM: &str = "anagram";
 
-/// `Cache::put('anagram_question_{id}', artist, 300)` equivalent.
 #[derive(Default)]
 pub struct AnagramQuestions {
     map: Mutex<HashMap<String, (String, Instant)>>,
@@ -44,7 +37,6 @@ impl AnagramQuestions {
         id
     }
 
-    /// `Cache::pull` — get + delete (one-shot question).
     pub fn pull(&self, id: &str) -> Option<String> {
         let mut m = self.map.lock().unwrap();
         let (artist, t) = m.remove(id)?;
@@ -70,7 +62,6 @@ fn expired_question() -> Response {
 
 // ---- index -----------------------------------------------------------------
 
-/// `GET /api/v1/minigames` — games list + per-type totals for the user.
 pub async fn index(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
     Json(json!({
         "games": games_list(&state, Some(user.id)).await
@@ -78,7 +69,6 @@ pub async fn index(State(state): State<AppState>, CurrentUser(user): CurrentUser
     .into_response()
 }
 
-/// `buildGamesList` — shared by `/minigames` and the home `minigames` tab.
 pub async fn games_list(state: &AppState, user_id: Option<i64>) -> Vec<Value> {
     let totals = match user_id {
         Some(id) => state.minigames.totals_for_user(id).await.unwrap_or_default(),
@@ -100,7 +90,6 @@ pub async fn games_list(state: &AppState, user_id: Option<i64>) -> Vec<Value> {
     ]
 }
 
-/// `GET /api/v1/minigames/{type}/leaderboard`.
 pub async fn leaderboard(
     State(state): State<AppState>,
     Path(game_type): Path<String>,
@@ -115,15 +104,11 @@ pub async fn leaderboard(
 
 // ---- next ------------------------------------------------------------------
 
-/// `POST /api/v1/minigames/{game}/next` — quiz/who_sang/album_cover →
-/// choices question; first_letter → title question; anagram → question_id.
 pub async fn next(
     State(state): State<AppState>,
     Path(game): Path<String>,
     CurrentUser(_user): CurrentUser,
 ) -> Response {
-    // PHP route params are kebab (`minigames/who-sang/next`) — normalize to
-    // the internal snake_case type.
     let game = game.replace('-', "_");
     match game.as_str() {
         TYPE_QUIZ | TYPE_WHO_SANG | TYPE_ALBUM_COVER => {
@@ -170,7 +155,6 @@ pub struct CheckBody {
     chosen_value: String,
 }
 
-/// `POST /api/v1/minigames/{game}/check`.
 pub async fn check(
     State(state): State<AppState>,
     Path(game): Path<String>,
@@ -193,7 +177,6 @@ pub async fn check(
             let is_correct = if game == TYPE_QUIZ {
                 raw.as_deref().is_some_and(|t| t.trim() == body.chosen_value.trim())
             } else {
-                // first_letter: slug equality on sanitized strings.
                 let given = blindall_core::sanitize::sanitize_string(body.chosen_value.trim());
                 let correct = raw.as_deref().map(blindall_core::sanitize::sanitize_string);
                 correct.as_deref().is_some_and(|c| {
@@ -238,7 +221,6 @@ pub async fn check(
             .minigames
             .record_score(user.id, &game, POINTS_CORRECT, meta)
             .await;
-        // PHP `MinigameScoreService::record` → UpdateUserLevel 'score'.
         state
             .levels
             .dispatch(user.id, blindall_db::LevelTrigger::Score);

@@ -1,33 +1,18 @@
-//! Object storage — Laravel `Storage` facade port.
-//! `filesystems.default` is `local` in dev / `ovh` (S3) in prod. Drivers:
-//! `local` (filesystem) and `s3` (SigV4-signed, works with OVH / Contabo /
-//! Supabase Storage / AWS). `UpstreamFallback` wraps a backend and lazily
-//! pulls missing files from the old site (`STORAGE_UPSTREAM_URL`), persisting
-//! them — progressive zero-copy migration of uploads.
-
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
-/// `Storage::disk()` operations used by the app.
 #[async_trait::async_trait]
 pub trait Storage: Send + Sync {
-    /// `Storage::put`/`storeAs` — write bytes at `path` (public visibility).
     async fn put(&self, path: &str, bytes: &[u8]) -> Result<(), std::io::Error>;
-    /// `Storage::delete`.
     async fn delete(&self, path: &str);
-    /// `Storage::exists`.
     async fn exists(&self, path: &str) -> bool;
-    /// `Storage::readStream` — for `local-track/{id}/audio` streaming.
     async fn read(&self, path: &str) -> Result<Vec<u8>, std::io::Error>;
-    /// `Storage::url` — public URL for a stored path.
     fn url(&self, path: &str) -> String;
 }
 
-/// `local` driver — files under `root`, exposed via `public_prefix`.
 #[derive(Clone)]
 pub struct LocalStorage {
     root: PathBuf,
-    /// URL prefix mapping to `root` (Laravel `public` disk → `/storage`).
     public_prefix: String,
 }
 
@@ -39,7 +24,6 @@ impl LocalStorage {
         }
     }
 
-    /// Guard against `../` traversal in stored keys.
     fn resolve(&self, path: &str) -> Option<PathBuf> {
         let p = Path::new(path);
         if p.components()
@@ -86,34 +70,21 @@ impl Storage for LocalStorage {
 }
 
 // ---------------------------------------------------------------------------
-// S3 driver (AWS Signature Version 4)
 // ---------------------------------------------------------------------------
 
-/// `s3` disk — Laravel `driver=s3` parity. Covers OVH (`ovh` disk), Contabo
-/// (`contabo` disk), Supabase Storage and AWS S3 — same env knobs.
 pub struct S3Storage {
     client: reqwest::Client,
-    /// e.g. `https://s3.gra.io.cloud.ovh.net` — scheme+host (and optional port),
-    /// no path. Trailing slash stripped.
     endpoint: String,
     region: String,
     bucket: String,
     access_key: String,
     secret_key: String,
-    /// Public URL base (`OVH_URL` / `AWS_URL`); derived from endpoint+bucket
-    /// when absent.
     public_base: String,
-    /// `use_path_style_endpoint` — `endpoint/bucket/key` instead of
-    /// `bucket.endpoint/key`. Required by Supabase Storage & Contabo.
     path_style: bool,
-    /// Canned ACL sent on PUT (`x-amz-acl`). Laravel used `visibility=public`
-    /// → `public-read` on OVH. Empty = no ACL header (Supabase rejects them).
     acl: Option<String>,
 }
 
 impl S3Storage {
-    /// Reads `S3_*` env first, then the Laravel-style `OVH_*` names.
-    /// Returns `None` when `STORAGE_DISK != s3` or credentials are missing.
     pub fn from_env() -> Option<Self> {
         if std::env::var("STORAGE_DISK").unwrap_or_else(|_| "local".into()) != "s3" {
             return None;
@@ -179,8 +150,6 @@ impl S3Storage {
         }
     }
 
-    /// SigV4-signed request for `method` on `key`. `body` may be empty.
-    /// Returns (url, headers) — caller attaches the body.
     fn sign(&self, method: &str, key: &str, body: &[u8]) -> (String, Vec<(String, String)>) {
         self.sign_at(method, key, body, &chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string())
     }
@@ -265,7 +234,6 @@ fn to_io(e: reqwest::Error) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::Other, e)
 }
 
-/// RFC 3986 — every byte except unreserved is %XX; `/` kept when `keep_slash`.
 fn uri_encode(s: &str, keep_slash: bool) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
@@ -326,13 +294,8 @@ impl Storage for S3Storage {
 }
 
 // ---------------------------------------------------------------------------
-// Lazy upstream migration
 // ---------------------------------------------------------------------------
 
-/// Wraps a backend: on `read` miss, fetches `{upstream}/{path}` (e.g.
-/// `https://blindallmusic.com/storage`), stores it in the inner backend and serves
-/// it. Point `STORAGE_UPSTREAM_URL` at the old site for progressive file
-/// migration — each file is copied the first time someone requests it.
 pub struct UpstreamFallback {
     inner: Arc<dyn Storage>,
     upstream: String,
@@ -384,7 +347,6 @@ impl Storage for UpstreamFallback {
                     return Err(e);
                 }
                 let bytes = resp.bytes().await.map_err(to_io)?.to_vec();
-                // Persist best-effort — next hits stay local.
                 let inner = self.inner.clone();
                 let path = path.to_string();
                 let data = bytes.clone();
@@ -400,11 +362,8 @@ impl Storage for UpstreamFallback {
 }
 
 // ---------------------------------------------------------------------------
-// Backend selection + file serving
 // ---------------------------------------------------------------------------
 
-/// Builds the app storage backend from env (`STORAGE_DISK`, `S3_*`/`OVH_*`,
-/// `STORAGE_UPSTREAM_URL`).
 pub fn backend_from_env(root: PathBuf, public_prefix: String) -> Arc<dyn Storage> {
     let inner: Arc<dyn Storage> = match S3Storage::from_env() {
         Some(s3) => {
@@ -425,9 +384,6 @@ pub fn backend_from_env(root: PathBuf, public_prefix: String) -> Arc<dyn Storage
     }
 }
 
-/// `GET {storage_prefix}/{*path}` — serves an uploaded file through the
-/// configured `Storage` backend (local hit, S3 object, or upstream fetch).
-/// Replaces `ServeDir` so lazy migration + S3 work uniformly.
 pub async fn serve_stored(
     axum::extract::State(state): axum::extract::State<crate::state::AppState>,
     axum::extract::Path(path): axum::extract::Path<String>,
@@ -529,8 +485,6 @@ mod tests {
 
     #[test]
     fn s3_signature_is_stable() {
-        // Golden: caught by a change in canonical-request layout, header set,
-        // or the HMAC key chain. Verified once against the live endpoint.
         let (url, headers) =
             s3(false).sign_at("GET", "photos/a.webp", &[], "20240101T000000Z");
         assert_eq!(url, "https://blindall.s3.gra.io.cloud.ovh.net/photos/a.webp");
@@ -545,7 +499,6 @@ mod tests {
         assert!(auth.contains("SignedHeaders=host;x-amz-content-sha256;x-amz-date"));
         let sig = auth.rsplit("Signature=").next().unwrap();
         assert_eq!(sig.len(), 64, "hex sha256 signature");
-        // Deterministic for fixed inputs.
         let (_, again) = s3(false).sign_at("GET", "photos/a.webp", &[], "20240101T000000Z");
         assert_eq!(headers.last().unwrap().1, again.last().unwrap().1);
     }

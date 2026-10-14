@@ -1,8 +1,3 @@
-//! Teams — `TeamController`/`TeamRequestController` persistence.
-//! Team membership is `users.team_id`; requests live in `team_requests`
-//! (unique team+user); scores come from `total_scores`/`round_standings`
-//! scoped to public rooms.
-
 use sqlx::postgres::PgPool;
 use sqlx::Row;
 
@@ -59,8 +54,6 @@ impl TeamRepo {
         Ok(exists == 1)
     }
 
-    /// `TeamController::index` — paginated teams ranked by public-room score,
-    /// owner not banned, optional name search.
     pub async fn list(
         &self,
         search: Option<&str>,
@@ -122,7 +115,6 @@ impl TeamRepo {
         Ok((teams, count))
     }
 
-    /// `TeamController::store` — create + assign owner membership.
     pub async fn create(&self, owner_id: i64, name: &str) -> Result<i64, sqlx::Error> {
         let now = chrono::Utc::now();
         let res = sqlx::query_scalar::<_, i64>("INSERT INTO teams (user_id, name, created_at, updated_at) VALUES ($1, $2, $3, $4) RETURNING id")
@@ -141,8 +133,6 @@ impl TeamRepo {
         Ok(id)
     }
 
-    /// `HasPicture::updatePhoto` — sets `photo_path`, returns the previous
-    /// path so the caller can delete the old file.
     pub async fn set_photo(
         &self,
         id: i64,
@@ -162,7 +152,6 @@ impl TeamRepo {
         Ok(prev)
     }
 
-    /// `HasPicture::deletePhoto`.
     pub async fn clear_photo(&self, id: i64) -> Result<Option<String>, sqlx::Error> {
         let prev: Option<String> =
             sqlx::query_scalar("SELECT photo_path FROM teams WHERE id = $1")
@@ -193,7 +182,6 @@ impl TeamRepo {
             .await
     }
 
-    /// `switchOwner` — team.user_id = new owner.
     pub async fn switch_owner(&self, team_id: i64, new_owner_id: i64) -> Result<(), sqlx::Error> {
         sqlx::query("UPDATE teams SET user_id = $1 WHERE id = $2")
             .bind(new_owner_id)
@@ -203,7 +191,6 @@ impl TeamRepo {
         Ok(())
     }
 
-    /// `leave`/`removeMember` — users.team_id = NULL.
     pub async fn remove_member(&self, user_id: i64) -> Result<(), sqlx::Error> {
         sqlx::query("UPDATE users SET team_id = NULL WHERE id = $1")
             .bind(user_id)
@@ -212,7 +199,6 @@ impl TeamRepo {
         Ok(())
     }
 
-    /// `destroy` — clear all members then delete the team.
     pub async fn delete(&self, team_id: i64) -> Result<(), sqlx::Error> {
         sqlx::query("UPDATE users SET team_id = NULL WHERE team_id = $1")
             .bind(team_id)
@@ -225,8 +211,6 @@ impl TeamRepo {
         Ok(())
     }
 
-    /// `TeamController::show` — score + stats + member contributions on
-    /// public rooms only.
     pub async fn team_show(&self, team_id: i64) -> Result<serde_json::Value, sqlx::Error> {
         let score: f64 = sqlx::query_scalar(
             "SELECT COALESCE(ROUND(SUM(ts.score)::numeric, 1)::float8, 0) FROM total_scores ts \
@@ -293,9 +277,6 @@ impl TeamRepo {
 
     // ---- team_requests -------------------------------------------------------
 
-    /// Pending (non-declined) requests of a user — `teamRequests()->count()`.
-    /// `teamRequest` pending for (team, user) — used by the SPA to show the
-    /// join/cancel button state like `TeamController::show`'s `userRequest`.
     pub async fn has_pending_request(
         &self,
         team_id: i64,
@@ -312,8 +293,6 @@ impl TeamRepo {
         Ok(n > 0)
     }
 
-    /// `User::cachedTeamRequestIds` — `{pending, declined}` team_id lists
-    /// used by the SPA to render join/cancel/declined button states.
     pub async fn team_request_ids(
         &self,
         user_id: i64,
@@ -347,7 +326,6 @@ impl TeamRepo {
         .await
     }
 
-    /// `TeamRequestController::store` — create the join request.
     pub async fn create_request(&self, team_id: i64, user_id: i64) -> Result<i64, sqlx::Error> {
         let now = chrono::Utc::now();
         let res = sqlx::query_scalar::<_, i64>(
@@ -371,7 +349,6 @@ impl TeamRepo {
             .map(|o| o.map(|r| (r.get("team_id"), r.get("user_id"))))
     }
 
-    /// `approve()` — set member + delete ALL the user's pending requests.
     pub async fn approve_request(&self, request_id: i64) -> Result<bool, sqlx::Error> {
         let Some((team_id, user_id)) = self.find_request(request_id).await? else {
             return Ok(false);
@@ -388,7 +365,6 @@ impl TeamRepo {
         Ok(true)
     }
 
-    /// `reject()` — mark declined_at.
     pub async fn decline_request(&self, request_id: i64) -> Result<(), sqlx::Error> {
         sqlx::query("UPDATE team_requests SET declined_at = $1 WHERE id = $2")
             .bind(chrono::Utc::now())
@@ -398,7 +374,6 @@ impl TeamRepo {
         Ok(())
     }
 
-    /// `cancel()` — delete the user's request on a team.
     pub async fn cancel_request(&self, team_id: i64, user_id: i64) -> Result<(), sqlx::Error> {
         sqlx::query("DELETE FROM team_requests WHERE team_id = $1 AND user_id = $2")
             .bind(team_id)

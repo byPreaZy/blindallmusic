@@ -1,20 +1,11 @@
-//! Port of `app/Services/EloService.php` — pure parts.
-//!
-//! The DB-touching orchestration (`updateElosForRound`) is restructured:
-//! callers provide the per-user inputs (elo, is_guest, tracks played %,
-//! placement rounds, win streaks) and get back standings + elo updates.
-//! This keeps the math exact and testable; the queries live in blindall-db.
-
 use crate::types::{PodiumEntry, Standing, TrackHistoryEntry};
 use std::collections::HashMap;
 
 pub const PLACEMENT_ROUNDS: usize = 10;
 pub const INITIAL_ELO: i64 = 1500;
 pub const TARGET_AVERAGE_ELO: i64 = 1500;
-/// Min fraction of round tracks a user must have played for ELO to count.
 pub const MIN_TRACKS_PLAYED_PERCENTAGE: f64 = 0.8;
 
-/// `calculateEloChange` — individual comparison against each opponent.
 pub fn calculate_elo_change(
     user_elo: i64,
     opponent_elos: &[i64],
@@ -37,7 +28,6 @@ pub fn calculate_elo_change(
     (k * (actual - expected)).round() as i64
 }
 
-/// `getKFactor` — high during placements, then decreasing with ELO.
 fn k_factor(user_elo: i64, placement_rounds_played: usize) -> f64 {
     if placement_rounds_played < PLACEMENT_ROUNDS {
         let placement_k = 50.0 - (placement_rounds_played as f64 * 1.8);
@@ -54,17 +44,14 @@ fn k_factor(user_elo: i64, placement_rounds_played: usize) -> f64 {
     }
 }
 
-/// `getActualScore` — (totalPlayers - position + 1) / totalPlayers.
 fn actual_score(position: usize, total_players: usize) -> f64 {
     (total_players - position + 1) as f64 / total_players as f64
 }
 
-/// `getExpectedScore` — 1 / (1 + 10^((opp - user) / 400)).
 fn expected_score(user_elo: i64, opponent_elo: f64) -> f64 {
     1.0 / (1.0 + 10f64.powf((opponent_elo - user_elo as f64) / 400.0))
 }
 
-/// `applyInflationProtection` — dampen gains >2000 ELO, dampen losses <1000.
 pub fn apply_inflation_protection(elo_change: i64, user_elo: i64) -> i64 {
     let mut change = elo_change as f64;
     if user_elo > 2000 && elo_change > 0 {
@@ -76,21 +63,16 @@ pub fn apply_inflation_protection(elo_change: i64, user_elo: i64) -> i64 {
     change.round() as i64
 }
 
-/// Per-user inputs the orchestrator must gather (was: User + standings queries).
 #[derive(Debug, Clone)]
 pub struct EloPlayerInput {
     pub user_id: i64,
     pub elo: i64,
     pub is_guest: bool,
     pub team_id: Option<i64>,
-    /// unique tracks played in this round (from Redis history or DB scores).
     pub tracks_played: usize,
-    /// `getPlacementRoundsPlayed` result (is_elo_counted standings count).
     pub placement_rounds_played: usize,
-    /// `calculateWinStreak` result — only meaningful if position == 1.
     pub win_streak: i64,
     pub tracks_history: Vec<TrackHistoryEntry>,
-    /// pre-computed by metrics::from_tracks_history.
     pub average_response_time: Option<f64>,
     pub fast_answers_count: i64,
     pub total_answers_count: i64,
@@ -98,12 +80,9 @@ pub struct EloPlayerInput {
 
 pub struct EloRoundResult {
     pub standings: Vec<Standing>,
-    /// (user_id, elo_after) — broadcast `UserEloUpdated` after commit.
     pub elo_updates: Vec<(i64, i64)>,
 }
 
-/// `shouldCountElo`: public room + ≥3 podium entries + ≥3 *valid* players
-/// (≥80% tracks played, not guest) — the validity filter is applied inside.
 pub fn update_elos_for_round(
     round_id: i64,
     room_id: i64,
@@ -121,7 +100,6 @@ pub fn update_elos_for_round(
         };
     }
 
-    // Valid players: ≥80% tracks and not guest (guests never move ELO).
     let valid_user_ids: Vec<i64> = podium
         .iter()
         .filter(|p| {
@@ -134,8 +112,6 @@ pub fn update_elos_for_round(
 
     let is_elo_counted = room_is_public && podium.len() >= 3 && valid_user_ids.len() >= 3;
 
-    // Positions among valid players only — podium is already sorted by
-    // total desc, so filtering it preserves the ranking order.
     let valid_sorted: Vec<i64> = podium
         .iter()
         .filter(|p| valid_user_ids.contains(&p.user_id))
@@ -175,7 +151,6 @@ pub fn update_elos_for_round(
                 input.placement_rounds_played,
             );
             change = apply_inflation_protection(change, user_elo);
-            // Scale by participation ratio (mid-round joiners).
             change = (change as f64 * pct).round() as i64;
             (change, user_elo + change)
         } else {
@@ -225,7 +200,6 @@ mod tests {
 
     #[test]
     fn actual_score_positions() {
-        // 4 players: P1=1.0, P2=0.75, P3=0.5, P4=0.25
         assert_eq!(actual_score(1, 4), 1.0);
         assert_eq!(actual_score(4, 4), 0.25);
     }
@@ -248,8 +222,6 @@ mod tests {
 
     #[test]
     fn php_exact_values() {
-        // (N-pos+1)/N is NOT symmetric around 0.5: P1=1.0, P4=0.25 for N=4.
-        // PHP exact: win = 32*(1.0-0.5) = 16 ; lose = 32*(0.25-0.5) = -8.
         let opp = [1500, 1500, 1500];
         assert_eq!(calculate_elo_change(1500, &opp, 1, 4, 10), 16);
         assert_eq!(calculate_elo_change(1500, &opp, 4, 4, 10), -8);

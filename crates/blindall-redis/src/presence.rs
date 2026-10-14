@@ -1,7 +1,3 @@
-//! Port of `RoomPresenceService` — ZSET `room:{id}:members_z`, score =
-//! last_seen unix seconds, prune >90s before counting. The WS hub is the
-//! real "who is here" source; this mirrors it for HTTP/home counts.
-
 use crate::keys;
 use crate::Result;
 use fred::prelude::*;
@@ -16,7 +12,6 @@ impl RoomPresenceStore {
         Self { client }
     }
 
-    /// `addMember` — join + heartbeat refresh.
     pub async fn add_member(&self, room_id: i64, user_id: i64, now_unix: i64) -> Result<()> {
         let key = keys::room_members(room_id);
         self.client
@@ -35,7 +30,6 @@ impl RoomPresenceStore {
         Ok(())
     }
 
-    /// `removeMember`.
     pub async fn remove_member(&self, room_id: i64, user_id: i64) -> Result<()> {
         self.client
             .zrem::<(), _, _>(keys::room_members(room_id), user_id)
@@ -43,9 +37,6 @@ impl RoomPresenceStore {
         Ok(())
     }
 
-    /// `getMemberCount` — prune then ZCARD. Direct calls: awaiting a
-    /// *pipeline* command only buffers it, which silently returned `Ok(0)`
-    /// here before the response was ever read.
     pub async fn member_count(&self, room_id: i64, now_unix: i64) -> Result<i64> {
         let key = keys::room_members(room_id);
         let cutoff = now_unix - keys::PRESENCE_PRUNE_SECONDS;
@@ -56,7 +47,6 @@ impl RoomPresenceStore {
         self.client.zcard(&key).await.map_err(Into::into)
     }
 
-    /// `getMemberIds` — prune then ZRANGE.
     pub async fn member_ids(&self, room_id: i64, now_unix: i64) -> Result<Vec<i64>> {
         let key = keys::room_members(room_id);
         let cutoff = now_unix - keys::PRESENCE_PRUNE_SECONDS;
@@ -70,10 +60,6 @@ impl RoomPresenceStore {
             .map_err(Into::into)
     }
 
-    /// `RoomParticipationService::grantAccess` — PHP stores the flag in the
-    /// session (`rooms.{id}.users.{uid}.can_play`); the JWT rewrite is
-    /// stateless, so the grant lives in Redis `room:{id}:players` instead.
-    /// TTL refreshed on each grant — same 2h window as presence.
     pub async fn grant_participation(&self, room_id: i64, user_id: i64) -> Result<()> {
         let key = keys::room_players(room_id);
         self.client.sadd::<(), _, _>(&key, user_id).await?;
@@ -83,7 +69,6 @@ impl RoomPresenceStore {
         Ok(())
     }
 
-    /// `RoomParticipationService::hasAccess`.
     pub async fn has_participation(&self, room_id: i64, user_id: i64) -> Result<bool> {
         self.client
             .sismember(keys::room_players(room_id), user_id)
@@ -91,7 +76,6 @@ impl RoomPresenceStore {
             .map_err(Into::into)
     }
 
-    /// `getMemberCountsForRooms` — 2 pipeline cmds per room, same as PHP.
     pub async fn member_counts(
         &self,
         room_ids: &[i64],

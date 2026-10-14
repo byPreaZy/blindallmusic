@@ -1,6 +1,3 @@
-//! Donations — `DonationGoalService`, `DonorPerkService`,
-//! `StripeWebhookController` + `StripeWebhookVerifier` ports.
-
 use crate::auth::{CurrentUser, OptionalUser};
 use crate::state::AppState;
 use axum::{
@@ -14,15 +11,12 @@ use serde_json::{json, Value};
 
 pub const DONOR_PERKS: [&str; 3] = ["ad_free", "avatar_crown", "supporter_reactions"];
 
-/// `config('donations.*')`.
 #[derive(Clone)]
 pub struct DonationsConfig {
     pub monthly_goal_cents: i64,
     pub stripe_payment_url: String,
     pub stripe_webhook_secret: String,
-    /// `supporter_perks` (subset of `DonorPerk::values()`).
     pub supporter_perks: Vec<String>,
-    /// `donations.supporter_reaction_emojis`.
     pub supporter_reaction_emojis: Vec<String>,
 }
 
@@ -41,8 +35,6 @@ impl Default for DonationsConfig {
     }
 }
 
-/// `StripeWebhookVerifier::verify` — parse `t=...,v1=...` header, tolerance
-/// 300s, HMAC-SHA256 over `{t}.{payload}` (constant-time compare).
 pub fn verify_stripe_signature(
     secret: &str,
     signature_header: &str,
@@ -81,7 +73,6 @@ pub fn verify_stripe_signature(
     }
 }
 
-/// `POST /api/v1/stripe/webhook` — `checkout.session.completed` only.
 pub async fn stripe_webhook(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -117,7 +108,6 @@ pub async fn stripe_webhook(
     Json(json!({"received": true})).into_response()
 }
 
-/// `recordCheckoutSession` — skip unpaid/zero/duplicate sessions.
 async fn record_session(state: &AppState, session: &Value) -> Result<i64, Response> {
     let Some(id) = session["id"].as_str().filter(|s| !s.is_empty()) else {
         return Ok(0);
@@ -153,8 +143,6 @@ async fn record_session(state: &AppState, session: &Value) -> Result<i64, Respon
         )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())?;
-    // PHP `Cache::forget(donation_goal_progress:v2:{month})` — drop the
-    // Laravel-format key so a dual-stack PHP instance won't serve stale data.
     use fred::interfaces::KeysInterface;
     let key = format!(
         "{}donation_goal_progress:v2:{}",
@@ -162,8 +150,6 @@ async fn record_session(state: &AppState, session: &Value) -> Result<i64, Respon
         blindall_db::donations::month_key(donated_at)
     );
     let _: Result<(), _> = state.redis.del(&key).await;
-    // `$user->notify(new DonationThankYou($donation))` — only for NEW rows;
-    // duplicates short-circuit in PHP before notify. Best-effort mail.
     if is_new {
         if let Some(uid) = user_id {
             if let Ok(Some(email)) = state.auth.email_of(uid).await {
@@ -186,7 +172,6 @@ async fn record_session(state: &AppState, session: &Value) -> Result<i64, Respon
     Ok(0)
 }
 
-/// `paymentUrlForUser` — query params appended before any `#fragment`.
 pub fn payment_url_for_user(
     cfg: &DonationsConfig,
     user: Option<&blindall_db::entities::User>,
@@ -223,7 +208,6 @@ pub fn payment_url_for_user(
     format!("{base}{sep}{}{fragment}", qs.join("&"))
 }
 
-/// `enrichUserPayload` — adds `photo`, `donor_perks`, `is_supporter`.
 fn enrich(state: &AppState, mut supporter: Value, perks_map: &std::collections::HashSet<i64>) -> Value {
     let uid = supporter["id"].as_i64().unwrap_or(0);
     let photo_path = supporter["photo_path"].as_str().unwrap_or("").to_string();
@@ -254,7 +238,6 @@ async fn perks_map(state: &AppState, supporter_ids: &[i64]) -> std::collections:
         .collect()
 }
 
-/// `GET /api/v1/donations/progress` — `currentProgressForUser`.
 pub async fn progress(State(state): State<AppState>, OptionalUser(user): OptionalUser) -> Response {
     let key = blindall_db::donations::current_month_key();
     let mut progress = match state
@@ -270,7 +253,6 @@ pub async fn progress(State(state): State<AppState>, OptionalUser(user): Optiona
         None => None,
     };
     let days_remaining = days_remaining_in_month(&key);
-    // `buildProgress` additions.
     let raised = progress["raised_cents"].as_i64().unwrap_or(0);
     let carryover = progress["carryover_cents"].as_i64().unwrap_or(0);
     let goal = state.donations.monthly_goal_cents;
@@ -282,7 +264,6 @@ pub async fn progress(State(state): State<AppState>, OptionalUser(user): Optiona
         o.insert("adsense_slot".into(), json!(state.adsense_slot));
         o.insert("progress_segments".into(), progress_segments(raised, carryover, goal));
     }
-    // `currentProgressForUser` additions.
     progress["payment_url"] =
         json!(payment_url_for_user(&state.donations, user.as_ref(), email.as_deref(), None));
     let supporters = monthly_supporters(&state).await.unwrap_or_default();
@@ -290,8 +271,6 @@ pub async fn progress(State(state): State<AppState>, OptionalUser(user): Optiona
     Json(progress).into_response()
 }
 
-/// `enrichMessagesForChat` — adds `user.donor_perks`/`user.is_supporter`
-/// to each message whose `user.id` donated this month.
 pub async fn enrich_messages(state: &AppState, messages: &mut [Value]) {
     let ids: Vec<i64> = messages
         .iter()
@@ -311,14 +290,11 @@ pub async fn enrich_messages(state: &AppState, messages: &mut [Value]) {
     }
 }
 
-/// `monthlySupporters` — month donors + carryover supporters, enriched.
 async fn monthly_supporters(state: &AppState) -> Option<Vec<Value>> {
     let key = blindall_db::donations::current_month_key();
     let goal = state.donations.monthly_goal_cents;
     let donors = state.donations_repo.month_donors(&key).await.ok()?;
     let mut supporters = donors;
-    // Carryover: previous month's post-goal supporters (only when there IS
-    // carryover — `carryoverSupporters` early-returns [] otherwise).
     let mut existing: std::collections::HashSet<i64> = supporters
         .iter()
         .filter_map(|s| s["id"].as_i64())
@@ -357,7 +333,6 @@ async fn monthly_supporters(state: &AppState) -> Option<Vec<Value>> {
     )
 }
 
-/// `progressSegments` — carryover→raised→surplus fill order (surplus cap 25%).
 fn progress_segments(raised: i64, carryover: i64, goal: i64) -> Value {
     if goal <= 0 {
         return json!({"carryover_percent": 0, "raised_percent": 0, "surplus_percent": 0});
@@ -373,7 +348,6 @@ fn progress_segments(raised: i64, carryover: i64, goal: i64) -> Value {
     })
 }
 
-/// `diffInDays(startOfDay(now), startOfDay(monthEnd))` in Europe/Paris.
 fn days_remaining_in_month(key: &str) -> i64 {
     let now = chrono::Utc::now().with_timezone(&chrono_tz::Europe::Paris);
     let today = now.date_naive();
@@ -382,7 +356,6 @@ fn days_remaining_in_month(key: &str) -> i64 {
     }) else {
         return 0;
     };
-    // Last day of the month = first day of next month − 1.
     let (ny, nm) = if m == 12 { (y + 1, 1) } else { (y, m + 1) };
     let Some(end) = chrono::NaiveDate::from_ymd_opt(ny, nm, 1).map(|d| d.pred_opt().unwrap_or(d)) else {
         return 0;
@@ -390,11 +363,9 @@ fn days_remaining_in_month(key: &str) -> i64 {
     (end - today).num_days().max(0)
 }
 
-/// `GET /api/v1/donations/history` — `monthlyHistory(12)`.
 pub async fn history(State(state): State<AppState>) -> Response {
     let goal = state.donations.monthly_goal_cents;
     let now_key = blindall_db::donations::current_month_key();
-    // 12 months back from the current month start.
     let mut start_key = now_key.clone();
     for _ in 0..11 {
         start_key = blindall_db::donations::prev_month_key(&start_key).unwrap_or(start_key);
@@ -429,7 +400,6 @@ pub async fn history(State(state): State<AppState>) -> Response {
     Json(json!({ "history": history })).into_response()
 }
 
-/// `GET /api/v1/donations/supporters` — `monthlySupporters` (full list).
 pub async fn supporters(State(state): State<AppState>) -> Response {
     match monthly_supporters(&state).await {
         Some(s) => Json(json!({ "supporters": s })).into_response(),
@@ -437,7 +407,6 @@ pub async fn supporters(State(state): State<AppState>) -> Response {
     }
 }
 
-/// `GET /api/v1/donations/recent` — `recentDonations(30)` + supporter flag.
 pub async fn recent(State(state): State<AppState>) -> Response {
     let donations = match state.donations_repo.recent_donations(30).await {
         Ok(d) => d,
@@ -466,9 +435,6 @@ pub async fn recent(State(state): State<AppState>) -> Response {
     Json(json!({ "donations": donations })).into_response()
 }
 
-/// `GET /api/v1/users/{id}/donations` — `userDonationHistory` + summary
-/// (self only — mirrors profile privacy, PHP checks `show_donation_history`
-/// for public display).
 pub async fn user_donations(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -501,7 +467,6 @@ mod tests {
         let t = 1_700_000_000;
         let header = sign("whsec_x", t, payload);
         assert!(verify_stripe_signature("whsec_x", &header, payload, t + 60).is_ok());
-        // Wrong secret, expired timestamp, malformed header.
         assert!(verify_stripe_signature("whsec_y", &header, payload, t).is_err());
         assert!(verify_stripe_signature("whsec_x", &header, payload, t + 400).is_err());
         assert!(verify_stripe_signature("whsec_x", "t=1", payload, t).is_err());
@@ -529,7 +494,6 @@ mod tests {
         assert!(url.contains("client_reference_id=7"));
         assert!(url.contains("locked_prefilled_email=u%40e.fr"));
         assert!(url.ends_with("#f"));
-        // Guest → only locale.
         let guest = blindall_db::entities::User { is_guest: true, ..user };
         let url = payment_url_for_user(&cfg, Some(&guest), None, Some("en"));
         assert_eq!(url, "https://donate.stripe.com/x?foo=1&locale=en#f");

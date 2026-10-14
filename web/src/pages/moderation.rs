@@ -1,7 +1,3 @@
-//! Moderation section — `Pages/Moderation/*` port (dashboard, trashed
-//! messages, banned users, users management, moderators, local tracks).
-//! Gated on `is_public_moderator || is_administrator` — enforced API-side too.
-
 use crate::api;
 use crate::auth::use_auth;
 use crate::i18n::t;
@@ -24,7 +20,6 @@ pub fn ModShell(active: &'static str, children: ChildrenFn) -> impl IntoView {
     let auth = use_auth();
     view! {
         <div class="mx-auto max-w-6xl px-4 py-8">
-            // `auth.ready` gate — prevents a 403 flash while `/auth/me` loads.
             <Show when=move || {
                 auth.ready.get()
                     && auth.user.get()

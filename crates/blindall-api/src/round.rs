@@ -1,9 +1,3 @@
-//! Round control + the answer-check endpoint.
-//!
-//! `check` is the hot path — PHP `RoundController::check` maps to
-//! `blindall_core::scoring::check` executed inside the room actor (all
-//! writes serialized through the actor inbox instead of Redis job locks).
-
 use crate::auth::CurrentUser;
 use crate::state::AppState;
 use axum::extract::{Path, State};
@@ -20,13 +14,10 @@ pub struct CheckBody {
     text: String,
     #[serde(default)]
     words: Vec<String>,
-    /// PHP uses `currentTime` (camelCase in the JSON contract).
     #[serde(rename = "currentTime")]
     current_time: f64,
 }
 
-/// `POST /rounds/{round}/tracks/{track}/check` — answer submission.
-/// Response shape mirrors the PHP `{words, good_answers, message}`.
 pub async fn check(
     State(state): State<AppState>,
     Path((round_id, track_id)): Path<(i64, i64)>,
@@ -41,7 +32,6 @@ pub async fn check(
         ));
     }
 
-    // The actor for this round's room is found via the round row.
     let round = state
         .store
         .round_row(round_id)
@@ -54,7 +44,6 @@ pub async fn check(
     if !participates(&state, round.room_id, user.id()).await {
         return Err(err(StatusCode::FORBIDDEN, "room_access_required"));
     }
-    // PHP 409 on track mismatch.
     let idx = (round.current - 1).max(0) as usize;
     if round.tracks.get(idx).copied() != Some(track_id) {
         return Err(err(StatusCode::CONFLICT, "track_mismatch"));
@@ -87,7 +76,6 @@ pub async fn check(
 
     Ok(Json(match outcome {
         CheckOutcome::InvalidTime => {
-            // PHP: `{error, message: __('Answer window closed')}`.
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(json!({
@@ -119,8 +107,6 @@ pub async fn check(
                         "order": a.order,
                         "speedBonus": a.speed_bonus,
                         "name": a.type_name,
-                        // `type` relation on PHP's serialized TrackAnswer —
-                        // the chip reads `type.svg_icon`.
                         "type": {"name": a.type_name, "svg_icon": a.svg_icon},
                         "value": a.value,
                         "score": a.score,
@@ -137,8 +123,6 @@ pub async fn check(
         CheckOutcome::AlreadyFound => json!({
             "words": words,
             "good_answers": [],
-            // `__('You have already found these answers')` — untranslated
-            // in every locale file; PHP returns the raw English key.
             "message": msg("good", "You have already found these answers"),
         }),
         CheckOutcome::Almost => json!({
@@ -154,7 +138,6 @@ pub async fn check(
     }))
 }
 
-/// `POST /rounds/{round}/tracks/{track}/listened`.
 pub async fn track_listened(
     State(state): State<AppState>,
     Path((round_id, track_id)): Path<(i64, i64)>,
@@ -189,8 +172,6 @@ pub async fn track_listened(
     Ok(Json(json!({"success": true})))
 }
 
-/// `GET /rounds/{round}/scores` — live Redis scores (podium).
-/// PHP `RoundController::scores` → `ensureRoundParticipant` (403 outsiders).
 pub async fn scores(
     State(state): State<AppState>,
     Path(round_id): Path<i64>,
@@ -214,7 +195,6 @@ pub async fn scores(
     })))
 }
 
-/// `ensureRoundParticipant` — PHP session flag; Redis `room:{id}:players`.
 async fn participates(state: &AppState, room_id: i64, user_id: i64) -> bool {
     state
         .presence
@@ -223,7 +203,6 @@ async fn participates(state: &AppState, room_id: i64, user_id: i64) -> bool {
         .unwrap_or(false)
 }
 
-/// `POST /rooms/{id}/start` — `StartRound` dispatch.
 pub async fn start(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -239,7 +218,6 @@ pub async fn start(
     Ok(Json(json!({"success": true})))
 }
 
-/// `hasRoomControl` — owner | room moderator | admin (403 otherwise).
 async fn require_room_control(
     state: &AppState,
     room_id: i64,
@@ -307,7 +285,6 @@ fn err(code: StatusCode, error: &'static str) -> (StatusCode, Json<Value>) {
     (code, Json(json!({"error": error})))
 }
 
-/// PHP: `array_unique(merge(newWords, clientWords))`.
 fn merged_words(body: &CheckBody) -> Vec<String> {
     let sanitized = blindall_core::sanitize::sanitize_string(&body.text);
     let mut words: Vec<String> = sanitized
@@ -326,7 +303,6 @@ fn merged_words(body: &CheckBody) -> Vec<String> {
     words
 }
 
-/// `SetLocale` equivalent — the SPA ships its locale on `X-Locale`.
 fn locale_of(headers: &axum::http::HeaderMap) -> &str {
     match headers
         .get("x-locale")
@@ -338,8 +314,6 @@ fn locale_of(headers: &axum::http::HeaderMap) -> &str {
     }
 }
 
-/// `__()` for the handful of server-rendered check strings. Falls back to
-/// the English key like Laravel when a locale has no override.
 fn tr<'a>(locale: &str, key: &'a str) -> &'a str {
     match (locale, key) {
         ("fr", "Answer window closed") => "Fenêtre de réponse fermée",

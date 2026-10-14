@@ -1,7 +1,3 @@
-//! User account writes — `UserController` port.
-//! Self-only ops (PHP `authorize: $this->user()->id === $user->id`),
-//! `destroy` also allows administrators.
-
 use crate::auth::CurrentUser;
 use crate::state::AppState;
 use axum::{
@@ -35,9 +31,6 @@ pub struct IndexQuery {
     page: Option<i64>,
 }
 
-/// `GET /api/v1/users?search=&page=` — `Api\UserController::index`
-/// (`auth:sanctum`): `{filters:{search}, users:{data:[{id,name}],…}}`
-/// paginated 20 — the moderators pickers' autocomplete source.
 pub async fn index(
     State(state): State<AppState>,
     CurrentUser(_user): CurrentUser,
@@ -73,9 +66,6 @@ pub struct UpdateProfileBody {
     email: String,
 }
 
-/// `POST /api/v1/users/{id}` — `update` (self only):
-/// name required min:2 max:25 unique-ignore-self Reserved;
-/// email required max:255 email unique-ignore-self.
 pub async fn update(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -120,9 +110,6 @@ pub struct UpdatePasswordBody {
     current_password: Option<String>,
 }
 
-/// `PUT /api/v1/users/{id}/password` — `updatePassword`:
-/// password required confirmed min:8; `current_password` required only when
-/// the account already has a password (`hasPassword()`).
 pub async fn update_password(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -166,7 +153,6 @@ pub struct DonationPreferencesBody {
     show_donation_history_on_profile: bool,
 }
 
-/// `PATCH /api/v1/users/{id}/donation-preferences`.
 pub async fn update_donation_preferences(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -186,9 +172,6 @@ pub async fn update_donation_preferences(
     }
 }
 
-/// `POST /api/v1/users/{id}/photo` — `updatePhoto` (self only):
-/// `photo` required image max:1024KB → contain 350×350 webp at
-/// `users/{uniqid}.webp`, previous file deleted.
 pub async fn update_photo(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -228,7 +211,6 @@ pub async fn update_photo(
     Json(json!({"ok": true, "photo_path": path})).into_response()
 }
 
-/// `DELETE /api/v1/users/{id}/photo` — `destroyPhoto` (self only).
 pub async fn destroy_photo(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -250,10 +232,7 @@ pub async fn destroy_photo(
     Json(json!({"ok": true})).into_response()
 }
 
-/// `GET /api/v1/users/me` — `AccountPageService::payload` (Me/Show page):
-/// profile stats + password/email state + donation summary + supporter flag.
 pub async fn me(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
-    // PHP `not.guest` on the account page — guests have nothing to manage.
     if user.is_guest {
         return StatusCode::FORBIDDEN.into_response();
     }
@@ -293,8 +272,6 @@ pub async fn me(State(state): State<AppState>, CurrentUser(user): CurrentUser) -
         .as_ref()
         .map(|h| h["created_at"].clone())
         .unwrap_or(Value::Null);
-    // PHP: `created_at` is `format('d/m/Y')` and `created_at_from_now` is
-    // `diffForHumans(null, true)` (absolute, FR — `app.locale`).
     let created = created_at
         .as_str()
         .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
@@ -324,7 +301,6 @@ pub async fn me(State(state): State<AppState>, CurrentUser(user): CurrentUser) -
     .into_response()
 }
 
-/// `GET /api/v1/users/notifications` — unread list + count (navbar badge).
 pub async fn notifications(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
@@ -338,7 +314,6 @@ pub async fn notifications(
     Json(json!({"notifications": list, "unread_count": count})).into_response()
 }
 
-/// `POST /api/v1/users/notifications/{id}/read`.
 pub async fn notification_read(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -351,10 +326,6 @@ pub async fn notification_read(
     }
 }
 
-/// Laravel `BroadcastNotificationCreated` — the `broadcast` channel of
-/// database notifications (`via → ['database','broadcast']`). Laravel
-/// names the channel `private-App.Models.User.{id}`; the WS protocol
-/// maps it to `user:{id}`.
 pub async fn push_notification(
     state: &AppState,
     user_id: i64,
@@ -379,8 +350,6 @@ pub async fn push_notification(
         .await;
 }
 
-/// `POST /api/v1/users/notifications/{id}/done` — reads every same-type +
-/// same-message notification (PHP `markNotificationAsDone`).
 pub async fn notification_done(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -392,9 +361,6 @@ pub async fn notification_done(
     }
 }
 
-/// `DELETE /api/v1/users/{id}` — `destroy` (self or admin):
-/// `UserAccountDeletionService::delete` — photo file, rooms (soft),
-/// playlists, scores, total_scores, forceDelete.
 pub async fn destroy(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -406,7 +372,6 @@ pub async fn destroy(
     if let Ok(Some(path)) = state.auth.photo_path(id).await {
         state.storage.delete(&path).await;
     }
-    // `UserAccountDeletionService` — Brevo contact delete before the row goes.
     if let Ok(Some(email)) = state.auth.email_of(id).await {
         let (http, mail) = (state.http.clone(), state.mail.clone());
         tokio::spawn(async move {
@@ -419,8 +384,6 @@ pub async fn destroy(
     }
 }
 
-/// Carbon `diffForHumans(null, DIFF_ABSOLUTE)` in French (`app.locale = fr`):
-/// largest unit only, singular/plural.
 fn diff_for_humans_fr(d: chrono::DateTime<chrono::Utc>) -> String {
     let secs = (chrono::Utc::now() - d).num_seconds().max(0);
     let (n, unit) = if secs < 60 {
@@ -438,7 +401,6 @@ fn diff_for_humans_fr(d: chrono::DateTime<chrono::Utc>) -> String {
     } else {
         (secs / 31_536_000, "an")
     };
-    // "mois" is invariable in French; "an" pluralizes.
     let s = if n > 1 && unit != "mois" { "s" } else { "" };
     format!("{n} {unit}{s}")
 }

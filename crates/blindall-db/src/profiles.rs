@@ -1,6 +1,3 @@
-//! User profiles — `ProfilePageService` query port (header, scores, likes,
-//! bookmarks, highlights, score evolution).
-
 use sqlx::postgres::PgPool;
 use sqlx::Row;
 
@@ -14,16 +11,12 @@ impl ProfileRepo {
         Self { pool }
     }
 
-    /// `Room::cachedPublicIds` — ids of public rooms (no cache; the lists
-    /// are small and the queries cheap).
     pub async fn public_room_ids(&self) -> Result<Vec<i64>, sqlx::Error> {
         sqlx::query_scalar("SELECT id FROM rooms WHERE is_public = true AND deleted_at IS NULL")
             .fetch_all(&self.pool)
             .await
     }
 
-    /// `ProfilePageService::header` — user + level + team + totals + counts.
-    /// Returns None for guests or missing users (`show` aborts 404).
     pub async fn header(&self, user_id: i64) -> Result<Option<serde_json::Value>, sqlx::Error> {
         let Some(user) = sqlx::query(
             "SELECT u.id, u.name, u.photo_path, u.elo, u.is_guest, u.team_id, \
@@ -124,8 +117,6 @@ impl ProfileRepo {
         })))
     }
 
-    /// `ProfilePageService::scores` — paginated total_scores on public rooms.
-    /// sort ∈ {updated_at, score, room}, direction ∈ {asc, desc}.
     pub async fn scores(
         &self,
         user_id: i64,
@@ -188,7 +179,6 @@ impl ProfileRepo {
         }))
     }
 
-    /// `ProfilePageService::likes` — tracks upvoted by the user (votes=1).
     pub async fn likes(&self, user_id: i64, page: i64) -> Result<serde_json::Value, sqlx::Error> {
         const PER_PAGE: i64 = 10;
         let total: i64 = sqlx::query_scalar(
@@ -227,7 +217,6 @@ impl ProfileRepo {
         }))
     }
 
-    /// `unlikeTrack` — delete the user's vote rows on the track.
     pub async fn unlike_track(&self, user_id: i64, track_id: i64) -> Result<(), sqlx::Error> {
         sqlx::query(
             "DELETE FROM votes WHERE user_id = $1 \
@@ -240,7 +229,6 @@ impl ProfileRepo {
         Ok(())
     }
 
-    /// `ProfilePageService::bookmarks` — bookmarked rooms + category.
     pub async fn bookmarks(&self, user_id: i64, page: i64) -> Result<serde_json::Value, sqlx::Error> {
         const PER_PAGE: i64 = 10;
         let total: i64 = sqlx::query_scalar(
@@ -281,7 +269,6 @@ impl ProfileRepo {
         }))
     }
 
-    /// `scoreEvolution` — cumulative daily totals over the `scores` table.
     pub async fn score_evolution(&self, user_id: i64) -> Result<Vec<serde_json::Value>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT DATE(created_at) AS date, SUM(score) AS daily_score \
@@ -304,7 +291,6 @@ impl ProfileRepo {
             .collect())
     }
 
-    /// `highlights` — performance summary + top 3 public rooms + elo rank.
     pub async fn highlights(&self, user_id: i64) -> Result<serde_json::Value, sqlx::Error> {
         let best_win: i64 = sqlx::query_scalar(
             "SELECT COALESCE(MAX(rs.win_streak), 0) FROM round_standings rs \
@@ -328,8 +314,6 @@ impl ProfileRepo {
             .as_ref()
             .and_then(|r| r.try_get::<f64, _>("best_round_score").ok())
             .unwrap_or(0.0);
-        // topRooms — 3 public rooms by score (PHP shape: score +
-        // `updated_at` dd/mm/YYYY + nested `room`).
         let public = self.public_room_ids().await?;
         let mut top_rooms = Vec::new();
         if !public.is_empty() {
@@ -362,7 +346,6 @@ impl ProfileRepo {
                 })
                 .collect();
         }
-        // week_score — `week` leaderboard sort (7-day public-room sum).
         let week_score: f64 = sqlx::query_scalar(
             "SELECT COALESCE(ROUND(SUM(rs.total_score)::numeric, 1)::float8, 0) \
              FROM round_standings rs \
@@ -372,7 +355,6 @@ impl ProfileRepo {
         .bind(user_id)
         .fetch_one(&self.pool)
         .await?;
-        // Elo leaderboard position — count of strictly-better elos.
         let position: Option<i64> = match sqlx::query_scalar::<_, i64>("SELECT elo FROM users WHERE id = $1")
             .bind(user_id)
             .fetch_optional(&self.pool)
@@ -401,8 +383,6 @@ impl ProfileRepo {
                 "position": position,
             },
             "top_rooms": top_rooms,
-            // `ProfileBadgeService` metrics — badges are assembled in the API
-            // layer (needs `is_supporter` + room photo URL resolution).
             "badge_metrics": {
                 "rooms_created_count": lvl("rooms_created_count"),
                 "unique_rooms_played_count": lvl("unique_rooms_played_count"),

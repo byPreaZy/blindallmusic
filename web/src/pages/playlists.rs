@@ -1,5 +1,3 @@
-//! Playlists index (`/playlists`) + create (`/playlists/create`).
-
 use crate::api;
 use crate::auth::use_auth;
 use crate::i18n::t;
@@ -36,8 +34,6 @@ pub fn PlaylistsPage() -> impl IntoView {
         loading.set(false);
     });
 
-    // PHP `Index.vue` — client-side equivalent of the search box
-    // (filters on name + description).
     let search = RwSignal::new(String::new());
     let filtered = move || {
         let q = search.get().to_lowercase();
@@ -77,7 +73,6 @@ pub fn PlaylistsPage() -> impl IntoView {
                 </Show>
             </header>
 
-            // Search card — PHP `text-input` + reset.
             <div class="mb-6 rounded-xl border border-white/10 bg-surface-raised/60 p-4">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div class="relative flex-1">
@@ -105,7 +100,6 @@ pub fn PlaylistsPage() -> impl IntoView {
                 when=move || !loading.get()
                 fallback=move || view! { <div class="text-white/60">{t("Loading")}"…"</div> }
             >
-                // Desktop table — PHP `hidden lg:block` Card.
                 <div class="hidden overflow-hidden rounded-xl border border-white/10 bg-surface-raised/60 lg:block">
                     <div class="overflow-x-auto">
                         <table class="w-full" role="table" aria-label=t("Playlists list")>
@@ -203,7 +197,6 @@ pub fn PlaylistsPage() -> impl IntoView {
                     </div>
                 </div>
 
-                // Mobile cards — PHP `grid sm:grid-cols-2 lg:hidden`.
                 <div class="grid gap-4 sm:grid-cols-2 lg:hidden">
                     <For
                         each=filtered

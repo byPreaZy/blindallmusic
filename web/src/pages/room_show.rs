@@ -1,7 +1,3 @@
-//! Room show — port of `Show.vue`'s realtime orchestration:
-//! presence join + heartbeat, `joined` hydration, all game events,
-//! player + input + answers + ranking + chat.
-
 use crate::api;
 use crate::auth::use_auth;
 use crate::components::navbar::Spinner;
@@ -44,10 +40,6 @@ fn parse_scores(v: &Value) -> HashMap<i64, f64> {
     }
 }
 
-/// `app/Seo/RoomHead::apply` — description / canonical / OG / Twitter /
-/// JSON-LD (VideoGame + Breadcrumb + FAQ) for the room page. `seo` is the
-/// `RoomSeoPanel` payload (official rooms only); `password_protected` adds
-/// `noindex` (`hiddenFromRobots`).
 fn apply_room_head(room: &RoomConfig, seo: Option<&Value>, password_protected: bool) {
     let tokens = |stats: Option<&Value>| {
         let cat = room
@@ -85,8 +77,6 @@ fn apply_room_head(room: &RoomConfig, seo: Option<&Value>, password_protected: b
         rep
     };
     let stats = seo.and_then(|s| s.get("stats"));
-    // `metaDescription`/`description`: configured FR copy > `Room page meta
-    // description` (official) > room.description > `Room default description`.
     let description = if seo.is_some() {
         match seo
             .and_then(|s| s["content"]["intro"].as_str())
@@ -108,7 +98,6 @@ fn apply_room_head(room: &RoomConfig, seo: Option<&Value>, password_protected: b
         .unwrap_or_else(|| room.id.to_string());
     let path = format!("/rooms/{slug}");
     let url = crate::seo::canonical_url(&path);
-    // `__(':room — :suffix')` — "{room} — {Room title suffix}".
     let title = format!("{} — {}", room.name, t("Room title suffix"));
     let full_title = format!("{title} | Blind'All Music");
     let image = room
@@ -157,7 +146,6 @@ fn apply_room_head(room: &RoomConfig, seo: Option<&Value>, password_protected: b
     crate::seo::set_meta("name", "twitter:image", &image_abs);
     crate::seo::set_meta("name", "twitter:image:alt", &image_alt);
 
-    // `structuredData` — VideoGame schema.
     let schema_desc = seo
         .and_then(|s| s["content"]["intro"].as_str())
         .map(str::to_string)
@@ -217,7 +205,6 @@ fn apply_room_head(room: &RoomConfig, seo: Option<&Value>, password_protected: b
     }
     crate::seo::set_json_ld("room", &schema);
 
-    // `BreadcrumbSchema::build` + `FaqPageSchema::build` (official rooms).
     if let Some(s) = seo {
         let crumbs: Vec<Value> = s["breadcrumbs"].as_array().cloned().unwrap_or_default();
         if !crumbs.is_empty() {
@@ -248,7 +235,6 @@ fn apply_room_head(room: &RoomConfig, seo: Option<&Value>, password_protected: b
                 }),
             );
         }
-        // FAQ schema uses the *resolved* strings (same rule as the panel).
         let faq = resolved_faq(room, s);
         if !faq.is_empty() {
             crate::seo::set_json_ld(
@@ -267,7 +253,6 @@ fn apply_room_head(room: &RoomConfig, seo: Option<&Value>, password_protected: b
     }
 }
 
-/// `RoomContentService::forRoom` tokens — room/category + stats.
 fn seo_tokens(room: &RoomConfig, s: &Value) -> Vec<(&'static str, String)> {
     vec![
         ("room", room.name.clone()),
@@ -285,9 +270,6 @@ fn seo_tokens(room: &RoomConfig, s: &Value) -> Vec<(&'static str, String)> {
     ]
 }
 
-/// `RoomContentService::forRoom` — configured FR copy wins on the `fr`
-/// locale; other locales get the translated `Room page *` templates
-/// (`configuredText` only ships `fr` in `official_room_seo`).
 fn resolved_intro(room: &RoomConfig, s: &Value, secondary: bool) -> String {
     let field = if secondary { "intro_secondary" } else { "intro" };
     if crate::i18n::locale() == "fr" {
@@ -299,7 +281,6 @@ fn resolved_intro(room: &RoomConfig, s: &Value, secondary: bool) -> String {
     tr(key, &seo_tokens(room, s))
 }
 
-/// The two `Room page FAQ q/a` pairs resolved with the same tokens.
 fn resolved_faq(room: &RoomConfig, s: &Value) -> Vec<(String, String)> {
     let rep = seo_tokens(room, s);
     vec![
@@ -308,8 +289,6 @@ fn resolved_faq(room: &RoomConfig, s: &Value) -> Vec<(String, String)> {
     ]
 }
 
-/// `RoomSeoPanel.vue` — breadcrumbs / about / stats / similar rooms / FAQ
-/// shown under the room UI for official SEO rooms.
 #[component]
 fn RoomSeoPanel(room: RwSignal<RoomConfig>, seo: RwSignal<Option<Value>>) -> impl IntoView {
     view! {
@@ -330,8 +309,6 @@ fn RoomSeoPanel(room: RwSignal<RoomConfig>, seo: RwSignal<Option<Value>>) -> imp
                                 <ol class="flex flex-wrap items-center gap-2">
                                     {crumbs.iter().enumerate().map(|(i, c)| {
                                         let label = t(c["label"].as_str().unwrap_or_default()).to_string();
-                                        // Room name is not a translation key —
-                                        // `t()` falls through unchanged.
                                         let href = c["href"].as_str().map(str::to_string);
                                         let last = i + 1 == crumbs.len();
                                         view! {
@@ -423,8 +400,6 @@ pub fn RoomPage() -> impl IntoView {
     let auth = use_auth();
     let navigate = use_navigate();
     let params = use_params::<RoomParams>();
-    // Route param may be a slug (`/rooms/{slug}` web route) or a numeric id —
-    // resolved to the numeric id by the `show` response below.
     let param = params.get().ok().and_then(|p| p.id).unwrap_or_default();
     let room_id = RwSignal::new(param.parse::<i64>().unwrap_or(0));
 
@@ -445,7 +420,6 @@ pub fn RoomPage() -> impl IntoView {
     let current_time = RwSignal::new(0.0_f64);
     let next_track_at = RwSignal::new(Option::<String>::None);
     let next_audio_url = RwSignal::new(Option::<(i64, String)>::None);
-    // `TrackPaused`/`TrackResumed` → player pause control.
     let paused = RwSignal::new(false);
     let answers_by_user = RwSignal::new(HashMap::<i64, Vec<Value>>::new());
     let found_all_markers = RwSignal::new(Vec::<Value>::new());
@@ -459,8 +433,6 @@ pub fn RoomPage() -> impl IntoView {
     let public_rooms = RwSignal::new(Vec::<Value>::new());
     let suggestion_open = RwSignal::new(false);
 
-    // Anonymous visitors → guest account (Laravel `ensureGuestSession` in
-    // `RoomController::show` — rooms are playable without registering).
     let nav = navigate.clone();
     Effect::new(move |_| {
         if auth.ready.get() && !auth.is_authed() && api::stored_token().is_none() {
@@ -476,10 +448,7 @@ pub fn RoomPage() -> impl IntoView {
         }
     });
 
-    // Realtime wraps Rc (single-threaded CSR) → local-storage signal.
     let rt = RwSignal::new_local(Option::<Realtime>::None);
-    // App-wide socket (user:{id} channel) — reused for room channels when it
-    // exists so a logged-in player keeps one connection like PHP's Echo.
     let shared_rt = use_context::<crate::app::SharedRealtime>();
 
     // ---- hydrate + wire events once we have a token -----------------------
@@ -488,9 +457,6 @@ pub fn RoomPage() -> impl IntoView {
             let Ok(data) = api::get::<JoinedPayload>(&format!("/api/v1/rooms/{room_id}/joined")).await else {
                 return;
             };
-            // The page may have unmounted while the request was in flight —
-            // every page signal is disposed by then, so bail before touching
-            // any of them ("reactive value already disposed" panic).
             if round_id.is_disposed() {
                 return;
             }
@@ -523,24 +489,12 @@ pub fn RoomPage() -> impl IntoView {
         });
     });
 
-    // Boot: room config (resolves slug → numeric id) → realtime connect →
-    // join + presence + events. `show` grants participation server-side
-    // (`joined` 403s without it), so it must carry the session token —
-    // track `auth.user` like the realtime effect so the fetch re-runs once
-    // the guest session resolves. A 403 means the room is password-locked
-    // → render the landing-style password gate and retry with
-    // `?password=` (PHP `RoomController::show` posts the password through
-    // the same route).
     let needs_password = RwSignal::new(false);
     let password_wrong = RwSignal::new(false);
-    // `show` 404 → Laravel's standard not-found page, not a forever spinner.
     let not_found = RwSignal::new(false);
-    // `password_input` is the field binding (untracked by the boot effect);
-    // `room_password` is set only on submit — it is what re-triggers `show`.
     let password_input = RwSignal::new(String::new());
     let room_password = RwSignal::new(String::new());
     let show_done = RwSignal::new(false);
-    // `seo` prop — official-rooms-only SEO landing payload (`RoomSeoPanel`).
     let seo_data = RwSignal::new(Option::<Value>::None);
     Effect::new(move |_| {
         let _ = auth.user.get();
@@ -572,7 +526,6 @@ pub fn RoomPage() -> impl IntoView {
                     show_done.set(true);
                     needs_password.set(false);
                     room_id.set(resp.room.id);
-                    // PHP RoomHead: "{room} — {Room title suffix} | Blind'All Music".
                     crate::i18n::set_title(Some(&format!(
                         "{} — {}",
                         resp.room.name,
@@ -584,8 +537,6 @@ pub fn RoomPage() -> impl IntoView {
                     public_rooms.set(resp.public_rooms);
                 }
                 Err(e) if e.status == 403 => {
-                    // `Rooms/Password.vue` shows the room name — the 403 body
-                    // carries it (non-sensitive, same page data as PHP).
                     if let Some(name) = e.body["room"]["name"].as_str() {
                         room.update(|c| c.name = name.to_string());
                         crate::i18n::set_title(Some(&format!(
@@ -594,7 +545,6 @@ pub fn RoomPage() -> impl IntoView {
                             t("Room title suffix")
                         )));
                     }
-                    // `hiddenFromRobots` — password rooms are noindexed.
                     crate::seo::set_noindex();
                     password_wrong.set(!pwd.is_empty());
                     needs_password.set(true);
@@ -606,19 +556,12 @@ pub fn RoomPage() -> impl IntoView {
     });
 
     Effect::new(move |_| {
-        // Track auth.user so the effect re-runs once a guest session
-        // completes — `stored_token()` alone isn't reactive and the room
-        // would stay on "Connecting to the room" forever for first-time
-        // visitors (guest POST resolving after the room fetch).
         let _ = auth.user.get();
         let rid = room_id.get();
         if rid == 0 || rt.get().is_some() {
             return;
         }
         let channel = format!("room:{rid}");
-        // Reuse the app-wide socket (`App`'s `user:{id}` connection) when it
-        // exists — PHP runs everything on one Echo connection. Guests landing
-        // straight on a room may not have it yet → own connection.
         let shared = shared_rt.unwrap();
         let realtime = match shared.get() {
             Some(r) => r,
@@ -737,7 +680,6 @@ pub fn RoomPage() -> impl IntoView {
                 .or(e["next_track_preview_url"].as_str())
                 .map(str::to_string);
             next_audio_url.set(e["next_track_id"].as_i64().zip(url));
-            // Revealed card for the finished track goes into the playlist grid.
             if let Some(tp) = e.get("track").cloned() {
                 played_tracks.update(|v| v.push(tp));
             }
@@ -762,7 +704,6 @@ pub fn RoomPage() -> impl IntoView {
             }
         });
         on!("UserHasFoundAllTheAnswers", move |e| {
-            // PHP emits `{room, user}` — markers track the user object.
             found_all_markers.update(|v| {
                 let u = if e["user"].is_object() { e["user"].clone() } else { e.clone() };
                 if !v.iter().any(|x: &Value| x["id"].as_i64() == u["id"].as_i64()) {
@@ -774,13 +715,10 @@ pub fn RoomPage() -> impl IntoView {
 
         realtime.join(&channel);
         {
-            // Keep the WS keepalive alive for the component's lifetime —
-            // `let _hb` would drop (and cancel) it at the end of this Effect.
             let hb = SendWrapper::new(realtime.start_heartbeat());
             on_cleanup(move || drop(hb));
         }
 
-        // Presence HTTP join + heartbeat + resync on reconnect.
         let hydrate2 = hydrate.clone();
         leptos::task::spawn_local(async move {
             hydrate2(rid);
@@ -811,7 +749,6 @@ pub fn RoomPage() -> impl IntoView {
         }
     });
 
-    // presence-left + socket cleanup on unmount.
     {
         on_cleanup(move || {
             let rid = room_id.get_untracked();
@@ -842,8 +779,6 @@ pub fn RoomPage() -> impl IntoView {
         .map(|u| u.is_administrator || u.is_public_moderator)
         .unwrap_or(false);
 
-    // Init display_chat once when `show` lands — must not clobber the
-    // user's toggle when `room` mutates later (is_playing flips, etc.).
     let chat_inited = RwSignal::new(false);
     Effect::new(move |_| {
         let r = room.get();
@@ -853,7 +788,6 @@ pub fn RoomPage() -> impl IntoView {
         }
     });
 
-    // Memo (Send+Sync) — `Show when=` requires Send closures.
     let is_moderator = Memo::new(move |_| {
         let Some(me) = auth.user.get().map(|u| u.id) else {
             return false;
@@ -863,8 +797,6 @@ pub fn RoomPage() -> impl IntoView {
             .iter()
             .any(|m| m["id"].as_i64() == Some(me))
     });
-    // Reactive props — `me`/`moderators` can land after mount (guest create,
-    // show fetch) so components read signals, not one-shot values.
     let can_vote = Signal::derive(move || auth.user.get().is_some());
     let me_sig = Signal::derive(move || auth.user.get().map(|u| u.id));
     let is_guest_sig = Signal::derive(move || auth.user.get().map(|u| u.is_guest).unwrap_or(true));
@@ -896,8 +828,6 @@ pub fn RoomPage() -> impl IntoView {
                                     </div>
                                 }
                             >
-                        // `Rooms/Password.vue` — the room is locked until the
-                        // right `?password=` is supplied to `show`.
                         <div class="flex flex-1 items-center justify-center">
                             <form
                                 class="w-full max-w-sm space-y-4 rounded-xl border border-white/10 bg-surface-raised/60 p-6"
@@ -922,7 +852,6 @@ pub fn RoomPage() -> impl IntoView {
                                 <button type="submit" class="btn-primary w-full">
                                     {t("Login")}
                                 </button>
-                                // `Tip` — PHP points owners back at `rooms.index`.
                                 <p class="text-center text-xs text-white/50">
                                     {t("If you are the owner of the room and have forgotten the password, you can change it on")}" "
                                     <a href="/rooms" class="underline hover:text-white/80">
@@ -946,7 +875,6 @@ pub fn RoomPage() -> impl IntoView {
                 <div class="room-show-root h-full min-w-0 overflow-x-hidden md:flex"
                     style="height:calc(100dvh - 3.5rem)">
                     <div class="room-show-scroll relative min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:px-12 md:py-8">
-                        // ---- header: title + conn badge + RoomActions
                         <article class="room-show-header flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between md:mb-6 md:gap-3">
                             <div class="flex min-w-0 items-center gap-2 sm:gap-3">
                                 <h1 class="retro-title retro-title--white min-w-0 truncate text-xl sm:text-2xl">
@@ -977,7 +905,6 @@ pub fn RoomPage() -> impl IntoView {
                             </div>
                         </article>
 
-                        // Manual-start tip.
                         <Show when=move || {
                             let r = room.get();
                             !r.is_autostart && !r.is_playing && round.get().map(|x| x.is_playing).unwrap_or(false) == false
@@ -993,7 +920,6 @@ pub fn RoomPage() -> impl IntoView {
                             </div>
                         </Show>
 
-                        // ---- player + input (markers + official bar)
                         <div class="room-show-player mb-2 min-w-0 md:mb-8">
                             <Player
                                 track=track
@@ -1010,7 +936,6 @@ pub fn RoomPage() -> impl IntoView {
                             <AnswerInput round=round track=track current_time=current_time.read_only() volume=volume/>
                         </div>
 
-                        // ---- mobile tabs (MobileRoomHud equivalent)
                         <div class="room-mobile-shell mb-4 md:hidden">
                             <div class="mb-3 flex gap-2">
                                 {["playlist", "ranking", "chat"].iter().map(|tab| {
@@ -1045,13 +970,11 @@ pub fn RoomPage() -> impl IntoView {
                             </Show>
                         </div>
 
-                        // ---- desktop: playlist + ranking side by side
                         <div class="hidden gap-8 md:grid md:grid-cols-2">
                             <PlaylistPanel played_tracks=played_tracks round=round room_id=room_id.get() can_vote=can_vote/>
                             <RankingPanel users=users scores=scores answers_by_user=answers_by_user track=track room_id=room_id.get() me_id=me_sig podium_open=podium_open/>
                         </div>
 
-                        // ---- info card: description + moderators + stats
                         <section class="retro-card mt-8 hidden md:block">
                             <Show when=move || room.get().description.is_some()>
                                 <header class="retro-card__header">
@@ -1116,7 +1039,6 @@ pub fn RoomPage() -> impl IntoView {
                             </main>
                         </section>
 
-                        // ---- public rooms
                         <Show when=move || !public_rooms.get().is_empty()>
                             <section class="retro-card mt-8 hidden md:block">
                                 <main class="retro-card__body">
@@ -1147,12 +1069,8 @@ pub fn RoomPage() -> impl IntoView {
                             </section>
                         </Show>
 
-                        // `<RoomSeoPanel v-if="seo">` — official rooms only.
                         <RoomSeoPanel room=room seo=seo_data/>
 
-                        // `<Adsense v-if="roomAdsEnabled" force-serve>` —
-                        // lobby slot: joined && no round playing && room not
-                        // playing (`adsDisabled`/`ad_free` gated inside Adsense).
                         <Show when=move || {
                             joined.get()
                                 && !round.get().map(|r| r.is_playing).unwrap_or(false)
@@ -1162,8 +1080,6 @@ pub fn RoomPage() -> impl IntoView {
                         </Show>
                     </div>
 
-                    // ---- chat: desktop sidebar / mobile bottom sheet — one
-                    // mount point so we never double-subscribe the WS channel.
                     {move || {
                         let mobile = mobile_tab.get() == "chat";
                         let show = room.get().is_chat_active
@@ -1172,8 +1088,6 @@ pub fn RoomPage() -> impl IntoView {
                         show.then(|| {
                             let r = rt.get().unwrap();
                             let cls = if mobile {
-                                // Shows on mobile; turns into the desktop
-                                // sidebar if the viewport grows mid-session.
                                 "chat-panel flex h-[48dvh] max-h-[32rem] min-h-[24rem] w-full shrink-0 flex-col md:h-full md:max-h-none md:min-h-0 md:w-1/5"
                             } else {
                                 "chat-panel hidden h-full w-1/5 shrink-0 flex-col md:flex"
@@ -1187,7 +1101,6 @@ pub fn RoomPage() -> impl IntoView {
                     }}
                 </div>
 
-                // ---- finalizing overlay + finished modal + share/suggestion modals
                 <Show when=move || finalizing.get() && !round_finished.get()>
                     <div class="round-finalizing-overlay">
                         <div class="round-finalizing-overlay__panel">
@@ -1266,7 +1179,6 @@ fn RoomActions(
                     <span class="hidden md:inline">{t("Share")}</span>
                 </button>
 
-                // Moderator controls — Options + Start/Stop (Controls.vue).
                 <Show when=move || is_moderator.get()>
                     <div class="room-actions__group flex items-center gap-2">
                         <button type="button" class="room-action-btn" on:click=move |_| options_open.set(true)>
@@ -1468,8 +1380,6 @@ fn SuggestionModal(
 }
 
 // ---- RoomOptionsModal ---------------------------------------------------------
-// `Controls.vue` options modal + `EditOptionsForm` — sliders + room flags,
-// `PUT /rooms/{id}/options`. Featured toggle is admin-only (PHP `user.admin`).
 
 #[component]
 fn RoomOptionsModal(
@@ -1490,7 +1400,6 @@ fn RoomOptionsModal(
     let password = RwSignal::new(String::new());
     let saving = RwSignal::new(false);
 
-    // Hydrate from the room each time the modal opens.
     Effect::new(move |_| {
         if open.get() {
             let r = room.get();

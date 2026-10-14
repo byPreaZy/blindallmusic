@@ -1,5 +1,3 @@
-//! `AudiusService` port — discovery-host picking + stream URL.
-
 use std::sync::RwLock;
 use std::time::Duration;
 
@@ -8,10 +6,7 @@ use serde_json::Value;
 
 pub struct AudiusService {
     http: reqwest::Client,
-    /// `services.audius.app_name` — required by the discovery API.
     app_name: String,
-    /// Cached working host (PHP resolves per service instantiation; we
-    /// cache it for the process lifetime and re-resolve on failure).
     host: RwLock<Option<String>>,
 }
 
@@ -33,9 +28,6 @@ impl AudiusService {
         }
     }
 
-    /// `searchTrack` — `{host}/v1/tracks/search?query&limit=10&app_name&search_type=all`.
-    /// PHP returns null on any failure → folded into an empty result here;
-    /// the aggregator only merges valid tracks anyway.
     pub async fn search_track(&self, term: &str) -> ProviderResult {
         if term.trim().is_empty() {
             return Ok(vec![]);
@@ -73,7 +65,6 @@ impl AudiusService {
         Ok(tracks)
     }
 
-    /// `formatTrack` — preview is the live stream URL on the resolved host.
     fn format_track(&self, host: &str, t: &Value) -> ProviderTrack {
         let id = t["id"].as_str().unwrap_or_default();
         let permalink = t["permalink"].as_str();
@@ -100,8 +91,6 @@ impl AudiusService {
         }
     }
 
-    /// `getHost`: GET api.audius.co → shuffle hosts → first healthy
-    /// `/v1/health_check` wins; fallback to hosts[0].
     async fn resolve_host(&self) -> Option<String> {
         if let Some(h) = self.host.read().ok()?.clone() {
             return Some(h);
@@ -122,7 +111,6 @@ impl AudiusService {
             return None;
         }
 
-        // Shuffle — PHP uses shuffle() on the same list.
         use rand::seq::SliceRandom;
         hosts.shuffle(&mut rand::rng());
 
@@ -146,7 +134,6 @@ impl AudiusService {
         picked
     }
 
-    /// `getLiveTrackPreview` — `{host}/v1/tracks/{id}/stream`.
     pub async fn live_track_preview(&self, provider_id: &str) -> Option<String> {
         let host = self.resolve_host().await?;
         Some(format!("{host}/v1/tracks/{provider_id}/stream"))

@@ -1,5 +1,3 @@
-//! `local_tracks` — `LocalTrackService` + `ModerationLocalTrackService` port.
-
 use serde_json::{json, Value};
 use sqlx::postgres::PgPool;
 use sqlx::Row;
@@ -14,8 +12,6 @@ impl LocalTrackRepo {
         Self { pool }
     }
 
-    /// `unique:local_tracks,track_name,NULL,id,artist_name,{artist}` —
-    /// uniqueness is on the (artist_name, track_name) pair.
     pub async fn name_taken(
         &self,
         artist_name: &str,
@@ -35,7 +31,6 @@ impl LocalTrackRepo {
             == 1)
     }
 
-    /// `store` — insert after files are uploaded.
     pub async fn create(
         &self,
         artist_name: &str,
@@ -62,8 +57,6 @@ impl LocalTrackRepo {
         
     }
 
-    /// `searchTrack` — provider-format results (limit 10, newest first).
-    /// Returns (id, artist, track, artwork_path); URLs are caller-formatted.
     pub async fn search(
         &self,
         term: &str,
@@ -91,7 +84,6 @@ impl LocalTrackRepo {
             .collect())
     }
 
-    /// File paths (for `audio` streaming + `destroy` cleanup).
     pub async fn paths(&self, id: i64) -> Result<Option<(String, String)>, sqlx::Error> {
         sqlx::query("SELECT audio_path, artwork_path FROM local_tracks WHERE id = $1")
             .bind(id)
@@ -100,10 +92,6 @@ impl LocalTrackRepo {
             .map(|o| o.map(|r| (r.get("audio_path"), r.get("artwork_path"))))
     }
 
-    /// `ModerationLocalTrackService::paginateTracks` — search, whitelisted
-    /// sorts, `playlists_usage_count` subquery, uploader join.
-    /// `applySearch`: name/artist LIKE + `ctype_digit` terms also match
-    /// the local-track `id` and uploader `user_id` exactly.
     pub async fn paginate(
         &self,
         search: Option<&str>,
@@ -177,9 +165,6 @@ impl LocalTrackRepo {
         ))
     }
 
-    /// `Track::where('provider','local')->where('provider_id', $id)->get()`
-    /// — playlist rows pointing at this upload (`deleteTrack` dispatches
-    /// `ProcessDeletedTrack` for each).
     pub async fn linked_track_ids(&self, id: i64) -> Result<Vec<i64>, sqlx::Error> {
         sqlx::query_scalar(
             "SELECT id FROM tracks WHERE provider = 'local' AND provider_id = $1",
@@ -189,7 +174,6 @@ impl LocalTrackRepo {
         .await
     }
 
-    /// `update` — names only (PHP `UpdateLocalTrackRequest`).
     pub async fn update(
         &self,
         id: i64,

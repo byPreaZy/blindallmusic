@@ -1,5 +1,3 @@
-//! Profile endpoints — `ProfileController` port.
-
 use crate::auth::CurrentUser;
 use crate::state::AppState;
 use axum::extract::{Path, Query, State};
@@ -9,8 +7,6 @@ use axum::Json;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-/// `User::photo` accessor — `Storage::url(photo_path)` or the ui-avatars
-/// fallback (initials, matching `defaultPhotoUrl` for users).
 pub fn photo_url(state: &AppState, photo_path: &str, name: &str) -> String {
     if !photo_path.is_empty() {
         return state.storage.url(photo_path);
@@ -30,9 +26,6 @@ pub fn photo_url(state: &AppState, photo_path: &str, name: &str) -> String {
     )
 }
 
-/// `GET /api/v1/profile/{user}` — `ProfileController::show` header block.
-/// Guests get 404 (PHP `isGuest()` abort). `enrichUserPayload` adds
-/// `donor_perks`/`is_supporter`; `donation_summary` when opted-in + >0.
 pub async fn show(State(state): State<AppState>, Path(user_id): Path<i64>) -> Response {
     let mut profile = match state.profiles.header(user_id).await {
         Ok(Some(p)) => p,
@@ -60,7 +53,6 @@ pub async fn show(State(state): State<AppState>, Path(user_id): Path<i64>) -> Re
         .unwrap_or(false)
         && summary["donation_count"].as_i64().unwrap_or(0) > 0;
     if let Some(o) = profile.as_object_mut() {
-        // `User::photo` accessor — resolve storage path / ui-avatars fallback.
         let name = o["name"].as_str().unwrap_or("").to_string();
         let path = o["photo"].as_str().unwrap_or("").to_string();
         o.insert("photo".into(), json!(photo_url(&state, &path, &name)));
@@ -71,7 +63,6 @@ pub async fn show(State(state): State<AppState>, Path(user_id): Path<i64>) -> Re
         }
         o.insert("donor_perks".into(), json!(perks));
         o.insert("is_supporter".into(), json!(is_supporter));
-        // `shouldShowDonationHistory` — opted in AND has donated.
         if show_donations {
             o.insert("donation_summary".into(), summary);
         }
@@ -86,7 +77,6 @@ pub struct ScoresQuery {
     direction: Option<String>,
 }
 
-/// `GET /api/v1/profile/{user}/scores` — tab `scores`.
 pub async fn scores(
     State(state): State<AppState>,
     Path(user_id): Path<i64>,
@@ -109,7 +99,6 @@ pub struct PageQuery {
     page: Option<i64>,
 }
 
-/// `GET /api/v1/profile/{user}/likes` — tab `likes`.
 pub async fn likes(
     State(state): State<AppState>,
     Path(user_id): Path<i64>,
@@ -121,7 +110,6 @@ pub async fn likes(
     }
 }
 
-/// `GET /api/v1/profile/{user}/bookmarks` — tab `bookmarks`.
 pub async fn bookmarks(
     State(state): State<AppState>,
     Path(user_id): Path<i64>,
@@ -133,9 +121,6 @@ pub async fn bookmarks(
     }
 }
 
-/// `GET /api/v1/profile/{user}/minigames` — `ProfilePageService::minigames`:
-/// all 5 game defs + per-type totals, paginated session history, leaderboard
-/// context (`user_rank`/`user_total_score`), rankings URL.
 pub async fn profile_minigames(
     State(state): State<AppState>,
     Path(user_id): Path<i64>,
@@ -206,7 +191,6 @@ pub async fn profile_minigames(
     .into_response()
 }
 
-/// `GET /api/v1/profile/{user}/score-evolution`.
 pub async fn score_evolution(State(state): State<AppState>, Path(user_id): Path<i64>) -> Response {
     match state.profiles.score_evolution(user_id).await {
         Ok(v) => Json(json!({"score_evolution": v})).into_response(),
@@ -214,13 +198,9 @@ pub async fn score_evolution(State(state): State<AppState>, Path(user_id): Path<
     }
 }
 
-/// `GET /api/v1/profile/{user}/highlights` — deferred prop port
-/// (`performance` + `rank` + `top_rooms` + `badges`).
 pub async fn highlights(State(state): State<AppState>, Path(user_id): Path<i64>) -> Response {
     match state.profiles.highlights(user_id).await {
         Ok(mut v) => {
-            // Resolve `room.photo` to a URL (`Room::photo` accessor — storage
-            // or the ui-avatars room fallback).
             if let Some(rooms) = v["top_rooms"].as_array_mut() {
                 for r in rooms.iter_mut() {
                     let path = r["room"]["photo"].as_str().unwrap_or("").to_string();
@@ -237,8 +217,6 @@ pub async fn highlights(State(state): State<AppState>, Path(user_id): Path<i64>)
             let elo_rank = v["rank"]["position"].as_i64();
             let m = &v["badge_metrics"];
             let g = |k: &str| m[k].as_i64().unwrap_or(0);
-            // `ProfileBadgeService::forUser` — same 8 definitions, ordered
-            // earned-first like PHP's `sortByDesc('earned')`.
             let mut badges = vec![
                 badge("supporter", "crown", is_supporter, is_supporter as i64, 1, "/docs/support"),
                 badge("creator", "sparkles", g("rooms_created_count") >= 1, g("rooms_created_count"), 1, "/rooms/create"),
@@ -267,8 +245,6 @@ pub async fn highlights(State(state): State<AppState>, Path(user_id): Path<i64>)
     }
 }
 
-/// `Room::defaultPhotoUrl` — the 5-letter random-color ui-avatars variant
-/// (`HasPicture::defaultPhotoUrl`, rooms branch).
 fn room_photo_url(state: &AppState, path: &str, name: &str) -> String {
     if !path.is_empty() {
         if path.starts_with("http") {
@@ -283,7 +259,6 @@ fn room_photo_url(state: &AppState, path: &str, name: &str) -> String {
 }
 
 fn badge(id: &str, icon: &str, earned: bool, current: i64, target: i64, url: &str) -> Value {
-    // PHP lang keys use spaces (`Profile badge top elo`).
     let key = id.replace('_', " ");
     json!({
         "id": id,
@@ -297,7 +272,6 @@ fn badge(id: &str, icon: &str, earned: bool, current: i64, target: i64, url: &st
     })
 }
 
-/// `DELETE /api/v1/profile/likes/{track}` — `unlikeTrack` (own votes only).
 pub async fn unlike_track(
     State(state): State<AppState>,
     Path(track_id): Path<i64>,
@@ -305,7 +279,6 @@ pub async fn unlike_track(
 ) -> Response {
     match state.profiles.unlike_track(user.id, track_id).await {
         Ok(()) => {
-            // PHP `UpdateUserLevel::dispatch($user, 'likes_count')`.
             state
                 .levels
                 .dispatch(user.id, blindall_db::LevelTrigger::LikesCount);

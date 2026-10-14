@@ -1,7 +1,3 @@
-//! `t()` — locale-aware strings keyed by the same English source keys as
-//! `lang/{fr,es}.json`. `en` falls through to the key itself, matching
-//! Laravel's `__()` behaviour for untranslated entries.
-
 use leptos::prelude::ArcRwSignal;
 use leptos::reactive::traits::{Get, Set};
 
@@ -9,16 +5,10 @@ thread_local! {
     static LOCALE: ArcRwSignal<&'static str> = ArcRwSignal::new("fr");
 }
 
-/// Current UI locale (`fr` default, `en`/`es` via URL prefix or switcher).
-/// Reading inside a view tracks the signal — switching locale re-renders.
 pub fn locale() -> &'static str {
     LOCALE.with(|l| l.get())
 }
 
-/// Persist + apply a locale (`UserDropdown` switcher / `language` route).
-/// A real change reloads the page — `t()` renders static text nodes, so a
-/// fresh mount is how every string picks up the new language (same model
-/// as Inertia's `router.visit` on the `language` route).
 pub fn set_locale(l: &str) {
     let l: &'static str = match l {
         "en" => "en",
@@ -40,7 +30,6 @@ pub fn set_locale(l: &str) {
     }
 }
 
-/// Startup: restore the persisted locale.
 pub fn init_locale() {
     if let Some(v) = web_sys::window()
         .and_then(|w| w.local_storage().ok().flatten())
@@ -64,12 +53,8 @@ pub fn t<'a>(key: &'a str) -> &'a str {
     }
 }
 
-/// Laravel `Head::title(key)` parity — pages render `{title} | Blind'All Music`.
-/// Pass an already-translated/literal string (PHP title args are `__()`'d
-/// by the controller); `None` resets to the bare app name.
 pub fn set_title(title: Option<&str>) {
     if let Some(d) = web_sys::window().and_then(|w| w.document()) {
-        // SEO landing titles already carry the suffix in the lang file.
         let title = match title {
             Some(t) if t.ends_with("| Blind'All Music") => t.to_string(),
             Some(t) if !t.is_empty() => format!("{t} | Blind'All Music"),
@@ -79,7 +64,6 @@ pub fn set_title(title: Option<&str>) {
     }
 }
 
-/// Convenience: `set_title` with a translated key.
 pub fn set_title_key(key: &str) {
     set_title(Some(t(key)));
 }
@@ -2355,7 +2339,6 @@ fn fr<'a>(key: &'a str) -> &'a str {
     }
 }
 
-/// `t()` with `:name` placeholder replacement (`page.props.language` style).
 #[allow(dead_code)]
 pub fn tr(key: &str, replace: &[(&str, String)]) -> String {
     let base = match t(key) {

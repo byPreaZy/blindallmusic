@@ -1,7 +1,3 @@
-//! Moderation — `TrashedMessageController`, `BannedUserController`,
-//! `UserManagementController`, `ModeratorController` backing queries.
-//! Bans use the mchev/banhammer `bans` table.
-
 use serde_json::{json, Value};
 use sqlx::postgres::PgPool;
 use sqlx::Row;
@@ -41,8 +37,6 @@ impl ModerationRepo {
 
     // ---- trashed messages ---------------------------------------------------
 
-    /// `TrashedMessageController::index` — soft-deleted messages, search
-    /// on body or user name, latest deleted first.
     pub async fn trashed_messages(
         &self,
         search: Option<&str>,
@@ -106,7 +100,6 @@ impl ModerationRepo {
         })
     }
 
-    /// `restore` / `forceDelete` — message must be trashed.
     pub async fn restore_message(&self, message_id: i64) -> Result<bool, sqlx::Error> {
         sqlx::query(
             "UPDATE messages SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL",
@@ -127,7 +120,6 @@ impl ModerationRepo {
 
     // ---- banned users -------------------------------------------------------
 
-    /// `BannedUserController::index` — users having at least one ban row.
     pub async fn banned_users(
         &self,
         search: Option<&str>,
@@ -200,7 +192,6 @@ impl ModerationRepo {
         })
     }
 
-    /// `formatBan` for all (non-deleted) bans of a user.
     async fn ban_history(&self, user_id: i64, sensitive: bool) -> Result<Vec<Value>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT b.id, b.comment, b.created_at, b.expired_at, b.ip, \
@@ -234,9 +225,6 @@ impl ModerationRepo {
             .collect())
     }
 
-    /// `$user->isBanned()` — active (non-deleted, unexpired) ban exists.
-    /// `PageController::bannedUser` — latest ban row for the banned-page
-    /// payload (`comment`, `expired_at`).
     pub async fn latest_ban(&self, user_id: i64) -> Result<Option<Value>, sqlx::Error> {
         let row = sqlx::query(
             "SELECT comment, expired_at FROM bans \
@@ -268,7 +256,6 @@ impl ModerationRepo {
         .map(|n| n > 0)
     }
 
-    /// `$user->unban()` — soft-delete active bans.
     pub async fn unban(&self, user_id: i64) -> Result<bool, sqlx::Error> {
         sqlx::query(
             "UPDATE bans SET deleted_at = $1 \
@@ -286,7 +273,6 @@ impl ModerationRepo {
 
     // ---- user management ----------------------------------------------------
 
-    /// `paginateUsers` — non-guest users + counts, `formatListUser` shape.
     pub async fn users(
         &self,
         search: Option<&str>,
@@ -375,8 +361,6 @@ impl ModerationRepo {
         })
     }
 
-    /// `formatUserDetail` — same as list row for now (the rich PHP version
-    /// adds conversations/IP forensics, ported later if needed).
     pub async fn user_detail(&self, user_id: i64, sensitive: bool) -> Result<Option<Value>, sqlx::Error> {
         let row = sqlx::query(
             "SELECT id, name, photo_path, created_at, provider, is_guest, \
@@ -407,7 +391,6 @@ impl ModerationRepo {
         Ok(Some(v))
     }
 
-    /// `$user->ban([...])` — insert a ban row (created_by = moderator id).
     pub async fn ban(
         &self,
         user_id: i64,
@@ -436,7 +419,6 @@ impl ModerationRepo {
         Ok(())
     }
 
-    /// Staff flag check used by `ban` (cannot ban admins/moderators).
     pub async fn is_staff(&self, user_id: i64) -> Result<bool, sqlx::Error> {
         sqlx::query_scalar::<_, i64>(
             "SELECT (is_administrator OR EXISTS(\
@@ -454,7 +436,6 @@ impl ModerationRepo {
 
     // ---- dashboard ----------------------------------------------------------
 
-    /// `ModerationDashboard` stats.
     pub async fn stats(&self) -> Result<Value, sqlx::Error> {
         let one = |sql: &'static str| {
             let pool = self.pool.clone();
@@ -482,7 +463,6 @@ impl ModerationRepo {
         }))
     }
 
-    /// Public moderators list — users attached to any public room.
     pub async fn moderators(&self, page: i64, per_page: i64) -> Result<Page, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT DISTINCT u.id, u.name, u.photo_path, u.created_at FROM users u \

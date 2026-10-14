@@ -1,9 +1,3 @@
-//! Home — port of `Home/Index.vue` + `PublicRoomsGrid` + `RoomCard` +
-//! `HomeSidebar` + `TopPlayers` + `DonationGoalCard`.
-//!
-//! Data: `GET /api/v1/home` (tabs, categories, popularity-sorted catalog,
-//! weekly top 10, featured rooms) + `GET /api/v1/donations/progress`.
-
 use crate::api;
 use crate::auth::Auth;
 use crate::i18n::t;
@@ -90,7 +84,6 @@ impl HomeRoom {
     }
 }
 
-/// `useRoomPoster` — gradient index + initials for photo-less rooms.
 fn poster_gradient(r: &HomeRoom) -> &'static str {
     const G: [&str; 8] = [
         "from-brand-deep to-brand-midnight",
@@ -120,7 +113,6 @@ fn poster_initials(name: &str) -> String {
     }
 }
 
-/// `useRoomPublicChannel` card states.
 #[derive(PartialEq, Clone, Copy)]
 enum CardState {
     Hot,
@@ -171,11 +163,6 @@ fn cta_class(s: CardState) -> &'static str {
     }
 }
 
-/// `useRoomPublicChannel` — live room-card state via `room.public:{id}`
-/// (`RoomPublicState`) + `public-state` polling every 30 s, subscribed only
-/// while the card is inside the viewport (IntersectionObserver 120 px root
-/// margin, PHP parity). Member-count deltas are reported to the tab
-/// player-count chips (`reportTabPlayerDelta`).
 fn use_room_public_channel(
     room: &HomeRoom,
     card_ref: NodeRef<leptos::html::Article>,
@@ -197,10 +184,6 @@ fn use_room_public_channel(
     let subscribed = StoredValue::new(false);
     let shared_rt = use_context::<crate::app::SharedRealtime>();
     let tab_counts = use_context::<RwSignal<Value>>();
-    // Async callbacks (poll futures, ws listeners, observer ticks, the bump
-    // timeout) can fire after the card's owner is disposed — guard every
-    // reactive access behind this flag, flipped in `on_cleanup` before the
-    // signals die.
     let disposed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
 
     let report_delta = {
@@ -251,7 +234,6 @@ fn use_room_public_channel(
         })
     };
 
-    // `fetchInitialPublicState` + `setInterval` polling.
     let poll: Rc<dyn Fn()> = {
         let apply_public_state = apply_public_state.clone();
         Rc::new(move || {
@@ -306,7 +288,6 @@ fn use_room_public_channel(
         })
     };
 
-    // IntersectionObserver — subscribe when the card is (nearly) on screen.
     let observer = StoredValue::new_local(
         None::<(
             web_sys::IntersectionObserver,
@@ -347,8 +328,6 @@ fn use_room_public_channel(
         }
     });
     on_cleanup(move || {
-        // `unsubscribe` inline — the Rc closure can't cross the Send+Sync
-        // boundary that `on_cleanup` requires.
         if subscribed.get_value() {
             subscribed.set_value(false);
             interval_handle.set_value(None);
@@ -367,7 +346,6 @@ fn use_room_public_channel(
     (member_count, is_playing, track_index, bump)
 }
 
-/// `Room.vue` catalog variant — photo 16/9, badge, deck (name + stats + CTA).
 #[component]
 fn RoomCard(room: HomeRoom) -> impl IntoView {
     let href = format!("/rooms/{}", if room.slug.is_empty() { room.id.to_string() } else { room.slug.clone() });
@@ -453,7 +431,6 @@ fn RoomCard(room: HomeRoom) -> impl IntoView {
                     <span class="game-card__scanlines" aria-hidden="true" />
                     <div class="absolute inset-0 bg-gradient-to-t from-brand-midnight via-brand-midnight/50 to-transparent" />
 
-                    // Equalizer icon while playing (PlayingIcon)
                     {move || playing.get().then(|| view! {
                         <div class=format!("pointer-events-none absolute inset-x-0 top-3 flex justify-center {}", if with_players.get() { "text-brand-secondary" } else { "text-brand-primary" })>
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 24" class="h-8 w-14 drop-shadow-lg sm:h-10 sm:w-16" fill="currentColor" aria-hidden="true">
@@ -537,7 +514,6 @@ fn RoomCard(room: HomeRoom) -> impl IntoView {
     }
 }
 
-/// `HomeCategoryFilter` — multi-select dropdown with counts.
 #[component]
 fn CategoryFilter(
     categories: RwSignal<Vec<Value>>,
@@ -628,7 +604,6 @@ fn CategoryFilter(
     }
 }
 
-/// `TopPlayers` — podium 2/1/3 + ranked list 4-10.
 #[component]
 fn TopPlayers(list: Vec<Value>) -> impl IntoView {
     let podium: Vec<(usize, Value)> = {
@@ -736,7 +711,6 @@ fn urlencoding(s: &str) -> String {
         .collect()
 }
 
-/// `DonationGoalCard` — monthly community support widget (simplified).
 #[component]
 fn DonationGoalCard() -> impl IntoView {
     let goal = RwSignal::new(Option::<Value>::None);
@@ -816,7 +790,6 @@ fn DonationGoalCard() -> impl IntoView {
     }
 }
 
-/// `HomeSidebar` — donation card + featured + top 10 + quick links.
 #[component]
 fn HomeSidebar(
     weekly: RwSignal<Vec<Value>>,
@@ -878,7 +851,6 @@ fn HomeSidebar(
                     </div>
                 </div>
 
-                // `OuvragePromo` — partner banner (author's other product).
                 <div class="border-t border-white/10 p-4">
                     <p class="game-section-kicker">{t("Partner")}</p>
                     <h3 class="retro-title retro-title--secondary mb-3 text-sm">{t("For artisans and self-employed")}</h3>
@@ -971,9 +943,6 @@ pub fn HomePage() -> impl IntoView {
         });
     };
 
-    // Initial fetch runs through the refetch Effect below (it fires once on
-    // creation) — no eager call here, that would double-fetch.
-    // Tab switch → reset filter + page, refetch.
     let switch_tab = move |id: &'static str| {
         if tab.get_untracked() == id {
             return;
@@ -982,21 +951,17 @@ pub fn HomePage() -> impl IntoView {
         tab.set(id.to_string());
         cat_ids.set(vec![]);
         page.set(1);
-        // `cat_ids.set` re-triggers the refetch effect only when it changed.
         if !had_cats {
             fetch_home();
         }
     };
 
-    // Filter / page changes → refetch.
     let refetch = StoredValue::new(fetch_home);
     Effect::new(move |_| {
         cat_ids.track();
         refetch.with_value(|f| f());
     });
 
-    // `?search=` — navbar search: replaces the whole catalog (`v-else`
-    // in Home/Index.vue), no sidebar while searching.
     let query = use_query_map();
     let search_results = RwSignal::new(Vec::<HomeRoom>::new());
     let search_term = Signal::derive(move || {
@@ -1006,12 +971,10 @@ pub fn HomePage() -> impl IntoView {
         let s = search_term.get();
         if s.is_empty() {
             search_results.set(vec![]);
-            // `HomeHead::apply` — back to the default home head.
             crate::i18n::set_title_key("Free multiplayer music quizzes");
             crate::seo::apply_page("/", t("Home meta description"));
             return;
         }
-        // `HomeHead::applySearch` — search-mode head.
         crate::i18n::set_title_key("Search Results");
         crate::seo::apply_page("/", t("Home search meta description"));
         leptos::task::spawn_local(async move {
@@ -1033,7 +996,6 @@ pub fn HomePage() -> impl IntoView {
     let navigate = StoredValue::new(use_navigate());
     let load_more = move || {
         page.update(|p| *p += 1);
-        // append mode — fetch and merge
         let tab_v = tab.get_untracked();
         let cats = cat_ids.get_untracked();
         let pg = page.get_untracked();
@@ -1071,7 +1033,6 @@ pub fn HomePage() -> impl IntoView {
         <div class="w-full px-4 py-6 md:px-12">
             <h1 class="sr-only">"Blind'All Music, "{t("Free multiplayer music quizzes")}</h1>
 
-            // Search results — replaces the whole layout (`v-if` in Index.vue).
             {move || (!search_term.get().is_empty()).then(|| view! {
                 <section class="mb-12">
                     <h2 class="sr-only">{t("Search Results")}</h2>
@@ -1097,7 +1058,6 @@ pub fn HomePage() -> impl IntoView {
             })}
 
             <div class="flex flex-col gap-4 lg:gap-8" class:hidden=move || !search_term.get().is_empty()>
-                // Mobile hero + donation bar
                 <div class="space-y-2 lg:hidden">
                     <div class="retro-hero flex items-center gap-4">
                         <div class="retro-hero__icon">

@@ -1,6 +1,3 @@
-//! Misc public endpoints — `PageController::show/bannedUser`,
-//! `ContactController::send` port.
-
 use crate::state::AppState;
 use axum::{
     extract::{Path, State},
@@ -11,9 +8,6 @@ use axum::{
 use serde::Deserialize;
 use serde_json::json;
 
-/// `GET /api/v1/pages/{slug}` — `PageController::show` (latest revision).
-/// `page.date` — `revised_at->translatedFormat('l j F Y H:i:s')` localized
-/// from the request `X-Locale` header.
 pub async fn page(
     State(state): State<AppState>,
     Path(slug): Path<String>,
@@ -43,7 +37,6 @@ pub async fn page(
     }
 }
 
-/// `translatedFormat('l j F Y H:i:s')` — "lundi 13 octobre 2026 14:30:00".
 fn format_long_date(dt: chrono::DateTime<chrono::Utc>, locale: &str) -> String {
     use chrono::Datelike;
     const DAYS: [[&str; 7]; 3] = [
@@ -66,15 +59,10 @@ fn format_long_date(dt: chrono::DateTime<chrono::Utc>, locale: &str) -> String {
     )
 }
 
-/// `GET /api/v1/user/banned` — `bannedUser`: `{"ban": null}` when the
-/// authed user isn't banned (Laravel renders the page with a null prop).
-/// Unauthenticated guests 403 like PHP's `abort(403)`.
 pub async fn banned_user(
     State(state): State<AppState>,
     user: crate::auth::OptionalUser,
 ) -> Response {
-    // `PageController::bannedUser` — the route is outside `logout.banned` so
-    // a banned token still resolves here; guests get PHP's `abort(403)`.
     let Some(user) = user.0 else {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "banned"}))).into_response();
     };
@@ -86,7 +74,6 @@ pub async fn banned_user(
     Json(json!({
         "ban": ban.map(|b| json!({
             "comment": b["comment"].as_str().unwrap_or("Votre adresse IP a été bloquée"),
-            // `$ban->expired_at->diffForHumans() ?? 'jamais'` — FR diff.
             "expired_at": b["expired_at"]
                 .as_str()
                 .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
@@ -97,7 +84,6 @@ pub async fn banned_user(
     .into_response()
 }
 
-/// Carbon `diffForHumans()` on a FUTURE date — "dans 3 jours".
 fn diff_for_humans_fr_in(d: chrono::DateTime<chrono::Utc>) -> String {
     let secs = (d - chrono::Utc::now()).num_seconds().max(1);
     let (n, unit) = if secs < 60 {
@@ -125,8 +111,6 @@ pub struct ContactBody {
     message: String,
 }
 
-/// `POST /api/v1/contact` — `ContactController::send`: mail to the
-/// `mail.from.address` mailbox, from/reply-to the sender.
 pub async fn contact(
     State(state): State<AppState>,
     user: crate::auth::OptionalUser,
@@ -146,8 +130,6 @@ pub async fn contact(
             .replace('>', "&gt;")
             .replace('\n', "<br>")
     };
-    // `ContactMessage::toMail` — subject uses the sender name (or
-    // "Visiteur"), body starts with "name: email" when authed.
     let subject = match &user.0 {
         Some(u) => format!("Message de {}", u.name),
         None => "Message de Visiteur".to_string(),
@@ -165,7 +147,6 @@ pub async fn contact(
         ),
         _ => format!("<p>{}</p>", esc(&body.message)),
     };
-    // PHP notifies the User row owning `mail.from.address` — the mailbox.
     let _ = crate::mail::send_opts(
         &state.http,
         &state.mail,

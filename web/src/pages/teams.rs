@@ -1,6 +1,3 @@
-//! Teams — `/teams` (index + search + create) and `/teams/:id` (show with
-//! member contributions + owner controls). Ports `Teams/Index|Create|Show`.
-
 use crate::api;
 use crate::auth::use_auth;
 use crate::i18n::t;
@@ -15,8 +12,6 @@ use serde_json::{json, Value};
 pub fn TeamsPage() -> impl IntoView {
     crate::i18n::set_title_key("Teams");
     let auth = use_auth();
-    // `Route::resource('teams')` sits in `auth` + `not.guest` — anonymous
-    // users are sent to `/login`, guest accounts get a 404.
     crate::auth::require_registered(auth);
     let navigate = StoredValue::new(use_navigate());
     let teams = RwSignal::new(Vec::<Value>::new());
@@ -28,7 +23,6 @@ pub fn TeamsPage() -> impl IntoView {
     let show_create = RwSignal::new(false);
     let new_name = RwSignal::new(String::new());
     let busy = RwSignal::new(false);
-    // `viewer` — PHP `auth.user` pending/declined request ids + team_id.
     let viewer = RwSignal::new(Value::Null);
 
     Effect::new(move |_| {
@@ -74,7 +68,6 @@ pub fn TeamsPage() -> impl IntoView {
 
     view! {
         <div class="mx-auto max-w-6xl px-4 py-8">
-            // PHP `Teams/Index.vue` centered hero + tagline + CTAs.
             <div class="mx-auto mb-10 text-center">
                 <h1 class="mb-4 bg-gradient-to-r from-white via-violet-100 to-fuchsia-200 bg-clip-text text-4xl font-black tracking-tight text-transparent sm:text-5xl md:text-6xl">
                     {t("Teams")}
@@ -112,7 +105,6 @@ pub fn TeamsPage() -> impl IntoView {
                 </div>
             </div>
 
-            // PHP search — centered max-w-xl.
             <div class="mx-auto mb-10 max-w-xl">
                 <input type="text" placeholder={t("Search a team")}
                     class="form-input w-full rounded-xl border-white/10 bg-surface-base/80 py-3 pl-11 text-white placeholder-white/40"
@@ -149,8 +141,6 @@ pub fn TeamsPage() -> impl IntoView {
                         </div>
                     }
                 >
-                    // PHP `Teams/Index.vue` card grid — photo, seats badge,
-                    // Squad score / Rounds together boxes, join button states.
                     <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                         <For
                             each=move || teams.get()
@@ -341,7 +331,6 @@ pub fn TeamShowPage() -> impl IntoView {
         });
     };
 
-    // PHP `formatNumber` — ≥1000 locale-grouped, else one decimal.
     fn fmt_num(n: f64) -> String {
         if n >= 1000.0 {
             let s = format!("{:.1}", n);
@@ -360,7 +349,6 @@ pub fn TeamShowPage() -> impl IntoView {
         }
     }
 
-    // PHP `formatDate` — `toLocaleString(locale, {dateStyle:'medium',timeStyle:'short'})`.
     fn fmt_date(iso: &str) -> Option<String> {
         if iso.is_empty() {
             return None;
@@ -399,8 +387,6 @@ pub fn TeamShowPage() -> impl IntoView {
                     let my_team = viewer["is_member"].as_bool().unwrap_or(false);
                     let requested = viewer["has_pending_request"].as_bool().unwrap_or(false);
                     let declined = viewer["has_declined_request"].as_bool().unwrap_or(false);
-                    // PHP shows `Send a join request` to any logged-in
-                    // non-member (even one already in a team).
                     let logged_in = viewer["logged_in"].as_bool().unwrap_or(false);
                     let can_pic = viewer["can_change_team_picture"].as_bool().unwrap_or(false);
                     let members = d["members"].as_array().cloned().unwrap_or_default();
@@ -412,7 +398,6 @@ pub fn TeamShowPage() -> impl IntoView {
 
                     view! {
                         <div>
-                            // ← "All squads"
                             <div class="mb-6 px-4">
                                 <A href="/teams" attr:class="inline-flex items-center gap-2 text-sm font-medium text-violet-300/90 transition hover:text-violet-200">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -422,7 +407,6 @@ pub fn TeamShowPage() -> impl IntoView {
                                 </A>
                             </div>
 
-                            // Hero — violet/fuchsia gradient card.
                             <div class="relative mx-4 mb-8 overflow-hidden rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-950/70 via-neutral-900 to-fuchsia-950/40 px-6 py-8 shadow-[0_0_48px_-12px_rgba(139,92,246,0.3)] sm:px-10 sm:py-10">
                                 <div class="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-fuchsia-500/10 blur-3xl"></div>
                                 <div class="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:gap-10">
@@ -463,7 +447,6 @@ pub fn TeamShowPage() -> impl IntoView {
                                 </div>
                             </div>
 
-                            // Stats — 3 cards.
                             <div class="mx-4 mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
                                 <div class="rounded-xl border border-neutral-700/70 bg-neutral-900/50 px-4 py-4 text-center sm:text-left">
                                     <div class="text-[10px] font-bold uppercase tracking-wider text-neutral-500">{t("Rounds played")}</div>
@@ -490,7 +473,6 @@ pub fn TeamShowPage() -> impl IntoView {
                                 <div class="mx-4 mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{e}</div>
                             })}
 
-                            // Manage squad — owner only (`user.id === team.user_id`).
                             {is_owner.then(|| {
                                 let photo_input = NodeRef::<leptos::html::Input>::new();
                                 view! {
@@ -553,7 +535,6 @@ pub fn TeamShowPage() -> impl IntoView {
                                 }
                             })}
 
-                            // Squad roster card.
                             <div class="mx-4 rounded-xl border border-white/10 bg-surface-raised/60">
                                 <div class="flex w-full flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
                                     <span class="text-sm font-bold text-neutral-200">{t("Squad roster")}</span>
@@ -653,8 +634,6 @@ pub fn TeamShowPage() -> impl IntoView {
                                 </ul>
                             </div>
 
-                            // Footer actions — PHP order: Delete (solo owner) /
-                            // Leave (member) / join-request states.
                             <div class="mx-4 mt-8 flex flex-wrap items-center gap-3">
                                 {(is_owner && single_member).then(|| view! {
                                     <button type="button" class="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500"

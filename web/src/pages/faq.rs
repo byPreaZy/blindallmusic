@@ -1,6 +1,3 @@
-//! FAQ — `/faq`: searchable accordion with auth-gated up/down votes.
-//! Ports `Faq/Index` (6 per page like PHP).
-
 use crate::api;
 use crate::auth::use_auth;
 use crate::i18n::t;

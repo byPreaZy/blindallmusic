@@ -1,6 +1,3 @@
-//! Admin API — `auth.administrator` routes: users CRUD, dashboard
-//! maintenance (`rounds:force-clear`, `cache:clear`, `topusers:weekly`).
-
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -24,7 +21,6 @@ pub struct UsersQuery {
     per_page: Option<i64>,
 }
 
-/// `GET /api/v1/admin/users` — filterable list (search/role/trashed).
 pub async fn users(
     State(state): State<AppState>,
     Query(q): Query<UsersQuery>,
@@ -57,7 +53,6 @@ pub struct CreateUserBody {
     is_administrator: bool,
 }
 
-/// `POST /api/v1/admin/users`.
 pub async fn create_user(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
@@ -95,7 +90,6 @@ pub struct UpdateUserBody {
     password: Option<String>,
 }
 
-/// `PUT /api/v1/admin/users/{user}`.
 pub async fn update_user(
     State(state): State<AppState>,
     Path(user_id): Path<i64>,
@@ -129,7 +123,6 @@ pub async fn update_user(
     }
 }
 
-/// `DELETE /api/v1/admin/users/{user}` — soft delete.
 pub async fn delete_user(
     State(state): State<AppState>,
     Path(user_id): Path<i64>,
@@ -145,7 +138,6 @@ pub async fn delete_user(
     }
 }
 
-/// `PUT /api/v1/admin/users/{user}/restore`.
 pub async fn restore_user(
     State(state): State<AppState>,
     Path(user_id): Path<i64>,
@@ -163,7 +155,6 @@ pub async fn restore_user(
 
 // ---- maintenance -----------------------------------------------------------
 
-/// `POST /api/v1/admin/force-clear-rounds` — stop actors + close rounds.
 pub async fn force_clear_rounds(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
@@ -183,8 +174,6 @@ pub async fn force_clear_rounds(
     }
 }
 
-/// `POST /api/v1/admin/clear-cache` — `cache:clear`: delete all keys under
-/// the Laravel cache prefix (scores/presence keys live outside it).
 pub async fn clear_cache(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
     if !user.is_administrator {
         return forbidden();
@@ -219,8 +208,6 @@ pub async fn clear_cache(State(state): State<AppState>, CurrentUser(user): Curre
     Json(json!({"deleted_keys": deleted})).into_response()
 }
 
-/// `POST /api/v1/admin/regenerate-top-10` — recompute + write the
-/// PHP-serialized `weekly-top-10-users` cache key.
 pub async fn regenerate_top_10(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
@@ -254,7 +241,6 @@ fn err(field: &str, msg: &str) -> Response {
 
 // ---- content CRUD ------------------------------------------------------------
 
-/// `GET /api/v1/admin/categories`.
 pub async fn categories(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
     if !user.is_administrator {
         return forbidden();
@@ -270,7 +256,6 @@ pub struct NameBody {
     name: String,
 }
 
-/// `POST /api/v1/admin/categories` + `PUT …/{id}`.
 pub async fn create_category(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
@@ -337,7 +322,6 @@ pub struct AnswerTypeBody {
     svg_icon: Option<String>,
 }
 
-/// `POST /api/v1/admin/answer-types` + `PUT …/{id}`.
 pub async fn create_answer_type(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
@@ -394,7 +378,6 @@ pub async fn delete_answer_type(
     }
 }
 
-/// `GET /api/v1/admin/pages`.
 pub async fn pages(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
     if !user.is_administrator {
         return forbidden();
@@ -412,7 +395,6 @@ pub struct PageBody {
     parent_id: Option<i64>,
 }
 
-/// `POST /api/v1/admin/pages` — new page; `PUT …/{id}` — new revision.
 pub async fn create_page(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
@@ -424,7 +406,6 @@ pub async fn create_page(
     if body.title.trim().is_empty() || body.title.len() > 50 || body.content.is_empty() {
         return err("title", "validation");
     }
-    // PHP validates `unique:pages` on store only.
     match state
         .admin
         .page_title_taken(body.title.trim())
@@ -444,8 +425,6 @@ pub async fn create_page(
     }
 }
 
-/// PHP `update` — creates a new revision with `original_id` pointing at
-/// the original page (`$page->original_id ?? $page->id`).
 pub async fn update_page(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -473,8 +452,6 @@ pub async fn update_page(
     }
 }
 
-/// `DELETE /api/v1/admin/pages/{id}` — `Admin\PageController::destroy`
-/// (hard delete — Page has no SoftDeletes).
 pub async fn delete_page(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -490,7 +467,6 @@ pub async fn delete_page(
     }
 }
 
-/// `faqs`.
 pub async fn faqs(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
     if !user.is_administrator {
         return forbidden();
@@ -566,8 +542,6 @@ pub async fn delete_faq(
 
 // ---- dashboard -------------------------------------------------------------
 
-/// `GET /api/v1/admin/dashboard` — `Admin\DashboardController::index`
-/// (diskSpace + cacheDriver).
 pub async fn dashboard(State(_state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
     if !user.is_administrator {
         return forbidden();
@@ -595,7 +569,6 @@ pub struct AdminListQuery {
     per_page: Option<i64>,
 }
 
-/// `GET /api/v1/admin/playlists` — `Admin\PlaylistController::index`.
 pub async fn playlists(
     State(state): State<AppState>,
     Query(q): Query<AdminListQuery>,
@@ -621,7 +594,6 @@ pub struct AdminPlaylistBody {
     is_public: Option<bool>,
 }
 
-/// `PUT /api/v1/admin/playlists/{id}` — `Admin\PlaylistController::update`.
 pub async fn update_playlist(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -646,9 +618,6 @@ pub async fn update_playlist(
     }
 }
 
-/// `POST /api/v1/admin/playlists` — `Admin\PlaylistController::store`
-/// (`name` required max:50 unique, `is_public` bool; created under the
-/// admin user + moderator pivot).
 pub async fn create_playlist(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
@@ -674,8 +643,6 @@ pub async fn create_playlist(
     }
 }
 
-/// `DELETE /api/v1/admin/playlists/{id}` — hard delete (playlists have no
-/// SoftDeletes upstream).
 pub async fn destroy_playlist(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -692,7 +659,6 @@ pub async fn destroy_playlist(
 
 // ---- rooms -------------------------------------------------------------------
 
-/// `GET /api/v1/admin/rooms` — `Admin\RoomController::index`.
 pub async fn rooms(
     State(state): State<AppState>,
     Query(q): Query<AdminListQuery>,
@@ -735,7 +701,6 @@ pub struct AdminRoomBody {
     password: Option<String>,
 }
 
-/// `PUT /api/v1/admin/rooms/{id}` — `Admin\RoomController::update`.
 pub async fn update_room(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -780,11 +745,6 @@ pub async fn update_room(
     }
 }
 
-/// `POST /api/v1/admin/rooms` — `Admin\RoomController::store`. Validation
-/// mirrors PHP; the fillable list decides what actually gets written
-/// (PHP drops is_pro/is_active/is_chat_active/pause_between_tracks/
-/// playlist_id/color/photo from its create() array). Then moderator
-/// attach + `UpdateUserLevel` ('rooms_count').
 pub async fn create_room(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
@@ -822,7 +782,6 @@ pub async fn create_room(
         .await
     {
         Ok(id) => {
-            // PHP `UpdateUserLevel::dispatch($user, 'rooms_count')`.
             state
                 .levels
                 .dispatch(user.id, blindall_db::LevelTrigger::RoomsCount);
@@ -832,7 +791,6 @@ pub async fn create_room(
     }
 }
 
-/// `DELETE /api/v1/admin/rooms/{id}` — soft delete.
 pub async fn destroy_room(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -847,7 +805,6 @@ pub async fn destroy_room(
     }
 }
 
-/// `PUT /api/v1/admin/rooms/{id}/restore`.
 pub async fn restore_room(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -864,7 +821,6 @@ pub async fn restore_room(
 
 // ---- teams -------------------------------------------------------------------
 
-/// `GET /api/v1/admin/teams` — `Admin\TeamController::index`.
 pub async fn teams(
     State(state): State<AppState>,
     Query(q): Query<AdminListQuery>,
@@ -894,7 +850,6 @@ pub struct AdminTeamBody {
     user_id: i64,
 }
 
-/// `PUT /api/v1/admin/teams/{id}` — `Admin\TeamController::update`.
 pub async fn update_team(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -918,7 +873,6 @@ pub async fn update_team(
     }
 }
 
-/// `DELETE /api/v1/admin/teams/{id}` — soft delete.
 pub async fn destroy_team(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -934,7 +888,6 @@ pub async fn destroy_team(
     }
 }
 
-/// `PUT /api/v1/admin/teams/{id}/restore`.
 pub async fn restore_team(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -952,7 +905,6 @@ pub async fn restore_team(
 
 // ---- answer types ------------------------------------------------------------
 
-/// `GET /api/v1/admin/answer-types` — `Admin\AnswerTypeController::index`.
 pub async fn answer_types(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
     if !user.is_administrator {
         return forbidden();

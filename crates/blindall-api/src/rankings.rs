@@ -1,6 +1,3 @@
-//! Rankings endpoints — `RankingController` port (players/teams/minigames +
-//! `userLevelMetrics`). 10-minute in-memory cache like the PHP `Cache::remember`.
-
 use crate::auth::{CurrentUser, OptionalUser};
 use crate::state::AppState;
 use axum::extract::{Path, Query, State};
@@ -15,7 +12,6 @@ use std::time::{Duration, Instant};
 
 const CACHE_TTL: Duration = Duration::from_secs(600);
 
-/// `Cache::remember('global_leaderboard:…')` — per-process JSON cache.
 #[derive(Default)]
 pub struct RankingsCache {
     map: Mutex<HashMap<String, (Value, Instant)>>,
@@ -43,13 +39,11 @@ fn db_error() -> Response {
     StatusCode::INTERNAL_SERVER_ERROR.into_response()
 }
 
-/// `user.photo` accessor — map `photo_path` → resolved URL on each entry.
 fn enrich_photos(state: &AppState, payload: &mut Value) {
     let Some(items) = payload["data"].as_array_mut() else {
         return;
     };
     for entry in items.iter_mut() {
-        // entries shaped {user:{…,photo_path}} (leaderboards) or {team:{…}} (teams).
         for key in ["user", "team"] {
             if let Some(u) = entry[key].as_object_mut() {
                 let path = u
@@ -73,8 +67,6 @@ pub struct PlayersQuery {
     room: Option<i64>,
 }
 
-/// `GET /api/v1/rankings` — `RankingController::players` payload:
-/// leaderboard + sort list + official rooms + resolved room + user context.
 pub async fn players(
     State(state): State<AppState>,
     OptionalUser(user): OptionalUser,
@@ -111,7 +103,6 @@ pub async fn players(
         if ctx.is_none() {
             match state.rankings.user_context(u.id, sort, room_id).await {
                 Ok(mut v) => {
-                    // entry is shaped {user,stats} — enrich like `data` rows.
                     let mut wrap = json!({"data": [v["entry"].clone()]});
                     enrich_photos(&state, &mut wrap);
                     v["entry"] = wrap["data"][0].clone();
@@ -146,7 +137,6 @@ pub struct PageQuery {
     page: Option<i64>,
 }
 
-/// `GET /api/v1/rankings/teams` — `byTeams`: paginated teams + user position.
 pub async fn teams(
     State(state): State<AppState>,
     OptionalUser(user): OptionalUser,
@@ -180,7 +170,6 @@ pub async fn teams(
     .into_response()
 }
 
-/// `GET /api/v1/rankings/minigames` — `byMinigames` payload.
 pub async fn minigames(
     State(state): State<AppState>,
     OptionalUser(user): OptionalUser,
@@ -223,7 +212,6 @@ pub async fn minigames(
     .into_response()
 }
 
-/// `GET /api/v1/rankings/users/{user}/level-metrics` — level modal payload.
 pub async fn user_level_metrics(
     State(state): State<AppState>,
     Path(user_id): Path<i64>,

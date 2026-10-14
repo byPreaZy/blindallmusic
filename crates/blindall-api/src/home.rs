@@ -1,7 +1,3 @@
-//! `GET /api/v1/home` — homepage catalog, port of `HomeController::index` +
-//! `HomeCatalogService` (tabs, category filter, popularity sort, pagination)
-//! + `WeeklyTopUsers` + featured rooms + tab player counts.
-
 use crate::auth::OptionalUser;
 use crate::state::AppState;
 use axum::extract::{Query, State};
@@ -86,7 +82,6 @@ fn room_json(
     })
 }
 
-/// `roomPopularitySortKey` — [subscriptions, is_playing, rounds_count, id] desc.
 fn popularity_key(r: &CatalogRoom) -> (i64, i64, i64, i64) {
     (
         r.subscriptions,
@@ -103,7 +98,6 @@ pub async fn index(
     Query(q): Query<HomeQuery>,
     user: OptionalUser,
 ) -> Result<Json<Value>, StatusCode> {
-    // banhammer `ip.banned` + `auth.banned` middleware — `GET /` in PHP.
     let ip = crate::auth_session::client_ip(&headers, &addr.ip().to_string());
     if state.auth.is_ip_banned(&ip).await {
         return Err(StatusCode::FORBIDDEN);
@@ -130,8 +124,6 @@ pub async fn index(
     let storage = state.storage.clone();
     let now = chrono::Utc::now().timestamp();
 
-    // `?search=` — navbar room search (`HomeController` early-returns
-    // `search_result` instead of the catalog).
     if let Some(search) = q.search.as_deref().map(str::trim).filter(|s| !s.is_empty())
     {
         let mut rooms = state.home.search_rooms(search).await.unwrap_or_default();
@@ -167,7 +159,6 @@ pub async fn index(
         _ => state.home.catalog_rooms(true).await.unwrap_or_default(),
     };
 
-    // Live overlays: presence + current track index (+ private tracks_count).
     for r in &mut rooms {
         r.subscriptions = state.presence.member_count(r.id, now).await.unwrap_or(0);
     }
@@ -187,7 +178,6 @@ pub async fn index(
 
     rooms.sort_by(|a, b| popularity_key(b).cmp(&popularity_key(a)));
 
-    // Category filter — explicit selection wins over hidden defaults.
     if !category_ids.is_empty() {
         rooms.retain(|r| r.category_id.is_some_and(|c| category_ids.contains(&c)));
     } else if tab == "official" {
@@ -227,7 +217,6 @@ pub async fn index(
         Err(_) => vec![],
     };
 
-    // Tab player counts — presence totals across each whole catalog.
     let mut counts = json!({"official": 0, "community": 0});
     for (key, is_public) in [("official", true), ("community", false)] {
         if let Ok(all) = state.home.catalog_rooms(is_public).await {
@@ -239,7 +228,6 @@ pub async fn index(
         }
     }
 
-    // Minigames tab — same list as /minigames (type, name, description, score).
     let mut minigame_items: Vec<Value> = vec![];
     if tab == "minigames" {
         minigame_items =

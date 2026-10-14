@@ -1,6 +1,3 @@
-//! `GET /rooms` — `Rooms/Index.vue` ("My Rooms"): rooms the user moderates,
-//! search + trashed filter, per-room moderators/category/playlists/rounds.
-
 use crate::api;
 use crate::i18n::t;
 use leptos::prelude::*;
@@ -59,18 +56,13 @@ impl MineRoom {
 #[component]
 pub fn RoomsIndexPage() -> impl IntoView {
     crate::i18n::set_title_key("Rooms");
-    // `rooms.index` is `auth` + `not.guest` in Laravel (the catalog is `/`).
     crate::auth::require_registered(crate::auth::use_auth());
     let rooms = RwSignal::new(Vec::<MineRoom>::new());
     let loading = RwSignal::new(true);
     let error = RwSignal::new(Option::<String>::None);
     let search = RwSignal::new(String::new());
-    // PHP `trashed` filter: unset (non-deleted), `with`, `only`. The fetch
-    // always asks `with` so the mode switch stays client-side.
     let trashed = RwSignal::new(String::new());
 
-    // Refetch on mount + per search keystroke (Laravel throttles 150ms — the
-    // request is cheap enough on a moderator's own list).
     Effect::new(move |_| {
         let search_v = search.get();
         leptos::task::spawn_local(async move {

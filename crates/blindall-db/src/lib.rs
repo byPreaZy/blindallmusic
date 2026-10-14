@@ -1,5 +1,3 @@
-//! blindall-db — PostgreSQL persistence via sqlx against the existing schema.
-
 pub mod admin;
 pub mod auth;
 pub mod chat;
@@ -52,9 +50,6 @@ pub async fn connect(database_url: &str) -> Result<sqlx::postgres::PgPool, sqlx:
         .await
 }
 
-/// SQL schema lives in `blindall-rs/migrations/` and is embedded at compile
-/// time (the `sqlx::migrate!` macro needs proc-macro features we disable for
-/// the Windows toolchain — same result via `Migration::new`).
 fn migrations() -> sqlx::migrate::Migrator {
     let migrations = vec![
         sqlx::migrate::Migration::new(
@@ -114,14 +109,6 @@ fn migrations() -> sqlx::migrate::Migrator {
     }
 }
 
-/// Applies pending SQL migrations. sqlx records them in `_sqlx_migrations`
-/// and takes a lock so concurrent server replicas stay safe.
-///
-/// Migration 3 (`demo_data`) used to be embedded conditionally on `SEED_DEMO`,
-/// which crashed any boot where the flag went off after the migration had
-/// been applied ("previously applied but is missing"). The demo seed is now a
-/// runtime step ([`seed_demo`]) — the stray tracking row is dropped here so
-/// previously-seeded databases keep booting.
 pub async fn migrate(pool: &sqlx::postgres::PgPool) -> anyhow::Result<()> {
     sqlx::query(
         "DELETE FROM _sqlx_migrations WHERE version = 3 AND description = 'demo_data'",
@@ -133,9 +120,6 @@ pub async fn migrate(pool: &sqlx::postgres::PgPool) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// `SEED_DEMO=1` (local dev only) — playable room + tracks so gameplay can be
-/// exercised end-to-end without external providers. Idempotent (`NOT EXISTS`
-/// guards) and never part of the sqlx chain. Never call in prod.
 pub async fn seed_demo(pool: &sqlx::postgres::PgPool) -> anyhow::Result<()> {
     sqlx::raw_sql(include_str!("../../../migrations/0003_demo_data.sql"))
         .execute(pool)

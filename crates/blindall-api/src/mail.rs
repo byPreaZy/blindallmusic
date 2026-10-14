@@ -1,6 +1,3 @@
-//! Transactional mail via Brevo HTTP API — replaces the `brevo+api`
-//! Symfony mailer transport (`MailServiceProvider`).
-
 use serde_json::json;
 
 #[derive(Clone)]
@@ -8,7 +5,6 @@ pub struct MailConfig {
     pub api_key: String,
     pub from_email: String,
     pub from_name: String,
-    /// `APP_URL` — base for reset/verification links in emails.
     pub app_url: String,
 }
 
@@ -18,8 +14,6 @@ impl MailConfig {
     }
 }
 
-/// `POST https://api.brevo.com/v3/smtp/email` — best-effort; logs and
-/// drops failures like a queue worker swallow-and-retry would.
 pub async fn send(
     http: &reqwest::Client,
     cfg: &MailConfig,
@@ -31,8 +25,6 @@ pub async fn send(
     send_opts(http, cfg, to_email, to_name, subject, html, None).await
 }
 
-/// `send` + a `replyTo` address (`ContactMessage` sets it to the visitor's
-/// email so the mailbox reply goes straight back to them).
 pub async fn send_opts(
     http: &reqwest::Client,
     cfg: &MailConfig,
@@ -67,9 +59,6 @@ pub async fn send_opts(
     Ok(())
 }
 
-/// `ProcessUserCreated` → `Welcome` notification mail. FR copy verbatim from
-/// `lang/fr/messages.php` (PHP renders in the request locale; `fr` is the app
-/// default and the only mail copy that exists).
 pub async fn send_welcome(
     http: &reqwest::Client,
     cfg: &MailConfig,
@@ -89,8 +78,6 @@ pub async fn send_welcome(
     send(http, cfg, to_email, to_name, "Bienvenue sur Blind'All Music", &html).await
 }
 
-/// `BrevoService::contacts()->create` — `POST /v3/contacts` with `listIds: [2]`.
-/// Best-effort like the PHP `try/catch` around the SDK call.
 pub async fn create_contact(
     http: &reqwest::Client,
     cfg: &MailConfig,
@@ -117,15 +104,12 @@ pub async fn create_contact(
         }))
         .send()
         .await?;
-    // 400 "Contact already exist" is fine — `updateEnabled` should cover it
-    // but Brevo still rejects some dupes; swallow like PHP's try/catch.
     if !resp.status().is_success() {
         anyhow::bail!("brevo contact create failed: {}", resp.status());
     }
     Ok(())
 }
 
-/// `BrevoService::contacts()->delete` — `DELETE /v3/contacts/{email}`.
 pub async fn delete_contact(
     http: &reqwest::Client,
     cfg: &MailConfig,

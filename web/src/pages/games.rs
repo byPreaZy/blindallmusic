@@ -1,7 +1,3 @@
-//! Minigames — `/games` index and `/games/:type` play page.
-//! Ports `Minigames/Index` + the five `*/Play.vue` flows: 5 questions per
-//! round (preloaded in parallel), audio preview, instant check, summary.
-
 use crate::api;
 use crate::auth::use_auth;
 use crate::i18n::t;
@@ -36,7 +32,6 @@ pub fn GamesIndexPage() -> impl IntoView {
     crate::seo::apply_page("/minigames", t("Mini-games meta description"));
     crate::seo::set_meta("name", "keywords", t("Mini-games meta keywords"));
     let auth = use_auth();
-    // `minigames` routes are `auth` + `not.guest` in Laravel.
     crate::auth::require_registered(auth);
     let games = RwSignal::new(Vec::<Value>::new());
     let loading = RwSignal::new(true);
@@ -51,7 +46,6 @@ pub fn GamesIndexPage() -> impl IntoView {
 
     view! {
         <div class="mx-auto max-w-3xl px-4 py-8">
-            // `Minigames/Index.vue` — back link, gradient hero, whole-card list.
             <A href="/" attr:class="mb-6 inline-flex items-center gap-2 text-sm text-neutral-400 transition hover:text-white">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
@@ -74,7 +68,6 @@ pub fn GamesIndexPage() -> impl IntoView {
                 </div>
             </Show>
 
-            // PHP order: quiz, who_sang, anagram, first_letter, album_cover.
             <ul class="flex flex-col gap-5">
                 {["quiz", "who_sang", "anagram", "first_letter", "album_cover"].into_iter().map(|ty| {
                     let ty_s = ty.to_string();
@@ -140,8 +133,6 @@ struct RoundResult {
 pub fn GamePlayPage() -> impl IntoView {
     crate::auth::require_registered(crate::auth::use_auth());
     let params = use_params_map();
-    // PHP URLs are kebab-case (`/minigames/who-sang`) — normalize to the
-    // internal snake_case type.
     let game = move || params.get().get("type").unwrap_or_default().replace('-', "_");
     let questions = RwSignal::new(Vec::<Question>::new());
     let index = RwSignal::new(0usize);
@@ -159,7 +150,6 @@ pub fn GamePlayPage() -> impl IntoView {
     let game_type = RwSignal::new(game());
     let (name, _desc) = game_meta(&game_type.get_untracked());
     let _ = name;
-    // `MinigameHead::applyPlay` — translated title + meta description.
     let (title_key, desc_key) = match game_type.get_untracked().as_str() {
         "quiz" => ("Quiz — 4 choices", "Quiz 4 choices meta description"),
         "who_sang" => ("Who sang?", "Who sang meta description"),
@@ -315,7 +305,6 @@ pub fn GamePlayPage() -> impl IntoView {
                 <div class="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{e}</div>
             })}
 
-            // Summary screen
             <Show when=move || summary.get()>
                 <div class="rounded-2xl border-2 border-teal-500/20 bg-neutral-900/80 p-6">
                     <h2 class="mb-2 text-center text-2xl font-black text-white">{t("Round over!")}</h2>
@@ -355,11 +344,9 @@ pub fn GamePlayPage() -> impl IntoView {
                 </div>
             </Show>
 
-            // Question screen
             <Show when=move || valid_type && !loading.get() && !summary.get() && current(questions, index).is_some()>
                 <div class="overflow-hidden rounded-2xl border-2 border-teal-500/20 bg-neutral-900/80 shadow-2xl">
                     <div class="flex flex-col gap-6 p-6">
-                        // Progress + audio
                         <div class="flex items-center justify-between text-xs text-white/50">
                             <span>{move || format!("{} {}/{}", t("Question"), index.get() + 1, QUESTIONS_PER_ROUND)}</span>
                             <div class="flex gap-1">
@@ -396,7 +383,6 @@ pub fn GamePlayPage() -> impl IntoView {
                             }.into_any()
                         }}
 
-                        // Answering UI vs feedback
                         {move || {
                             if let Some(res) = result.get() {
                                 let correct = res["correct"].as_bool().unwrap_or(false);

@@ -1,6 +1,3 @@
-//! `DbGameStore` — the sqlx implementation of the game engine's
-//! persistence boundary. SQL mirrors the Eloquent queries of the PHP jobs.
-
 use crate::entities;
 use async_trait::async_trait;
 use blindall_core::types::{Standing, TrackAnswer, TrackHistoryEntry};
@@ -28,8 +25,6 @@ impl DbGameStore {
         Self::with_resolver(pool, Arc::new(PassthroughResolver))
     }
 
-    /// `with_resolver` — pass the `blindall-providers` resolver so
-    /// `track.audio` gets the live-fetch behavior for deezer/audius.
     pub fn with_resolver(pool: PgPool, resolver: Arc<dyn PreviewResolver>) -> Self {
         let http = reqwest::Client::builder()
             .timeout(Duration::from_secs(3))
@@ -43,19 +38,12 @@ impl DbGameStore {
         }
     }
 
-    /// `APP_ENV` — Discord webhooks fire only when `production`
-    /// (`ProcessDeletedTrack` `config('app.env') === 'production'`).
     pub fn environment(mut self, env: impl Into<String>) -> Self {
         self.environment = env.into();
         self
     }
 
-    /// `Http::post($room->discord_webhook_url, ['embeds' => [embed]])`
-    /// — failures are logged, never fatal. `color` is the Discord embed
-    /// decimal (`SendDiscordNotification`: danger `15158332`,
-    /// success `3066993`, default `3447003`).
     pub async fn post_discord_to_rooms(&self, playlist_id: i64, message: &str, color: u32) {
-        // `playlist->rooms` is `belongsToMany` — pivot `playlist_room`.
         let Ok(rooms) = sqlx::query(
             "SELECT r.name, r.discord_webhook_url FROM rooms r \
              JOIN playlist_room pr ON pr.room_id = r.id \
@@ -86,10 +74,6 @@ impl DbGameStore {
         }
     }
 
-    /// `TrackDeleted` database notifications — only when the playlist is
-    /// not public (`$this->track->playlist->is_public === false`).
-    /// Returns the created notices so callers can push
-    /// `BroadcastNotificationCreated` (`via → broadcast`).
     async fn notify_playlist_moderators(
         &self,
         playlist_id: i64,
@@ -120,7 +104,6 @@ impl DbGameStore {
         if moderators.is_empty() {
             return vec![];
         }
-        // `$this->track->playlist->toArray()` — raw model columns.
         let playlist_json = serde_json::json!({
             "id": playlist.get::<i64, _>("id"),
             "name": playlist.get::<String, _>("name"),
@@ -151,7 +134,6 @@ impl DbGameStore {
     }
 }
 
-/// `track->answers()->where('answer_type_id', $n)->first()?->value ?? 'inconnu'`.
 async fn track_answer_value(pool: &PgPool, track_id: i64, type_id: i64) -> String {
     sqlx::query_scalar::<_, String>(
         "SELECT value FROM track_answers WHERE track_id = $1 AND answer_type_id = $2 \
@@ -178,7 +160,6 @@ fn round_row_to_game(r: entities::Round) -> RoundRow {
     }
 }
 
-/// Summary row for the public room list (homepage).
 #[derive(Debug, Clone)]
 pub struct RoomSummary {
     pub id: i64,
@@ -191,7 +172,6 @@ pub struct RoomSummary {
 }
 
 impl DbGameStore {
-    /// Homepage list: public rooms, most recently active first.
     pub async fn public_playing_rooms(&self) -> Result<Vec<RoomSummary>> {
         let rows = sqlx::query(
             "SELECT id, name, slug, is_playing, tracks_by_round, user_count, \
@@ -242,15 +222,11 @@ impl GameStore for DbGameStore {
         })
     }
 
-    /// `StartRound`: random = uniform sample (PHP uses random offsets —
-    /// `ORDER BY random()` is the same distribution), else first N distinct.
     async fn pick_tracks(&self, room: &RoomConfig) -> Result<Vec<i64>> {
         const BASE: &str =
             "SELECT DISTINCT t.id FROM tracks t JOIN playlist_room pr \
              ON pr.playlist_id = t.playlist_id WHERE pr.room_id = $1";
         let sql = if room.is_random {
-            // PG requires ORDER BY exprs to appear in a DISTINCT select list —
-            // dedupe first, shuffle the outer set.
             format!("SELECT id FROM ({BASE}) d ORDER BY random() LIMIT {}", room.tracks_by_round)
         } else {
             format!("{BASE} LIMIT {}", room.tracks_by_round)
@@ -284,7 +260,6 @@ impl GameStore for DbGameStore {
         Ok(res)
     }
 
-    /// `increment('current')` + `current_track_started_at` update.
     async fn advance_round(&self, round_id: i64, started_at: DateTime<Utc>) -> Result<()> {
         sqlx::query(
             "UPDATE rounds SET \"current\" = \"current\" + 1, \
@@ -333,7 +308,6 @@ impl GameStore for DbGameStore {
         let Some(track) = track else { return Ok(None) };
         let track = entities::Track::from_row(&track);
 
-        // answers + type name (eager `trackAnswers.type` in PHP).
         let rows = sqlx::query(
             "SELECT ta.id, ta.value, ta.aliases, ta.score, at.name AS type_name, \
              at.svg_icon AS svg_icon \
@@ -366,13 +340,11 @@ impl GameStore for DbGameStore {
             })
             .collect();
 
-        // `track.audio` accessor — live resolution for expiring providers.
         let audio = self
             .resolver
             .resolve(&track.provider, &track.provider_id, &track.preview_url)
             .await;
 
-        // Vote totals for the revealed playlist card (`Track::upvotes`).
         let (upvotes, downvotes): (i64, i64) = sqlx::query_as(
             "SELECT CAST(COALESCE(SUM(GREATEST(votes, 0)), 0) AS bigint), \
              CAST(COALESCE(ABS(SUM(LEAST(votes, 0))), 0) AS bigint) \
@@ -396,7 +368,6 @@ impl GameStore for DbGameStore {
         }))
     }
 
-    /// `Http::retry(3,100)->timeout(3)->get()` — true iff a 2xx comes back.
     async fn probe_audio(&self, audio_url: &str) -> bool {
         for _ in 0..3 {
             match self.http.get(audio_url).send().await {
@@ -408,11 +379,6 @@ impl GameStore for DbGameStore {
         false
     }
 
-    /// `ProcessDeletedTrack` — title/artist from `track_answers`
-    /// (`answer_type_id` 2 = title, 1 = artist; `inconnu` fallbacks),
-    /// production-only Discord posts on the playlist's public rooms,
-    /// `TrackDeleted` notifications to private-playlist moderators,
-    /// then answers + track rows deleted in a transaction.
     async fn delete_track(
         &self,
         track_id: i64,
@@ -471,8 +437,6 @@ impl GameStore for DbGameStore {
         Ok(notified)
     }
 
-    /// `Round::where('is_playing', true)->orWhere->whereNull('finished_at')`
-    /// — same recovery set as the PHP boot logic.
     async fn load_active_rounds(&self) -> Result<Vec<RoundRow>> {
         let rows = sqlx::query(
             "SELECT * FROM rounds WHERE is_playing = true OR finished_at IS NULL",
@@ -501,9 +465,6 @@ impl GameStore for DbGameStore {
         if user_ids.is_empty() {
             return Ok(HashMap::new());
         }
-        // Single query — PHP `Broadcast::channel('rooms.{id}')` + presence
-        // service enrich every member with team, user_levels and the ELO-
-        // counted standings count.
         let rows = sqlx::query(
             "SELECT u.id, u.name, u.photo_path, u.elo, u.is_guest, u.team_id, \
              t.name AS team_name, t.photo_path AS team_photo, \
@@ -561,9 +522,6 @@ impl GameStore for DbGameStore {
             .collect())
     }
 
-    /// `RoundStanding::create` per row + `user->update(elo)` for counted
-    /// ones — inside a transaction with `FOR UPDATE` on the round row,
-    /// re-checking standings existence (PHP double-check parity).
     async fn write_standings(
         &self,
         standings: &[Standing],
@@ -626,7 +584,6 @@ impl GameStore for DbGameStore {
             .map_err(|e| StoreError::Other(e.into()))?;
         }
 
-        // Only elo-counted standings move the user's rating.
         let counted: std::collections::HashSet<i64> = standings
             .iter()
             .filter(|s| s.is_elo_counted)
@@ -647,7 +604,6 @@ impl GameStore for DbGameStore {
         tx.commit().await.map_err(|e| StoreError::Other(e.into()))
     }
 
-    /// `TotalScore::updateOrCreate(...)->increment('score')` per user + team.
     async fn bump_total_score(
         &self,
         room_id: i64,
@@ -659,7 +615,6 @@ impl GameStore for DbGameStore {
             .into_iter()
             .chain(team_id.map(|t| ("team", t)))
         {
-            // morph type stores the PHP class name in the legacy schema.
             let morph = if ty == "user" { "App\\Models\\User" } else { "App\\Models\\Team" };
             let existing: Option<i64> = sqlx::query_scalar(
                 "SELECT id FROM total_scores WHERE totalscorable_type = $1 \
@@ -706,7 +661,6 @@ impl GameStore for DbGameStore {
         Ok(())
     }
 
-    /// `getPlacementRoundsPlayed` — counted standings count.
     async fn placement_rounds_played(&self, user_id: i64) -> Result<i64> {
         sqlx::query_scalar(
             "SELECT COUNT(*) FROM round_standings WHERE user_id = $1 \
@@ -718,8 +672,6 @@ impl GameStore for DbGameStore {
         .map_err(|e| StoreError::Other(e.into()))
     }
 
-    /// `calculateWinStreak` — consecutive position-1 in this room's
-    /// finished rounds before `before_round_id` (PHP caps at 200 rows).
     async fn win_streak(
         &self,
         room_id: i64,
@@ -739,7 +691,6 @@ impl GameStore for DbGameStore {
         .fetch_all(&self.pool)
         .await
         .map_err(|e| StoreError::Other(e.into()))?;
-        // streak starts at 1 (current win) + consecutive past wins
         Ok(1 + positions.iter().take_while(|&&p| p == 1).count() as i64)
     }
 
@@ -754,7 +705,6 @@ impl GameStore for DbGameStore {
         Ok(n > 0)
     }
 
-    /// `requiredAnswersPerTrack` — count track_answers grouped by track.
     async fn required_answers_per_track(
         &self,
         track_ids: &[i64],
@@ -781,7 +731,6 @@ impl GameStore for DbGameStore {
             .collect())
     }
 
-    /// `scoresFromDatabase` — legacy rounds without Redis.
     async fn scores_from_db(&self, round_id: i64) -> Result<HashMap<i64, f64>> {
         let rows = sqlx::query(
             "SELECT user_id, SUM(score) AS total FROM scores \
@@ -804,7 +753,6 @@ impl GameStore for DbGameStore {
             .collect())
     }
 
-    /// `tracksHistoryFromDatabase`.
     async fn tracks_history_from_db(
         &self,
         round_id: i64,
@@ -858,8 +806,6 @@ impl GameStore for DbGameStore {
         Ok(())
     }
 
-    /// `UpdateUserLevel` job ('score' type — `ProcessAddScoreToTotalScore`
-    /// dispatches it only for public rooms).
     async fn recalc_user_level(&self, user_id: i64) -> Result<Option<serde_json::Value>> {
         crate::levels::LevelRepo::new(self.pool.clone())
             .update(user_id, crate::levels::LevelTrigger::Score)

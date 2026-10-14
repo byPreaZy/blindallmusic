@@ -1,7 +1,3 @@
-//! Admin section — `Pages/Admin/*` port (AdminMenu: Dashboard, Users, Teams,
-//! Rooms, Playlists, Categories, Answer Types, Pages, FAQ). All routes are
-//! gated on `user.is_administrator` — the API also enforces it.
-
 use crate::api;
 use crate::auth::use_auth;
 use crate::i18n::t;
@@ -28,8 +24,6 @@ pub fn AdminShell(active: &'static str, children: ChildrenFn) -> impl IntoView {
     let auth = use_auth();
     view! {
         <div class="mx-auto max-w-6xl px-4 py-8">
-            // `auth.ready` gate — without it the 403 flashes while `/auth/me`
-            // is still hydrating.
             <Show when=move || {
                 auth.ready.get()
                     && auth.user.get().map(|u| u.is_administrator).unwrap_or(false)

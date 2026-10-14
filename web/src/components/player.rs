@@ -1,7 +1,3 @@
-//! Audio player — port of `Player.vue` core (display-only client; the
-//! server drives track timing). YouTube embeds are simplified to a hidden
-//! iframe embed (no YT API polling) — a documented simplification.
-
 use crate::i18n::t;
 use crate::types::Track;
 use leptos::prelude::*;
@@ -17,8 +13,6 @@ fn storage() -> Option<web_sys::Storage> {
     web_sys::window()?.local_storage().ok()?
 }
 
-/// LocalStorage-backed volume — page-level so the player and the input's
-/// settings dropdown share one signal (`Volume` component in Vue).
 pub fn saved_volume() -> f64 {
     storage()
         .and_then(|s| s.get_item("volume").ok().flatten())
@@ -44,26 +38,15 @@ fn youtube_id(url: &str) -> Option<String> {
 
 #[component]
 pub fn Player(
-    /// Current track — `None` between tracks / before round start.
     track: RwSignal<Option<Track>>,
     track_duration: f64,
-    /// One-shot hydration offset (seconds) — consumed on first play.
     start_offset: RwSignal<f64>,
-    /// `TrackEnded.next_track_at` ISO timestamp for the countdown.
     next_track_at: RwSignal<Option<String>>,
-    /// `TrackEnded.next_track_audio_url` + `next_track_id` — buffered early
-    /// on the main element (PHP `preloadNextTrack` reuses `audio` muted).
     next_audio_url: RwSignal<Option<(i64, String)>>,
-    /// `TrackPaused`/`TrackResumed` server control (`room.is_playing`).
     paused: RwSignal<bool>,
     pause_between_tracks: f64,
-    /// Written by timeupdate — the `currentTime` sent to `/check`.
     current_time: RwSignal<f64>,
-    /// `UserHasFoundAllTheAnswers` entries — avatar+name markers above the
-    /// bar at the position where each player finished (Player.vue).
     found_all: RwSignal<Vec<Value>>,
-    /// Shared volume (0..1) — owned by the page so the settings dropdown
-    /// in `AnswerInput` controls the same signal.
     volume: RwSignal<f64>,
 ) -> impl IntoView {
     let percent = RwSignal::new(0.0_f64);
@@ -74,27 +57,17 @@ pub fn Player(
     let error = RwSignal::new(Option::<String>::None);
     let countdown = RwSignal::new(0_i64);
 
-    // HtmlAudioElement is !Send — SendWrapper asserts main-thread access so
-    // the shared Rc state can cross reactive/closure Send bounds safely (CSR
-    // is single-threaded; every capture below runs on the main thread).
     let audio = SendWrapper::new(Rc::new(RefCell::new(Option::<HtmlAudioElement>::None)));
-    // PHP `preloadedTrackId` — the next track buffered muted on the main
-    // element during the inter-track countdown, reused on TrackPlayed so
-    // playback starts with no buffering gap.
     let preloaded_id = SendWrapper::new(Rc::new(RefCell::new(Option::<i64>::None)));
     let pending_start = SendWrapper::new(Rc::new(RefCell::new(0.0_f64)));
     let applied_initial = SendWrapper::new(Rc::new(RefCell::new(false)));
 
-    // Create the elements once (component bodies run once on creation).
     {
         let audio = audio.clone();
         {
             if audio.borrow().is_none() {
                 if let Ok(a) = HtmlAudioElement::new() {
-                    // No crossorigin attr — plain <audio> playback doesn't
-                    // need CORS (providers' previews don't always send it).
                     a.set_volume(saved_volume());
-                    // timeupdate → progress + currentTime signal.
                     {
                         let audio = audio.clone();
                         let cb = Closure::<dyn FnMut()>::new(move || {
@@ -137,9 +110,6 @@ pub fn Player(
                     {
                         let audio = audio.clone();
                         let cb = Closure::<dyn FnMut()>::new(move || {
-                            // PHP `handleAudioError` — code 4 (src not
-                            // supported, often a flaky provider URL) gets
-                            // one silent reload retry before erroring.
                             if let Some(a) = audio.borrow().as_ref() {
                                 let code = a.error().map(|e| e.code()).unwrap_or(0);
                                 let retried = a.get_attribute("data-retried").is_some();
@@ -163,7 +133,6 @@ pub fn Player(
         }
     }
 
-    // Play helper shared by the track effect + the gesture button.
     let play_now = {
         let audio = audio.clone();
         let pending_start = pending_start.clone();
@@ -187,9 +156,6 @@ pub fn Player(
                             Ok(_) => {
                                 is_playing.set(true);
                                 needs_gesture.set(false);
-                                // PHP: browsers may reset currentTime on
-                                // play() — verify drift after 50ms and
-                                // re-apply the hydration offset if needed.
                                 let target = *pending_start.borrow();
                                 if target > 0.0 {
                                     let a2 = a.clone();
@@ -206,7 +172,6 @@ pub fn Player(
                                 }
                             }
                             Err(e) => {
-                                // NotAllowedError → browser autoplay policy.
                                 let name = js_sys::Reflect::get(&e, &"name".into())
                                     .ok()
                                     .and_then(|n| n.as_string())
@@ -228,7 +193,6 @@ pub fn Player(
         }))
     };
 
-    // Track changes → swap source + play; cleared → stop + wait state.
     {
         let audio = audio.clone();
         let pending_start = pending_start.clone();
@@ -245,7 +209,6 @@ pub fn Player(
                     countdown.set(0);
                     next_track_at.set(None);
                     next_audio_url.set(None);
-                    // Hydration offset applies once, on the first track.
                     if !*applied_initial.borrow() {
                         *pending_start.borrow_mut() = start_offset.get_untracked();
                         *applied_initial.borrow_mut() = true;
@@ -253,15 +216,11 @@ pub fn Player(
                         *pending_start.borrow_mut() = 0.0;
                     }
                     if tr.provider == "youtube" {
-                        // iframe below handles playback.
                         loading.set(false);
                         is_playing.set(true);
                         return;
                     }
                     if let Some(a) = audio.borrow().as_ref() {
-                        // PHP `canReusePreload` — the countdown preloaded
-                        // this exact track muted on the main element; just
-                        // unmute + play, no reload → seamless transition.
                         let buffered = *preloaded_id.borrow() == Some(tr.id)
                             && a.ready_state() >= 2;
                         if buffered {
@@ -299,10 +258,6 @@ pub fn Player(
         });
     }
 
-    // Preload the next track's audio as soon as TrackEnded lands — on the
-    // MAIN element, muted (PHP `preloadNextTrack`): it has just finished
-    // the previous track so it is free, and reusing it on TrackPlayed
-    // skips the fetch entirely.
     {
         let audio = audio.clone();
         let preloaded_id = preloaded_id.clone();
@@ -320,7 +275,6 @@ pub fn Player(
         });
     }
 
-    // Countdown to next_track_at (or pause_between_tracks fallback).
     {
         Effect::new(move |_| {
             let target = next_track_at.get();
@@ -369,8 +323,6 @@ pub fn Player(
         })
     });
 
-    // `TrackPaused`/`TrackResumed` — server-side pause control (PHP
-    // `.listen('TrackPaused', pause).listen('TrackResumed', resume)`).
     {
         let audio = audio.clone();
         Effect::new(move |_| {
@@ -387,8 +339,6 @@ pub fn Player(
         });
     }
 
-    // Shared volume → audio element + persistence (slider lives in the
-    // AnswerInput settings dropdown — Player.vue `Volume` component).
     {
         let audio = audio.clone();
         Effect::new(move |_| {
@@ -402,9 +352,6 @@ pub fn Player(
         });
     }
 
-    // Leaving the room → hard-stop the audio. The listeners above use
-    // `cb.forget()`, which leaks their Rc captures — the HtmlAudioElement
-    // would stay alive (and keep playing) without this explicit teardown.
     {
         let audio = audio.clone();
         on_cleanup(move || {
@@ -416,8 +363,6 @@ pub fn Player(
         });
     }
 
-    // Gesture handler is built inside the render closure — each render gets
-    // a fresh clone so the reactive closure stays FnMut.
     let gesture_play = play_now.clone();
     let markers_empty = move || found_all.get().is_empty();
     let countdown_pct = move || {
@@ -430,8 +375,6 @@ pub fn Player(
                 <iframe src=src class="pointer-events-none absolute h-px w-px opacity-0" allow="autoplay"></iframe>
             })}
 
-            // `UserHasFoundAllTheAnswers` markers — avatar+name bubble above
-            // the bar where each player finished (Player.vue TransitionGroup).
             <ul class="room-player__markers" class:room-player__markers--empty=markers_empty>
                 <For
                     each=move || found_all.get()
@@ -448,9 +391,6 @@ pub fn Player(
                         view! {
                             <li class="room-player__marker" style=format!("left:{pct}%") title=title_n>
                                 {photo.map(|p| view! {
-                                    // `photo` is a full URL when resolved
-                                    // server-side; raw storage paths get
-                                    // the /storage/ prefix.
                                     <img src=if p.starts_with("http") { p.clone() } else { format!("/storage/{p}") }
                                         class="room-player__marker-avatar" alt=alt_n/>
                                 })}
@@ -500,8 +440,6 @@ pub fn Player(
                         } else {
                             view! {
                                 <div class="relative h-6 w-full">
-                                    // Red zone indicator (first 18%) — PHP: users must
-                                    // answer before the teal bar leaves the red zone.
                                     <div class="absolute left-0 top-0 z-10 h-6 bg-brand-primary/80 transition-all duration-500 ease-linear"
                                         style=move || format!("width:{}%", percent.get().min(18.0))></div>
                                     <div class="absolute left-0 top-0 h-6 bg-brand-accent/90 transition-all duration-500 ease-linear"

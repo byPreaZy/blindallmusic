@@ -1,7 +1,3 @@
-//! Playlists endpoints — JSON port of `PlaylistController` +
-//! `TrackController` (playlist-scoped part). Inertia redirects/flash
-//! become plain JSON: `{ok: true}` or the entity; authz → 403.
-
 use crate::auth::CurrentUser;
 use crate::state::AppState;
 use axum::extract::{Path, Query, State};
@@ -17,7 +13,6 @@ fn err(status: StatusCode, msg: &str) -> axum::response::Response {
     (status, Json(json!({ "error": msg }))).into_response()
 }
 
-/// Load playlist + check `canEditPlaylist` (owner || moderator || admin).
 async fn editable(
     repo: &PlaylistRepo,
     id: i64,
@@ -34,7 +29,6 @@ async fn editable(
     Ok(p)
 }
 
-/// Owner-or-admin only (update/destroy — PHP is stricter there).
 async fn owned(
     repo: &PlaylistRepo,
     id: i64,
@@ -53,13 +47,9 @@ async fn owned(
 
 #[derive(Deserialize)]
 pub struct IndexParams {
-    /// `?scope=public` → `Playlist::isPublic()->get()` (room attach
-    /// dropdown / discovery); default stays `moderatedPlaylists`.
     scope: Option<String>,
 }
 
-/// `GET /api/v1/playlists` — `moderatedPlaylists` list, or public
-/// playlists with `?scope=public`.
 pub async fn index(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -88,9 +78,6 @@ pub async fn index(
     }
 }
 
-/// `GET /api/v1/playlists/{id}` — `PlaylistController::edit` payload:
-/// playlist + moderators + rooms + difficulties + total_tracks,
-/// plus `can_edit` (owner/moderator/admin).
 pub async fn show(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -152,7 +139,6 @@ pub struct CreateBody {
     name: String,
 }
 
-/// `POST /api/v1/playlists` — validate name (PHP: required|max:50|unique).
 pub async fn store(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -164,7 +150,6 @@ pub async fn store(
     }
     match state.playlists.create(user.id(), name).await {
         Ok(id) => {
-            // PHP `UpdateUserLevel::dispatch($user, 'playlists_count')`.
             state
                 .levels
                 .dispatch(user.id(), blindall_db::LevelTrigger::PlaylistsCount);
@@ -184,7 +169,6 @@ pub struct UpdateBody {
     user_id: i64,
 }
 
-/// `PUT /api/v1/playlists/{id}` — owner/admin only.
 pub async fn update(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -211,8 +195,6 @@ pub async fn update(
     }
 }
 
-/// `DELETE /api/v1/playlists/{id}` — PHP refuses public playlists that
-/// are attached to rooms.
 pub async fn destroy(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -243,8 +225,6 @@ pub struct PageParams {
     per_page: Option<i64>,
 }
 
-/// `GET /api/v1/playlists/{id}/tracks` — edit() 's paginated track list
-/// (answers, votes, hint, dificulty — `audio` resolved live).
 pub async fn tracks(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -282,7 +262,6 @@ pub struct StoreTrackBody {
     artwork_url: String,
 }
 
-/// `POST /api/v1/playlists/{id}/tracks` — firstOrNew + answers upsert.
 pub async fn store_track(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -292,7 +271,6 @@ pub async fn store_track(
     if let Err(r) = editable(&state.playlists, id, &user).await {
         return r;
     }
-    // PHP validation: required fields + max lengths.
     let ok = !b.provider.is_empty() && b.provider.len() <= 50
         && !b.provider_id.is_empty() && b.provider_id.len() <= 255
         && !b.provider_url.is_empty() && b.provider_url.len() <= 255
@@ -319,9 +297,6 @@ pub async fn store_track(
         .await
     {
         Ok(track_id) => {
-            // `TrackController::store` — Discord webhook on the playlist's
-            // public rooms ('success' color; no env gate here, unlike the
-            // delete path which is production-only).
             let message = format!(
                 "Le titre {} de {} a été ajouté par {}.",
                 b.track_name, b.artist_name, user.0.name
@@ -345,7 +320,6 @@ pub struct UpdateTrackBody {
     hint: Option<String>,
 }
 
-/// `PUT /api/v1/playlists/{id}/tracks/{track}` — dificulty (0–5) + hint.
 pub async fn update_track(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -379,8 +353,6 @@ pub async fn update_track(
     }
 }
 
-/// `DELETE /api/v1/playlists/{id}/tracks/{track}` — `TrackController::destroy`
-/// → `ProcessDeletedTrack` (notifications + production Discord).
 pub async fn delete_track(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -417,8 +389,6 @@ pub async fn delete_track(
     }
 }
 
-/// `DELETE /api/v1/playlists/{id}/tracks/clear` — `TrackController::destroyAll`:
-/// every track goes through `ProcessDeletedTrack` (canEditPlaylist authz).
 pub async fn clear_tracks(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -466,8 +436,6 @@ pub struct SearchParams {
     providers: Option<String>,
 }
 
-/// `GET /api/v1/playlists/{id}/tracks/search` — TrackController::search
-/// (canEdit + `added` flag via hasProviderTrack).
 pub async fn search_tracks(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -511,7 +479,6 @@ pub async fn search_tracks(
     Json(json!({ "tracks": tracks, "errors": errors })).into_response()
 }
 
-/// `GET /api/v1/answer-types` — id + name pairs for the answers UI.
 pub async fn answer_types(State(state): State<AppState>) -> impl IntoResponse {
     match state.playlists.answer_types().await {
         Ok(types) => Json(json!({
@@ -526,7 +493,6 @@ pub async fn answer_types(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
-/// Authz for track-scoped ops: the track's playlist must be editable.
 async fn editable_track(
     state: &AppState,
     track_id: i64,
@@ -549,7 +515,6 @@ pub struct AnswerBody {
     aliases: Option<Vec<String>>,
 }
 
-/// `TrackAnswerController` shared validation — returns cleaned aliases.
 fn validate_answer(b: &AnswerBody) -> Result<Option<Vec<String>>, axum::response::Response> {
     let value_len = b.value.trim().len();
     if value_len == 0 || value_len > 255 {
@@ -559,7 +524,6 @@ fn validate_answer(b: &AnswerBody) -> Result<Option<Vec<String>>, axum::response
     if !(0.0..=99.0).contains(&score) {
         return Err(err(StatusCode::UNPROCESSABLE_ENTITY, "invalid_score"));
     }
-    // PHP: aliases trim → non-empty → unique, max 20 items.
     let mut seen = std::collections::HashSet::new();
     let aliases: Vec<String> = b
         .aliases
@@ -573,7 +537,6 @@ fn validate_answer(b: &AnswerBody) -> Result<Option<Vec<String>>, axum::response
     Ok(if aliases.is_empty() { None } else { Some(aliases) })
 }
 
-/// `POST /api/v1/tracks/{id}/answers` — `TrackAnswerController::store`.
 pub async fn store_answer(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -583,7 +546,6 @@ pub async fn store_answer(
     if let Err(r) = editable_track(&state, track_id, &user).await {
         return r;
     }
-    // answer_type must exist (PHP `exists:answer_types,id`).
     let known: Vec<i64> = state
         .playlists
         .answer_types()
@@ -618,7 +580,6 @@ pub async fn store_answer(
     }
 }
 
-/// `PUT /api/v1/tracks/{id}/answers/{aid}` — `TrackAnswerController::update`.
 pub async fn update_answer(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -665,7 +626,6 @@ pub async fn update_answer(
     }
 }
 
-/// `DELETE /api/v1/tracks/{id}/answers/{aid}` — `TrackAnswerController::destroy`.
 pub async fn delete_answer(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -692,9 +652,6 @@ pub struct ProviderPlaylistBody {
     playlist_id: String,
 }
 
-/// `POST /api/v1/playlists/{id}/providers/find` —
-/// `PlaylistController::findPlaylist`. `blindall` = the current user's
-/// upvoted tracks summary; others hit the provider API.
 pub async fn find_provider_playlist(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -739,10 +696,6 @@ pub async fn find_provider_playlist(
     }
 }
 
-/// `POST /api/v1/playlists/{id}/providers/import` —
-/// `PlaylistController::importPlaylist` + `ProcessImportTrack`.
-/// Synchronous here (PHP queues it) — Deezer caps at 25×100 pages so
-/// the request stays under 30s in the worst case.
 pub async fn import_provider_playlist(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -785,8 +738,6 @@ pub async fn import_provider_playlist(
             }
         };
         for t in tracks {
-            // `ProcessImportTrack::handle` — preview+artwork required,
-            // dedupe on provider+provider_id inside `upsert_track`.
             let (Some(preview), Some(artwork)) = (t.preview_url, t.artwork_url) else {
                 continue;
             };
@@ -833,14 +784,12 @@ async fn load_owned_playlist(
     let Some(p) = state.playlists.find(id).await.ok().flatten() else {
         return Err(err(StatusCode::NOT_FOUND, "not_found"));
     };
-    // PHP: `Auth::user()->id === $playlist->owner->id || isAdministrator()`.
     if p.user_id != user.0.id && !user.0.is_administrator {
         return Err(err(StatusCode::FORBIDDEN, "unauthorized"));
     }
     Ok(p)
 }
 
-/// `POST /api/v1/playlists/{id}/moderators` — `syncWithoutDetaching`.
 pub async fn attach_playlist_moderator(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -859,7 +808,6 @@ pub async fn attach_playlist_moderator(
     }
 }
 
-/// `DELETE /api/v1/playlists/{id}/moderators` — `moderators()->detach`.
 pub async fn detach_playlist_moderator(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -885,8 +833,6 @@ fn csv_escape(s: &str) -> String {
     }
 }
 
-/// `GET /api/v1/playlists/{id}/export` — CSV with UTF-8 BOM, `;` separator,
-/// headings = answer type names + [Origine, Lien, Difficulté, Vote +, Vote -, Ajouté le].
 pub async fn export(
     State(state): State<AppState>,
     Path(id): Path<i64>,
@@ -895,7 +841,6 @@ pub async fn export(
     let Some(p) = state.playlists.find(id).await.ok().flatten() else {
         return err(StatusCode::NOT_FOUND, "not_found");
     };
-    // `auth()->user()->canEditPlaylist($playlist)` — owner || moderator || admin.
     if !state
         .playlists
         .can_edit(&p, user.id(), user.0.is_administrator)
@@ -933,7 +878,6 @@ pub async fn export(
         cols.push(t.dificulty.map(|d| d.to_string()).unwrap_or_default());
         cols.push(t.up_votes.to_string());
         cols.push(t.down_votes.to_string());
-        // `created_at->format('d/m/y H:i')`.
         cols.push(
             t.created_at
                 .map(|c| c.format("%d/%m/%y %H:%M").to_string())

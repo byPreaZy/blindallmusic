@@ -1,6 +1,3 @@
-# Bulk-import Deezer playlists into the official Blind'All Music rooms (dev DB).
-# Uses the real app endpoint POST /api/v1/playlists/{id}/providers/import —
-# same path the UI uses, with dedupe on provider+provider_id server-side.
 import json
 import sys
 import time

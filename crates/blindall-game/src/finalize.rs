@@ -1,9 +1,3 @@
-//! Port of `ProcessRoundFinalization` + `RoundFinalizationService::finalize`
-//! + the podium side of `EloService` (the math itself is `blindall_core::elo`).
-//!
-//! Runs as a detached tokio task (the PHP job), so a slow finalization
-//! never blocks the room actor.
-
 use crate::events;
 use crate::store::{GameStore, RoomConfig, StoreError};
 use blindall_core::elo::{self, EloPlayerInput};
@@ -42,13 +36,11 @@ async fn finalize(
     presence: &Arc<dyn PresenceStore>,
     photo_prefix: &str,
 ) -> crate::store::Result<()> {
-    // Guard: only finished rounds (PHP: refresh + check finished_at).
     if store.round_has_standings(round_id).await? {
         tracing::info!(round_id, "finalization skipped — standings exist");
         return Ok(());
     }
 
-    // snapshotScores: Redis first, legacy DB fallback.
     let redis_scores = scores_store.all_scores(round_id).await;
     let (scores, mut tracks_history, from_redis) = if !redis_scores.is_empty() {
         let history = scores_store
@@ -93,7 +85,6 @@ async fn finalize(
     let user_ids: Vec<i64> = scores.keys().copied().collect();
     let users = store.players_info(&user_ids).await?;
 
-    // buildPodium — desc by total, team attached.
     let mut podium: Vec<PodiumEntry> = scores
         .iter()
         .map(|(&uid, &total)| PodiumEntry {
@@ -104,10 +95,8 @@ async fn finalize(
         .collect();
     podium.sort_by(|a, b| b.total.partial_cmp(&a.total).unwrap_or(std::cmp::Ordering::Equal));
 
-    // calculateTrackPositions — per track, rank by score desc / time asc.
     calculate_track_positions(&mut tracks_history);
 
-    // Load round row — track count drives the participation percentage.
     let round_row = store.round_row(round_id).await?.ok_or(StoreError::NotFound("round"))?;
     if round_row.finished_at.is_none() {
         tracing::warn!(round_id, "finalization skipped — round not finished");
@@ -122,7 +111,6 @@ async fn finalize(
     let required = store.required_answers_per_track(&track_ids).await?;
     let threshold = metrics::speed_bonus_threshold(room.track_duration);
 
-    // Build EloPlayerInput map.
     let mut players = HashMap::new();
     for (idx, entry) in podium.iter().enumerate() {
         let uid = entry.user_id;
@@ -179,11 +167,8 @@ async fn finalize(
         return Ok(());
     }
 
-    // write_standings: db impl locks the round row FOR UPDATE and
-    // re-checks standings existence inside the transaction (PHP parity).
     store.write_standings(&standings, &elo_updates).await?;
 
-    // updateTotalScores + level recalc for public rooms.
     for (uid, score) in &scores {
         let Some(info) = users.get(uid) else {
             continue;
@@ -192,7 +177,6 @@ async fn finalize(
             .bump_total_score(room.id, *uid, info.team_id, *score)
             .await?;
         if room.is_public {
-            // `UserLevelUpdated` → private channel `App.Models.User.{id}`.
             match store.recalc_user_level(*uid).await {
                 Ok(Some(payload)) => {
                     hub.broadcast(
@@ -209,8 +193,6 @@ async fn finalize(
         }
     }
 
-    // Cleanup — Redis keys only on redis-source; legacy rows either way
-    // when present (PHP deletes whenever scores()->exists()).
     if from_redis {
         let _ = scores_store.cleanup(round_id).await;
     }
@@ -218,7 +200,6 @@ async fn finalize(
         let _ = store.delete_round_scores(round_id).await;
     }
 
-    // Broadcasts — UserEloUpdated × N, RoundFinished, RoomPublicState.
     let room_v = json!({
         "id": room.id,
         "is_public": room.is_public,
@@ -270,8 +251,6 @@ async fn finalize(
     Ok(())
 }
 
-/// `calculateTrackPositions` — rank players per track by score desc, then
-/// response_time asc (NULLs last, matching PHP's guarded compare).
 fn calculate_track_positions(history: &mut HashMap<i64, Vec<TrackHistoryEntry>>) {
     let mut by_track: HashMap<i64, Vec<(i64, f64, Option<f64>)>> = HashMap::new();
     for (&uid, entries) in history.iter() {
@@ -318,7 +297,6 @@ fn podium_user_json(
     }
 }
 
-/// `usersPodium` post-finalization — standings rows + user sub-object.
 fn users_podium_json(
     standings: &[Standing],
     users: &HashMap<i64, crate::store::PlayerInfo>,
@@ -339,9 +317,6 @@ fn users_podium_json(
     )
 }
 
-/// `teamsPodium` — standings grouped by team; PHP serializes the Team
-/// model (`{team_id, total, team}`) because Podium.vue/FInishedRoundModal
-/// read `result.team.name`/`result.team.photo`.
 fn teams_podium_json(
     standings: &[Standing],
     users: &HashMap<i64, crate::store::PlayerInfo>,

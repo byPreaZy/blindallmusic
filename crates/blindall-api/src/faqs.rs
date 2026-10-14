@@ -1,5 +1,3 @@
-//! Public FAQ endpoints — `FAQController` port.
-
 use crate::auth::CurrentUser;
 use crate::state::AppState;
 use axum::{
@@ -17,7 +15,6 @@ pub struct ListQuery {
     page: Option<i64>,
 }
 
-/// `GET /api/v1/faqs` — public list (search + votes ordering, 6/page like PHP).
 pub async fn index(State(state): State<AppState>, Query(q): Query<ListQuery>) -> Response {
     match state.faqs.list(q.search.as_deref(), q.page.unwrap_or(1), 6).await {
         Ok((faqs, total)) => Json(json!({
@@ -31,8 +28,6 @@ pub async fn index(State(state): State<AppState>, Query(q): Query<ListQuery>) ->
     }
 }
 
-/// `POST /api/v1/faqs/{id}/vote/up|down` — PHP route group is
-/// `auth` + `not.guest`: guests get 403, anonymous 401 (CurrentUser).
 pub async fn vote(
     State(state): State<AppState>,
     Path((id, direction)): Path<(i64, String)>,

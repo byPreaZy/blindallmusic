@@ -1,5 +1,3 @@
-//! Public FAQ reads + votes — `FAQController::index/upvote/downvote` port.
-
 use serde_json::{json, Value};
 use sqlx::postgres::PgPool;
 use sqlx::Row;
@@ -14,8 +12,6 @@ impl FaqRepo {
         Self { pool }
     }
 
-    /// `index` — optional `search` on question/answer, ordered by
-    /// total_upvotes desc then question; paginated (PHP uses 6/page).
     pub async fn list(
         &self,
         search: Option<&str>,
@@ -79,8 +75,6 @@ impl FaqRepo {
         .await
     }
 
-    /// `upvote`/`downvote` — laravel-vote toggle semantics:
-    /// same vote again → cancel; otherwise set/insert the vote.
     pub async fn vote(&self, user_id: i64, faq_id: i64, value: i64) -> Result<(), sqlx::Error> {
         if self.user_vote(user_id, faq_id).await? == Some(value) {
             sqlx::query(

@@ -24,7 +24,6 @@ DLLS = [
     "user32.dll", "secur32.dll", "crypt32.dll", "iphlpapi.dll",
 ]
 
-
 def exports(dll: Path) -> list[str]:
     data = dll.read_bytes()
 
@@ -62,7 +61,6 @@ def exports(dll: Path) -> list[str]:
         names.append(data[rva2off(name_rva):end].decode("ascii", "replace"))
     return names
 
-
 def main() -> int:
     OUT.mkdir(exist_ok=True)
     for dll_name in DLLS:
@@ -91,7 +89,6 @@ def main() -> int:
             continue
         print(f"ok {lib.name} ({len(names)} exports)")
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

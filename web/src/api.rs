@@ -1,5 +1,3 @@
-//! HTTP client for `/api/v1` — Sanctum bearer from localStorage.
-
 use gloo_net::http::{Method, RequestBuilder};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -8,8 +6,6 @@ use std::collections::HashMap;
 
 pub const TOKEN_KEY: &str = "blindall_token";
 
-/// Mirrors PHP `config('blindall.discord_invite_url')` — Inertia shares it on
-/// every page; here it's a build-time constant with the same default.
 pub const DISCORD_INVITE_URL: &str = "https://discord.gg/FVJRmKtScG";
 
 fn storage() -> Option<web_sys::Storage> {
@@ -38,8 +34,6 @@ pub struct ApiError {
     pub status: u16,
     pub message: String,
     pub errors: HashMap<String, Vec<String>>,
-    /// Raw decoded body — endpoints may carry extra fields (e.g. the room
-    /// name inside `password_required` 403s).
     pub body: Value,
 }
 
@@ -50,8 +44,6 @@ impl ApiError {
 }
 
 fn authed(req: RequestBuilder) -> RequestBuilder {
-    // `X-Locale` mirrors PHP's session locale (`SetLocale`) — the API uses
-    // it for localized payloads (check messages, mails).
     let req = req.header("X-Locale", crate::i18n::locale());
     match stored_token() {
         Some(token) => req.header("Authorization", &format!("Bearer {token}")),
@@ -73,9 +65,6 @@ async fn finish(
     }
     let status = resp.status();
     let body: Value = resp.json().await.unwrap_or_default();
-    // banhammer `logout.banned`/`auth.banned` — any API call answered with a
-    // banned-403 routes the SPA to `/user/banned` (the page's own fetch is
-    // exempt by the pathname guard, no redirect loop).
     if body["error"].as_str() == Some("banned") {
         if let Some(w) = web_sys::window() {
             if w.location().pathname().ok().as_deref() != Some("/user/banned") {
@@ -113,9 +102,6 @@ async fn send(req: RequestBuilder) -> Result<gloo_net::http::Response, ApiError>
     finish(authed(req).send().await).await
 }
 
-/// Reads a JSON response, tolerating `204`/empty bodies — Laravel returns
-/// `response()->noContent()` for many mutations. Empty parses as `null`
-/// (works for `Value`/`Option<T>` callers; struct callers still error).
 async fn parse<T: DeserializeOwned>(resp: gloo_net::http::Response) -> Result<T, ApiError> {
     let text = resp.text().await.map_err(|e| ApiError {
         status: 0,
@@ -216,7 +202,6 @@ pub async fn delete<T: DeserializeOwned>(path: &str) -> Result<T, ApiError> {
     parse(resp).await
 }
 
-/// POST for endpoints answering `204 No Content` (chat store, logout…).
 pub async fn post_no_content<B: Serialize>(path: &str, body: &B) -> Result<(), ApiError> {
     let body = serde_json::to_string(body).map_err(|e| ApiError {
         status: 0,
@@ -236,14 +221,12 @@ pub async fn post_no_content<B: Serialize>(path: &str, body: &B) -> Result<(), A
     finish(req.send().await).await.map(|_| ())
 }
 
-/// DELETE for `204 No Content` endpoints.
 pub async fn delete_no_content(path: &str) -> Result<(), ApiError> {
     send(RequestBuilder::new(path).method(Method::DELETE))
         .await
         .map(|_| ())
 }
 
-/// DELETE with a JSON body (Laravel `->detach($request->user_id)` style).
 pub async fn delete_with_body<T: DeserializeOwned, B: Serialize>(
     path: &str,
     body: &B,

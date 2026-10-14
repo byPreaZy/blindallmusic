@@ -1,6 +1,3 @@
-//! Admin — `Admin\UserController` CRUD + dashboard maintenance ops
-//! (`rounds:force-clear`, `topusers:weekly`).
-
 use serde_json::{json, Value};
 use sqlx::postgres::PgPool;
 use sqlx::Row;
@@ -15,8 +12,6 @@ impl AdminRepo {
         Self { pool }
     }
 
-    /// `index` — filterable user list (search/role/trashed), `format('d/m/Y H:i')`
-    /// done client-side; we return ISO.
     pub async fn users(
         &self,
         search: Option<&str>,
@@ -26,13 +21,11 @@ impl AdminRepo {
         per_page: i64,
     ) -> Result<crate::moderation::Page, sqlx::Error> {
         let like = search.map(|s| format!("%{s}%"));
-        // `role` filter: 'admin' | 'user' | 'guest' (PHP filter scope).
         let (admin_only, guests_only) = match role {
             Some("admin") => (true, false),
             Some("guest") => (false, true),
             _ => (false, false),
         };
-        // `trashed`: 'with' | 'only' | null (exclude).
         let trashed_clause = match trashed {
             Some("with") => "",
             Some("only") => "AND u.deleted_at IS NOT NULL",
@@ -101,7 +94,6 @@ impl AdminRepo {
         })
     }
 
-    /// `store` — admin creates a user (bcrypt password, is_administrator flag).
     pub async fn create_user(
         &self,
         name: &str,
@@ -128,7 +120,6 @@ impl AdminRepo {
         
     }
 
-    /// `update` — name/email/team_id/is_administrator (+optional password).
     pub async fn update_user(
         &self,
         user_id: i64,
@@ -164,7 +155,6 @@ impl AdminRepo {
         Ok(res.rows_affected() > 0)
     }
 
-    /// `destroy` / `restore` — soft delete + restore.
     pub async fn delete_user(&self, user_id: i64) -> Result<bool, sqlx::Error> {
         sqlx::query("UPDATE users SET deleted_at = $1 WHERE id = $2")
             .bind(chrono::Utc::now())
@@ -182,8 +172,6 @@ impl AdminRepo {
             .map(|r| r.rows_affected() > 0)
     }
 
-    /// `rounds:force-clear` — stop playing rooms + close unfinished rounds.
-    /// (In-memory actors should be stopped too — the API layer sends Stop.)
     pub async fn force_clear_rounds(&self) -> Result<(u64, u64), sqlx::Error> {
         let mut tx = self.pool.begin().await?;
         let rooms = sqlx::query("UPDATE rooms SET is_playing = false WHERE is_playing = true")
@@ -201,8 +189,6 @@ impl AdminRepo {
         Ok((rooms, rounds))
     }
 
-    /// `topusers:weekly` — top 10 public-room standings over 7 days.
-    /// Caller writes the result to `{prefix}weekly-top-10-users` (php-ser).
     pub async fn weekly_top_users(&self) -> Result<Vec<Value>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT rs.user_id, ROUND(SUM(rs.total_score)::numeric, 1)::float8 AS total_score, \
@@ -236,7 +222,6 @@ impl AdminRepo {
 
     // ---- content CRUD (categories / answer_types / pages / faqs) -------------
 
-    /// `Admin\CategoryController::index` — categories + room counts.
     pub async fn categories(&self) -> Result<Vec<Value>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT c.id, c.name, c.slug, c.created_at, \
@@ -273,7 +258,6 @@ impl AdminRepo {
         row > 0
     }
 
-    /// `store` — name + `Str::slug`.
     pub async fn create_category(&self, name: &str) -> Result<i64, sqlx::Error> {
         let now = chrono::Utc::now();
         sqlx::query_scalar::<_, i64>("INSERT INTO categories (name, slug, created_at, updated_at) VALUES ($1, $2, $3, $4) RETURNING id")
@@ -305,7 +289,6 @@ impl AdminRepo {
             .map(|r| r.rows_affected() > 0)
     }
 
-    /// `answer_types` CRUD.
     pub async fn answer_type_create(
         &self,
         name: &str,
@@ -356,7 +339,6 @@ impl AdminRepo {
             .map(|r| r.rows_affected() > 0)
     }
 
-    /// `pages` — versioned: update creates a new revision (`original_id`).
     pub async fn pages(&self) -> Result<Vec<Value>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT id, title, slug, original_id, parent_id, revised_at, created_at \
@@ -379,7 +361,6 @@ impl AdminRepo {
             .collect())
     }
 
-    /// `store`/`update` share the same INSERT — updates become revisions.
     pub async fn create_page(
         &self,
         title: &str,
@@ -412,7 +393,6 @@ impl AdminRepo {
             .await
     }
 
-    /// `Admin\PageController::store` validation — `unique:pages` on title.
     pub async fn page_title_taken(&self, title: &str) -> Result<bool, sqlx::Error> {
         sqlx::query_scalar::<_, i64>(
             "SELECT EXISTS(SELECT 1 FROM pages WHERE title = $1)::int::bigint",
@@ -423,7 +403,6 @@ impl AdminRepo {
         .map(|v| v == 1)
     }
 
-    /// `PageController::show` — latest revision by slug (public).
     pub async fn page_by_slug(&self, slug: &str) -> Result<Option<Value>, sqlx::Error> {
         let row = sqlx::query(
             "SELECT id, title, slug, content, parent_id, revised_at, updated_at \
@@ -445,7 +424,6 @@ impl AdminRepo {
         }))
     }
 
-    /// `faqs` CRUD.
     pub async fn faqs(&self) -> Result<Vec<Value>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT id, locale, question, answer, created_at FROM faqs ORDER BY id",
@@ -516,9 +494,6 @@ impl AdminRepo {
 
     // ---- Admin/Playlists ---------------------------------------------------
 
-    /// `Admin\PlaylistController::index` — all playlists (no SoftDeletes on
-    /// playlists upstream; `trashed` filter is a no-op kept for parity),
-    /// owner + moderators + tracks_count, ordered by updated_at, paginate 5.
     pub async fn admin_playlists(
         &self,
         search: Option<&str>,
@@ -578,7 +553,6 @@ impl AdminRepo {
         Ok(crate::moderation::Page { items, total, page, per_page })
     }
 
-    /// `Admin\PlaylistController::update` — name + description + is_public.
     pub async fn admin_update_playlist(
         &self,
         id: i64,
@@ -602,8 +576,6 @@ impl AdminRepo {
 
     // ---- Admin/Rooms -------------------------------------------------------
 
-    /// `Admin\RoomController::index` — search/trashed filters, ordered
-    /// is_public DESC then name, paginate 5.
     pub async fn admin_rooms(
         &self,
         search: Option<&str>,
@@ -684,8 +656,6 @@ impl AdminRepo {
         Ok(crate::moderation::Page { items, total, page, per_page })
     }
 
-    /// `Admin\RoomController::update` — full room fields incl. pro/active/
-    /// webhook/color (wider than the public `updateOptions`).
     pub async fn admin_update_room(
         &self,
         id: i64,
@@ -742,8 +712,6 @@ impl AdminRepo {
 
     // ---- Admin/Teams ---------------------------------------------------------
 
-    /// `Admin\TeamController::index` — search/trashed filters, `members_count`,
-    /// ordered by updated_at, paginate 5.
     pub async fn admin_teams(
         &self,
         search: Option<&str>,
@@ -800,7 +768,6 @@ impl AdminRepo {
         Ok(crate::moderation::Page { items, total, page, per_page })
     }
 
-    /// `Admin\TeamController::update` — name + owner (`user_id`).
     pub async fn admin_update_team(
         &self,
         id: i64,
@@ -817,7 +784,6 @@ impl AdminRepo {
             .map(|r| r.rows_affected() > 0)
     }
 
-    /// Soft-delete/restore parity (`Team` uses SoftDeletes).
     pub async fn team_set_deleted(&self, id: i64, deleted: bool) -> Result<bool, sqlx::Error> {
         if deleted {
             sqlx::query("UPDATE teams SET deleted_at = $1 WHERE id = $2")
@@ -837,7 +803,6 @@ impl AdminRepo {
 
     // ---- Admin/AnswerTypes -------------------------------------------------
 
-    /// `Admin\AnswerTypeController::index` — full list for the CRUD page.
     pub async fn admin_answer_types(&self) -> Result<Vec<Value>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT id, name, pronoun, svg_icon, created_at FROM answer_types ORDER BY id",
@@ -858,9 +823,6 @@ impl AdminRepo {
             .collect())
     }
 
-    /// `Admin\PlaylistController::store` — create under the admin user +
-    /// moderator pivot (same shape as `PlaylistRepo::create` but honours
-    /// the validated `is_public` flag).
     pub async fn admin_create_playlist(
         &self,
         user_id: i64,
@@ -892,10 +854,6 @@ impl AdminRepo {
         Ok(id)
     }
 
-    /// `Admin\RoomController::store` — PHP's `create()` array silently drops
-    /// non-fillable keys (is_pro, is_active, is_chat_active, playlist_id,
-    /// pause_between_tracks, color, photo_path), so only the fillable set is
-    /// written here. Then `moderators()->attach` + slug from the name.
     pub async fn admin_create_room(
         &self,
         user_id: i64,
@@ -909,7 +867,6 @@ impl AdminRepo {
         is_random: bool,
         discord_webhook_url: Option<&str>,
     ) -> Result<i64, sqlx::Error> {
-        // `RoomRepo::unique_slug` — kebab name, `-N` suffix on collision.
         let base = blindall_core::sanitize::str_slug(name, '-');
         let mut slug = base.clone();
         let mut count = 0;
@@ -961,7 +918,6 @@ impl AdminRepo {
         Ok(id)
     }
 
-    /// `Admin\PageController::destroy` — Page has no SoftDeletes → hard delete.
     pub async fn delete_page(&self, id: i64) -> Result<bool, sqlx::Error> {
         sqlx::query("DELETE FROM pages WHERE id = $1")
             .bind(id)
@@ -970,7 +926,6 @@ impl AdminRepo {
             .map(|r| r.rows_affected() > 0)
     }
 
-    /// `Admin\PlaylistController::store` validation helper — `unique:playlists`.
     pub async fn playlist_name_taken(&self, name: &str) -> Result<bool, sqlx::Error> {
         sqlx::query_scalar::<_, i64>(
             "SELECT EXISTS(SELECT 1 FROM playlists WHERE name = $1)::int::bigint",

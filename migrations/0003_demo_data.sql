@@ -1,10 +1,3 @@
--- =============================================================================
--- Données de démo LOCALES — appliquées uniquement quand SEED_DEMO=1.
--- Une room publique autostart "Démo" avec une playlist de 5 tracks jouables
--- (previews mp3 SoundHelix, URLs publiques stables) pour tester le gameplay
--- de bout en bout sans providers externes. Idempotent (guards NOT EXISTS).
--- =============================================================================
-
 -- Utilisateur propriétaire des objets démo (password NULL → ne peut pas se
 -- connecter, ce n'est pas un compte de test).
 INSERT INTO users (name, email, elo, is_guest, show_donation_history_on_profile, created_at, updated_at)

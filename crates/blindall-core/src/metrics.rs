@@ -1,14 +1,10 @@
-//! Port of `RoundPerformanceMetricsService` (pure parts).
-
 use crate::types::{PerformanceMetrics, TrackHistoryEntry};
 use std::collections::{HashMap, HashSet};
 
-/// `speedBonusThresholdForRoom`: `room.track_duration * 0.18`.
 pub fn speed_bonus_threshold(track_duration: u32) -> f64 {
     track_duration as f64 * 0.18
 }
 
-/// `trackIdsFromRound` — int-cast, filter 0, unique.
 pub fn track_ids_from_round(tracks: &[i64]) -> Vec<i64> {
     tracks
         .iter()
@@ -19,9 +15,6 @@ pub fn track_ids_from_round(tracks: &[i64]) -> Vec<i64> {
         .collect()
 }
 
-/// `fromTracksHistory`: completion time per track = max response_time of its
-/// found answers; a track counts as "completed" only when all required
-/// answers were found. Average over completed tracks; fast = under threshold.
 pub fn from_tracks_history(
     history: &[TrackHistoryEntry],
     required_answers_per_track: &HashMap<i64, usize>,
@@ -104,7 +97,6 @@ mod tests {
                 response_time: Some(9.0),
                 ..Default::default()
             },
-            // track 2 incomplete: 1/2 answers
             TrackHistoryEntry {
                 track_id: 2,
                 answer_id: Some(20),

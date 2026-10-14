@@ -1,6 +1,3 @@
-//! `EloBadge.vue` — tier-colored ELO chip. Ported verbatim: 12 tiers
-//! (Bronze → Grandmaster), `compact`/`minimal` variants used across the site.
-
 use leptos::prelude::*;
 
 struct EloTier {
@@ -36,9 +33,6 @@ fn tier_for(elo: i64) -> &'static EloTier {
         .unwrap_or(&ELO_TIERS[0])
 }
 
-/// `EloBadge` — `variant`: "default" | "compact" | "minimal", `size`: "sm" |
-/// "md" | "lg". Optional `elo_change` renders the `+N`/`-N` delta (default
-/// variant only, matching `showChange`).
 #[component]
 pub fn EloBadge(
     elo: i64,
@@ -89,7 +83,6 @@ pub fn EloBadge(
             </div>
         }
         .into_any(),
-        // `compact` — number only over the tier gradient.
         _ => view! {
             <div class=format!(
                 "inline-flex items-center justify-center rounded-md border font-bold shadow-sm \

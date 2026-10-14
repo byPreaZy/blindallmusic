@@ -8,8 +8,6 @@ use leptos_router::hooks::{use_navigate, use_query_map};
 use send_wrapper::SendWrapper;
 use wasm_bindgen::JsCast;
 
-/// `SearchRooms` — navbar room search (`SearchRooms.vue`): debounced
-/// navigation to `/?search=…`, `/` keyboard shortcut, ESC clears.
 #[component]
 fn SearchRooms() -> impl IntoView {
     let query = use_query_map();
@@ -21,7 +19,6 @@ fn SearchRooms() -> impl IntoView {
         Option::<gloo_timers::callback::Timeout>::None,
     ));
 
-    // `/` focuses the search (ignored while typing in a field).
     {
         let input_ref = input_ref;
         leptos::task::spawn_local(async move {
@@ -62,7 +59,6 @@ fn SearchRooms() -> impl IntoView {
         });
     };
 
-    // Keep the input synced with the URL (e.g. back/forward nav).
     Effect::new(move |_| {
         let url_q = query.get().get("search").unwrap_or_default();
         if url_q != value.get_untracked() {
@@ -111,8 +107,6 @@ fn SearchRooms() -> impl IntoView {
     }
 }
 
-/// `LanguageSwitcher` — compact `<select>` (fr/en/es). In PHP it lives inside
-/// `UserDropdown` (`:standalone="false"`) — same placement here.
 #[component]
 fn LanguageSwitcher() -> impl IntoView {
     view! {
@@ -147,7 +141,6 @@ fn help_icon(cls: &'static str) -> impl IntoView {
     }
 }
 
-/// `Navbar.vue` help dropdown — Guides / Référence / Systèmes de progression.
 #[component]
 fn HelpDropdown() -> impl IntoView {
     let open = RwSignal::new(false);
@@ -186,9 +179,6 @@ fn HelpDropdown() -> impl IntoView {
     }
 }
 
-/// `UserDropdown.vue` — avatar trigger (crown for supporters); menu order
-/// matches PHP: account, teams, rooms, playlists, admin, modération,
-/// language, logout.
 #[component]
 fn UserDropdown() -> impl IntoView {
     let auth = use_auth();
@@ -256,8 +246,6 @@ fn UserDropdown() -> impl IntoView {
     }
 }
 
-/// `MobileBottomNav.vue` — fixed bottom bar (home, rankings, level,
-/// notifications, user) shown below `md:`.
 #[component]
 fn MobileBottomNav() -> impl IntoView {
     let auth = use_auth();
@@ -288,8 +276,6 @@ fn MobileBottomNav() -> impl IntoView {
                                 <UserDropdown/>
                             </div>
                         }.into_any(),
-                        // `guest.to-login`/`guest.to-register` — guests log
-                        // out first, then land on the auth page.
                         Some(_) => view! {
                             <div class="flex flex-1 items-center justify-center gap-2 px-2">
                                 <button title=t("Login") class="retro-nav-btn text-xs"
@@ -319,15 +305,10 @@ fn MobileBottomNav() -> impl IntoView {
     }
 }
 
-/// `Navbar.vue` — desktop: logo + tagline | search + help | trophy,
-/// notifications, level, user dropdown. Mobile: search row + bottom nav.
-/// No text links — PHP MainMenu.vue is dead code upstream.
 #[component]
 pub fn Navbar() -> impl IntoView {
     let auth = use_auth();
 
-    // `v-if="!isRoomShow"` — mobile search strip hidden on the room page
-    // (Rooms/Show has its own mobile HUD).
     let is_room_show = move || {
         leptos_router::hooks::use_location()
             .pathname
@@ -338,7 +319,6 @@ pub fn Navbar() -> impl IntoView {
     };
 
     view! {
-        // Mobile search strip (`md:hidden` block in Navbar.vue).
         <Show when=move || !is_room_show()>
             <div class="surface-nav border-b border-white/10 px-4 py-3 md:hidden">
                 <SearchRooms/>
@@ -369,8 +349,6 @@ pub fn Navbar() -> impl IntoView {
                         <Show
                             when=move || auth.user.get().map(|u| !u.is_guest).unwrap_or(false)
                             fallback=move || {
-                                // Guests hit `guest.to-login`/`guest.to-register`
-                                // (logout → auth page); anonymous users get links.
                                 if auth.user.get().is_some() {
                                     view! {
                                         <div class="flex gap-3">

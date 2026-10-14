@@ -1,7 +1,3 @@
-//! User levels — `LevelCalculator::update` port. Callers dispatch this on
-//! the same triggers as `UpdateUserLevel` jobs (login, score, playlists,
-//! rooms, likes). Returns the `UserLevelUpdated` broadcast payload.
-
 use sqlx::postgres::PgPool;
 use sqlx::Row;
 
@@ -10,7 +6,6 @@ pub struct LevelRepo {
     pool: PgPool,
 }
 
-/// Dispatch `UpdateUserLevel` on this trigger (PHP `$type` values).
 #[derive(Debug, Clone, Copy)]
 pub enum LevelTrigger {
     Login,
@@ -25,7 +20,6 @@ impl LevelRepo {
         Self { pool }
     }
 
-    /// `getUserLevel` — firstOrCreate with the migration defaults.
     async fn ensure_level(&self, user_id: i64) -> Result<(), sqlx::Error> {
         let now = chrono::Utc::now();
         sqlx::query(
@@ -44,9 +38,6 @@ impl LevelRepo {
         Ok(())
     }
 
-    /// `LevelCalculator::update` — typed update + `calculateLevelData`,
-    /// returns the `UserLevelUpdated` payload, or `None` for guests
-    /// (PHP job early-returns on `isGuest()`).
     pub async fn update(
         &self,
         user_id: i64,
@@ -66,7 +57,6 @@ impl LevelRepo {
         match trigger {
             LevelTrigger::Login => self.update_login(user_id).await?,
             LevelTrigger::Score => {
-                // sum of total_scores over public rooms only.
                 sqlx::query(
                     "UPDATE user_levels SET score_public_rooms = COALESCE(( \
                      SELECT SUM(ts.score) FROM total_scores ts \
@@ -121,9 +111,6 @@ impl LevelRepo {
         self.calculate_level_data(user_id).await.map(Some)
     }
 
-    /// Read-side snapshot for `auth.user` — same fields PHP shares via
-    /// Inertia (`level`, `current_xp`, `xp_for_next_level`, `total_xp`,
-    /// `level_metrics`). `None` when the user has no row yet.
     pub async fn snapshot(
         &self,
         user_id: i64,
@@ -159,7 +146,6 @@ impl LevelRepo {
         }))
     }
 
-    /// `updateLogin` — consecutive-days streak on last_login_date.
     async fn update_login(&self, user_id: i64) -> Result<(), sqlx::Error> {
         let row = sqlx::query(
             "SELECT last_login_date, consecutive_days_streak FROM user_levels \
@@ -189,7 +175,6 @@ impl LevelRepo {
         Ok(())
     }
 
-    /// `calculateLevelData` — full XP recompute + progressive level loop.
     async fn calculate_level_data(&self, user_id: i64) -> Result<serde_json::Value, sqlx::Error> {
         let row = sqlx::query(
             "SELECT l.score_public_rooms, l.rooms_created_count, \
@@ -203,7 +188,6 @@ impl LevelRepo {
         .await?;
         let seniority: i64 = {
             let created: chrono::DateTime<chrono::Utc> = row.get("created_at");
-            // PHP `diffInMonths` (rounded int).
             ((chrono::Utc::now() - created).num_days() as f64 / 30.44).round() as i64
         };
         let minigame_total: i64 = sqlx::query_scalar(
@@ -213,7 +197,6 @@ impl LevelRepo {
         .fetch_one(&self.pool)
         .await?;
 
-        // `LevelCalculator::calculateLevelData` math lives in blindall-core.
         let data = blindall_core::levels::compute_level(&blindall_core::levels::XpInputs {
             score_public_rooms: row.get("score_public_rooms"),
             minigame_scores_total: minigame_total,
@@ -247,8 +230,6 @@ impl LevelRepo {
         .execute(&self.pool)
         .await?;
 
-        // `UserLevelUpdated::broadcastWith` — includes the fresh metrics
-        // snapshot so the level modal updates live.
         Ok(serde_json::json!({
             "level": level,
             "current_xp": current_xp,

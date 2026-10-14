@@ -1,20 +1,10 @@
-//! Pure port of the scoring part of `RoundController::check`.
-//!
-//! Redis operations (found-answer sets, podium, counters) are injected via
-//! the `ScoreBackend` trait so this stays I/O-free and unit-testable; the
-//! real implementation lives in `blindall-redis`.
-
 use crate::matching::{candidate_lines, evaluate_match};
 use crate::sanitize::sanitize_string;
 use crate::types::TrackAnswer;
 use std::collections::HashSet;
 
-/// What the caller must persist per round (Redis in prod, HashMap in tests).
 pub trait ScoreBackend {
-    /// answer_ids the user already found on this track.
     fn found_answer_ids(&mut self, user_id: i64, track_id: i64) -> HashSet<i64>;
-    /// Atomic `SADD` — returns true iff the answer was newly recorded
-    /// (mirrors `recordTrackDetails` bool + `round:…:answer:{id}:players`).
     fn record_track_details(
         &mut self,
         user_id: i64,
@@ -23,13 +13,9 @@ pub trait ScoreBackend {
         score: Option<f64>,
         answer_id: Option<i64>,
     ) -> bool;
-    /// `SCARD round:{id}:answer:{answerId}:players` minus 1 if user inside.
     fn players_who_found(&mut self, track_id: i64, answer_id: i64, exclude_user: i64) -> usize;
-    /// `INCRBYFLOAT` + `ZINCRBY podium`.
     fn add_score(&mut self, user_id: i64, score: f64);
-    /// `GET round:{id}:scores:{userId}` — current total (0.0 if unset).
     fn get_user_score(&mut self, user_id: i64) -> f64;
-    /// `SMEMBERS` count for user/track — after writes.
     fn count_found_for_user(&mut self, user_id: i64, track_id: i64) -> usize;
 }
 
@@ -40,10 +26,8 @@ pub struct CheckRequest {
     pub client_words: Vec<String>,
     pub current_time: f64,
     pub track_duration: u32,
-    /// `track.hint` — checked before any matching when `!hint`/`!indice`.
     pub hint: Option<String>,
     pub answers: Vec<TrackAnswer>,
-    /// `track_answers` total (for "found everything" detection).
     pub total_track_answers: usize,
 }
 
@@ -53,50 +37,33 @@ pub struct FoundAnswer {
     pub order: usize,
     pub speed_bonus: bool,
     pub type_name: String,
-    /// `answer_types.svg_icon` — PHP serializes the whole `type` relation on
-    /// `good_answers`; the chip renders `type.svg_icon` when present.
     pub svg_icon: Option<String>,
-    /// Original (unsanitized) value — for display in NewScore payload.
     pub value: String,
-    /// Final score credited (base + bonuses).
     pub score: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CheckOutcome {
-    /// `currentTime` out of bounds (`> track_duration + 8` or `< 0`).
     InvalidTime,
-    /// `!hint`/`!indice` and the track has a hint.
     Hint(String),
-    /// `!hint`/`!indice` but no hint on the track.
     NoHint,
-    /// ≥1 new answer recorded. `score` is the user's new round total.
     Good {
         answers: Vec<FoundAnswer>,
         total_score: f64,
-        /// user found every answer of the track → UserHasFoundAllTheAnswers.
         found_all: bool,
     },
-    /// All matches were already recorded.
     AlreadyFound,
-    /// ≥ half of the words of at least one answer line.
     Almost,
     Bad,
 }
 
-/// Port of `RoundController::check` (pure part).
-///
 /// NOTE on ordering: PHP computes `order` (playersWhoFound + 1) BEFORE
-/// recording — the same sequence is kept, including the SADD-already-exists
-/// duplicate path.
 pub fn check<B: ScoreBackend>(req: &CheckRequest, backend: &mut B) -> CheckOutcome {
-    // Security bound: allow tolerance for network/processing delays.
     let max_allowed = req.track_duration as f64 + 8.0;
     if req.current_time < 0.0 || req.current_time > max_allowed {
         return CheckOutcome::InvalidTime;
     }
 
-    // Hint command short-circuit.
     let text_lower = req.text.trim().to_lowercase();
     if text_lower == "!indice" || text_lower == "!hint" {
         return match &req.hint {
@@ -108,7 +75,6 @@ pub fn check<B: ScoreBackend>(req: &CheckRequest, backend: &mut B) -> CheckOutco
     let speed_bonus = req.current_time < (req.track_duration as f64 * 0.18);
     let sanitized = sanitize_string(&req.text);
 
-    // words = unique( sanitized words + trimmed non-empty client words )
     let mut user_words: Vec<String> = sanitized
         .split(' ')
         .filter(|w| !w.trim().is_empty())
@@ -150,7 +116,6 @@ pub fn check<B: ScoreBackend>(req: &CheckRequest, backend: &mut B) -> CheckOutco
         }
 
         if line_complete {
-            // Order computed BEFORE recording — same as PHP.
             let order = backend.players_who_found(req.track_id, answer.id, req.user_id) + 1;
 
             let mut score = answer.score;
@@ -218,10 +183,6 @@ mod tests {
     use super::*;
     use std::collections::{HashMap, HashSet};
 
-    /// In-memory ScoreBackend mirroring the Redis key semantics.
-    /// `stale_reads` simulates the prod race: the local found-set read is
-    /// stale (empty) while the atomic SADD still dedups — the PHP
-    /// `duplicateAnswers` path only triggers this way.
     struct MemBackend {
         found: HashMap<(i64, i64), HashSet<i64>>,   // (user,track) -> answer ids
         answer_players: HashMap<i64, HashSet<i64>>, // answer_id -> user ids
@@ -318,7 +279,6 @@ mod tests {
     #[test]
     fn good_first_answer_with_both_bonuses() {
         let mut b = MemBackend::new();
-        // time 4s < 30*0.18=5.4 → speed bonus; order 1 → +0.5. Total 1+0.5+0.5.
         match check(&req("billie jean", 4.0), &mut b) {
             CheckOutcome::Good {
                 answers,
@@ -350,8 +310,6 @@ mod tests {
 
     #[test]
     fn resubmit_of_found_answer_is_bad() {
-        // PHP parity: an already-found answer is filtered out of
-        // $remainingAnswers → no match at all → 'bad', NOT duplicate.
         let mut b = MemBackend::new();
         check(&req("billie jean", 4.0), &mut b);
         assert_eq!(check(&req("billie jean", 6.0), &mut b), CheckOutcome::Bad);
@@ -359,8 +317,6 @@ mod tests {
 
     #[test]
     fn concurrent_submit_is_already_found() {
-        // The duplicate path only triggers on a race: stale local read
-        // (empty) + atomic SADD dedup on the second write.
         let mut b = MemBackend::new();
         check(&req("billie jean", 4.0), &mut b);
         b.stale_reads = true;
@@ -411,7 +367,6 @@ mod tests {
         let mut b = MemBackend::new();
         assert_eq!(check(&req("billie jean", 39.0), &mut b), CheckOutcome::InvalidTime);
         assert_eq!(check(&req("billie jean", -1.0), &mut b), CheckOutcome::InvalidTime);
-        // boundary: 38.0 ok
         assert!(matches!(
             check(&req("billie jean", 38.0), &mut b),
             CheckOutcome::Good { .. }
@@ -421,7 +376,6 @@ mod tests {
     #[test]
     fn almost_and_bad() {
         let mut b = MemBackend::new();
-        // "michael" alone: 1/2 words of answer 2 -> almost? words: michael(1/2) → almost
         assert_eq!(check(&req("michael", 10.0), &mut b), CheckOutcome::Almost);
         assert_eq!(check(&req("xyz", 10.0), &mut b), CheckOutcome::Bad);
     }

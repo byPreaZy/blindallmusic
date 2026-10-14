@@ -1,6 +1,3 @@
-//! API/WS payload types — mirrors the axum JSON contracts in blindall-api
-//! and the broadcast payloads in blindall-game::events. Some fields exist
-//! for contract parity before their UI consumer lands.
 #![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
@@ -32,12 +29,10 @@ pub struct User {
     pub is_public_moderator: bool,
     #[serde(default)]
     pub team_id: Option<i64>,
-    /// `auth.user` shared-prop extras (enriched payload).
     #[serde(default)]
     pub photo: Option<String>,
     #[serde(default)]
     pub team: Option<Value>,
-    /// PHP `userLevel?->level ?? 1`.
     #[serde(default = "default_level")]
     pub level: i64,
     #[serde(default)]
@@ -60,7 +55,6 @@ pub struct AuthResponse {
     pub user: User,
 }
 
-/// `team` relation on room members — `{id, name}` (PHP `user.team`).
 #[derive(Clone, Debug, Default, PartialEq, Deserialize)]
 pub struct RoomUserTeam {
     pub id: i64,
@@ -68,7 +62,6 @@ pub struct RoomUserTeam {
     pub name: String,
 }
 
-/// `userLevel` on room members — level bubble on the avatar.
 #[derive(Clone, Debug, Default, PartialEq, Deserialize)]
 pub struct RoomUserLevel {
     #[serde(default)]
@@ -77,7 +70,6 @@ pub struct RoomUserLevel {
     pub rounds_played_count: i64,
 }
 
-/// Presence-channel user entry (hub payload / room_state `users`).
 #[derive(Clone, Debug, Default, PartialEq, Deserialize)]
 pub struct RoomUser {
     pub id: i64,
@@ -93,8 +85,6 @@ pub struct RoomUser {
     pub team: Option<RoomUserTeam>,
     #[serde(default, rename = "userLevel")]
     pub user_level: Option<RoomUserLevel>,
-    /// `RoundStanding is_elo_counted` count — ELO shows "N/A" when 0 and
-    /// elo is still the 1500 default (`hasPlayed` in UserProfileBadge).
     #[serde(default)]
     pub public_rounds_played_count: i64,
     #[serde(default)]
@@ -117,7 +107,6 @@ pub struct RoomSummary {
     pub tracks_by_round: i64,
 }
 
-/// `GET /rooms/{id}` → `room` object.
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct RoomConfig {
     pub id: i64,
@@ -141,7 +130,6 @@ pub struct RoomConfig {
     pub member_count: i64,
     #[serde(default)]
     pub can_edit: bool,
-    // `Rooms/Show` props — full show payload parity.
     #[serde(default)]
     pub slug: Option<String>,
     #[serde(default)]
@@ -219,7 +207,6 @@ pub struct Round {
     pub finished_at: Option<String>,
 }
 
-/// `GET /rooms/{id}/joined` response.
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct JoinedPayload {
     #[serde(default)]
@@ -240,7 +227,6 @@ pub struct JoinedPayload {
     pub room: Option<Value>,
 }
 
-/// `check` response good answer.
 #[derive(Clone, Debug, Deserialize)]
 pub struct GoodAnswer {
     pub id: i64,
@@ -252,18 +238,12 @@ pub struct GoodAnswer {
     pub score: Option<f64>,
     #[serde(default)]
     pub order: Option<i64>,
-    /// PHP sends `speedBonus` as a bool flag — typing it `f64` made every
-    /// `good` check response fail to deserialize → red flash on correct
-    /// answers.
     #[serde(default, rename = "speedBonus")]
     pub speed_bonus: Option<bool>,
-    /// `type` relation on the serialized TrackAnswer — the found chip
-    /// renders `type.svg_icon` (admin-managed SVG).
     #[serde(default, rename = "type")]
     pub answer_type: Option<GoodAnswerType>,
 }
 
-/// `type` on good_answers — `svg_icon` before the revealed value.
 #[derive(Clone, Debug, Deserialize)]
 pub struct GoodAnswerType {
     #[serde(default)]
@@ -311,7 +291,6 @@ pub struct ChatMessage {
 
 // ---- playlists -------------------------------------------------------------
 
-/// `GET /playlists` item (flattened `PlaylistListItem`).
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct PlaylistSummary {
     pub id: i64,
@@ -338,7 +317,6 @@ pub struct IdName {
     pub name: String,
 }
 
-/// `GET /playlists/{id}` payload.
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct PlaylistDetail {
     pub playlist: PlaylistFull,
@@ -381,7 +359,6 @@ pub struct DifficultyCount {
     pub count: i64,
 }
 
-/// `GET /playlists/{id}/tracks` row.
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct PlaylistTrack {
     pub id: i64,
@@ -420,7 +397,6 @@ pub struct TrackAnswerRow {
     pub aliases: Option<Value>,
 }
 
-/// Provider search result (`ProviderTrack` + `added`).
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct ProviderResult {
     pub provider: String,
@@ -450,7 +426,6 @@ pub struct Category {
     pub name: String,
 }
 
-/// `GET /rooms/{id}/edit` payload.
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct RoomEdit {
     pub room: Value,

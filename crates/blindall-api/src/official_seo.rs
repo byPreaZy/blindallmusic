@@ -1,10 +1,3 @@
-//! `config/official_room_seo.php` port — the whitelist of official rooms that
-//! get the SEO landing panel (`RoomSeoPanel`) plus their configured FR copy
-//! (`RoomContentService::configuredText`).
-//!
-//! `official_room_seo.json` is the parsed config: `slugs` = official SEO room
-//! slugs, `intros[slug][locale] = {intro, intro_secondary}` (FR only in PHP).
-
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -38,19 +31,14 @@ fn seo() -> &'static OfficialSeo {
     })
 }
 
-/// `OfficialRoomRegistry::slugs()`.
 pub fn slugs() -> &'static [String] {
     &seo().slugs
 }
 
-/// `OfficialRoomRegistry::isOfficialSeoRoom` slug half — the caller still
-/// checks `is_public` + no password on the row.
 pub fn is_official_slug(slug: &str) -> bool {
     seo().slugs.iter().any(|s| s == slug)
 }
 
-/// `RoomContentService::configuredText` — configured copy for the locale
-/// (only `fr` exists in the PHP config).
 pub fn configured_intro(slug: &str, locale: &str) -> Option<IntroTexts> {
     seo().intros.get(slug)?.get(locale).cloned()
 }
