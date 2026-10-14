@@ -19,8 +19,8 @@ use crate::pages::login::{
     VerifyEmailConfirmPage, VerifyEmailPage,
 };
 use crate::pages::moderation::{
-    ModBannedUsers, ModDashboard, ModModerators, ModTracks, ModTrashedMessages, ModUserShow,
-    ModUsers,
+    ModBannedUsers, ModDashboard, ModModerators, ModSuggestions, ModTracks, ModTrashedMessages,
+    ModUserShow, ModUsers,
 };
 use crate::pages::pages::StaticPage;
 use crate::pages::playlist_edit::PlaylistEditPage;
@@ -197,6 +197,7 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/moderation/banned-users") view=ModBannedUsers/>
                         <Route path=path!("/moderation/trashed-messages") view=ModTrashedMessages/>
                         <Route path=path!("/moderation/moderators") view=ModModerators/>
+                        <Route path=path!("/moderation/suggestions") view=ModSuggestions/>
                         <Route path=path!("/moderation/tracks") view=ModTracks/>
                         <Route path=path!("/language/:lang") view=LanguageSwitch/>
                         <Route path=path!("/en") view=LocaleRedirect/>

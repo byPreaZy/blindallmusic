@@ -180,6 +180,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/minigames/{game}/check", post(minigames::check))
         .route("/api/v1/moderation", get(moderation::dashboard))
         .route(
+            "/api/v1/moderation/suggestions",
+            get(moderation::suggestions),
+        )
+        .route(
             "/api/v1/moderation/trashed-messages",
             get(moderation::trashed_messages),
         )

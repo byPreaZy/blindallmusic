@@ -1120,7 +1120,7 @@ pub fn RoomPage() -> impl IntoView {
                 <ShareModal open=share_open url=move || {
                     room.get().url.clone().unwrap_or_else(|| format!("/rooms/{}", room_id.get()))
                 }/>
-                <SuggestionModal open=suggestion_open room_id=room_id/>
+                <SuggestionModal open=suggestion_open room_id=room_id track=track/>
             </Show>
         </div>
     }
@@ -1314,10 +1314,12 @@ fn ShareModal(
 fn SuggestionModal(
     open: RwSignal<bool>,
     room_id: RwSignal<i64>,
+    track: RwSignal<Option<Track>>,
 ) -> impl IntoView {
     let body = RwSignal::new(String::new());
     let sent = RwSignal::new(false);
     let sending = RwSignal::new(false);
+    let failed = RwSignal::new(false);
     let submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let text = body.get().trim().to_string();
@@ -1325,21 +1327,30 @@ fn SuggestionModal(
             return;
         }
         sending.set(true);
+        failed.set(false);
         let rid = room_id.get_untracked();
+        let track_id = track.get_untracked().map(|t| t.id);
         #[derive(serde::Serialize)]
         struct B {
-            message: String,
+            suggestion: String,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            track_id: Option<i64>,
         }
         leptos::task::spawn_local(async move {
             if api::post::<Value, _>(
                 &format!("/api/v1/rooms/{rid}/suggestion"),
-                &B { message: text },
+                &B {
+                    suggestion: text,
+                    track_id,
+                },
             )
             .await
             .is_ok()
             {
                 sent.try_set(true);
                 body.try_set(String::new());
+            } else {
+                failed.try_set(true);
             }
             sending.try_set(false);
         });
@@ -1363,12 +1374,26 @@ fn SuggestionModal(
                         } else {
                             view! {
                                 <div>
+                                    {move || track.get().map(|tr| {
+                                        let label = tr.answers.iter()
+                                            .find(|a| a.name == "Title" || a.name == "Titre")
+                                            .and_then(|a| a.value.clone())
+                                            .unwrap_or_else(|| format!("#{}", tr.id));
+                                        view! {
+                                            <p class="mb-2 text-xs text-white/50">
+                                                {t("About the current track")}" : "<span class="text-white/80">{label}</span>
+                                            </p>
+                                        }.into_any()
+                                    })}
                                     <textarea bind:value=body rows="4" maxlength="500"
                                         class="form-input w-full"
                                         placeholder=t("Suggest a track, an artist, a playlist…")></textarea>
                                     <button type="submit" class="btn-primary mt-3" disabled=move || sending.get()>
                                         {t("Send")}
                                     </button>
+                                    {move || failed.get().then(|| view! {
+                                        <p class="mt-2 text-xs text-red-400">{t("Could not send the suggestion.")}</p>
+                                    })}
                                 </div>
                             }.into_any()
                         }}

@@ -12,6 +12,7 @@ const SECTIONS: &[(&str, &str)] = &[
     ("/moderation/banned-users", "Banned users"),
     ("/moderation/trashed-messages", "Trashed messages"),
     ("/moderation/moderators", "Moderators"),
+    ("/moderation/suggestions", "Suggestions"),
     ("/moderation/tracks", "Local tracks"),
 ];
 
@@ -267,6 +268,117 @@ pub fn ModBannedUsers() -> impl IntoView {
                         }).collect::<Vec<_>>()}
                 </div>
                 {pager(page, last_page, load)}
+            </Show>
+        </ModShell>
+    }
+}
+
+// ---- suggestions queue -----------------------------------------------------------
+
+#[component]
+pub fn ModSuggestions() -> impl IntoView {
+    let data = RwSignal::new(Vec::<Value>::new());
+    let loading = RwSignal::new(true);
+    let error = RwSignal::new(Option::<String>::None);
+
+    let load = move || {
+        leptos::task::spawn_local(async move {
+            match api::get::<Value>("/api/v1/moderation/suggestions").await {
+                Ok(v) => data.set(v["suggestions"].as_array().cloned().unwrap_or_default()),
+                Err(e) => error.set(Some(e.message)),
+            }
+            loading.set(false);
+        });
+    };
+    load();
+
+    view! {
+        <ModShell active="/moderation/suggestions">
+            <ErrLine error=error/>
+            <Show when=move || !loading.get() fallback=move || view! {
+                <div class="py-16 text-center text-white/60">{t("Loading")}"…"</div>
+            }>
+                <div class="card">
+                    {move || {
+                        let list = data.get();
+                        if list.is_empty() {
+                            return view! {
+                                <div class="px-4 py-12 text-center text-sm text-white/40">{t("No suggestions yet.")}</div>
+                            }.into_any();
+                        }
+                        list.into_iter().map(|s| {
+                            let nid = s["id"].as_str().unwrap_or("").to_string();
+                            let read = s["read"].as_bool().unwrap_or(false);
+                            let d = s["data"].clone();
+                            let room_id = d["room"]["id"].as_i64().unwrap_or(0);
+                            let room_name = d["room"]["name"].as_str().unwrap_or("").to_string();
+                            let user_name = d["user"]["name"].as_str().unwrap_or("—").to_string();
+                            let message = d["message"].as_str().unwrap_or("").to_string();
+                            let date = fmt_date(&s["created_at"]);
+                            let playlists: Vec<Value> = d["room"]["playlist_list"]
+                                .as_array().cloned().unwrap_or_default();
+                            let playlists_legacy = d["room"]["playlists"].as_str().unwrap_or("").to_string();
+                            let track: Option<Value> = d["track"].as_object().map(|_| d["track"].clone());
+                            view! {
+                                <div class={format!("border-b border-white/5 px-4 py-3 last:border-0 {}", if read { "opacity-50" } else { "" })}>
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <div class="flex flex-wrap items-center gap-2 text-xs text-white/40">
+                                                <span>{date}</span>
+                                                <A href=format!("/rooms/{room_id}") attr:class="text-brand-accent-light hover:underline">{room_name}</A>
+                                                <span>"· " {user_name}</span>
+                                            </div>
+                                            <p class="mt-1 text-sm text-white/90">{message}</p>
+                                            {track.map(|tr| {
+                                                let tid = tr["id"].as_i64().unwrap_or(0);
+                                                let answers = tr["answers"].as_array().cloned().unwrap_or_default();
+                                                view! {
+                                                    <div class="mt-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs">
+                                                        <div class="mb-1 font-medium text-white/50">
+                                                            {t("Track")} {format!(" #{tid}")}
+                                                        </div>
+                                                        {answers.into_iter().map(|a| {
+                                                            let ty = a["type"].as_str().unwrap_or("").to_string();
+                                                            let val = a["value"].as_str().unwrap_or("").to_string();
+                                                            view! { <div class="text-white/70"><span class="text-white/40">{ty} " : "</span>{val}</div> }
+                                                        }).collect::<Vec<_>>()}
+                                                    </div>
+                                                }.into_any()
+                                            })}
+                                            <div class="mt-2 flex flex-wrap gap-2">
+                                                {if playlists.is_empty() && !playlists_legacy.is_empty() {
+                                                    view! { <span class="text-xs text-white/40">{playlists_legacy}</span> }.into_any()
+                                                } else {
+                                                    playlists.into_iter().map(|p| {
+                                                        let pid = p["id"].as_i64().unwrap_or(0);
+                                                        let pname = p["name"].as_str().unwrap_or("").to_string();
+                                                        view! {
+                                                            <A href=format!("/playlists/{pid}/edit") attr:class="rounded border border-white/15 px-2 py-0.5 text-xs text-brand-accent-light hover:bg-white/5">
+                                                                {pname}
+                                                            </A>
+                                                        }
+                                                    }).collect::<Vec<_>>().into_any()
+                                                }}
+                                            </div>
+                                        </div>
+                                        {(!read).then(|| {
+                                            view! {
+                                                <button type="button" class="shrink-0 rounded-lg border border-emerald-500/30 px-3 py-1.5 text-sm text-emerald-300"
+                                                    on:click=move |_| {
+                                                        let nid = nid.clone();
+                                                        leptos::task::spawn_local(async move {
+                                                            let _ = api::post_empty::<Value>(&format!("/api/v1/users/notifications/{nid}/done")).await;
+                                                            load();
+                                                        });
+                                                    }>{t("Done")}</button>
+                                            }.into_any()
+                                        })}
+                                    </div>
+                                </div>
+                            }
+                        }).collect::<Vec<_>>().into_any()
+                    }}
+                </div>
             </Show>
         </ModShell>
     }

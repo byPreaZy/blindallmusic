@@ -62,6 +62,36 @@ impl NotificationRepo {
             .collect())
     }
 
+    pub async fn suggestions(&self, user_id: i64, limit: i64) -> Result<Vec<Value>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, data, created_at, read_at FROM notifications \
+             WHERE notifiable_type = 'App\\Models\\User' AND notifiable_id = $1 \
+             AND type = 'App\\Notifications\\NewSuggestion' \
+             ORDER BY read_at IS NOT NULL, created_at DESC LIMIT $2",
+        )
+        .bind(user_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|r| {
+                let data: Value = r
+                    .get::<Option<String>, _>("data")
+                    .and_then(|d| serde_json::from_str(&d).ok())
+                    .unwrap_or(json!({}));
+                json!({
+                    "id": r.get::<String, _>("id"),
+                    "type": r.get::<String, _>("type"),
+                    "data": data,
+                    "read": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("read_at").is_some(),
+                    "created_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("created_at")
+                        .map(|t| t.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+                })
+            })
+            .collect())
+    }
+
     pub async fn unread_count(&self, user_id: i64) -> Result<i64, sqlx::Error> {
         sqlx::query_scalar(
             "SELECT COUNT(*) FROM notifications \

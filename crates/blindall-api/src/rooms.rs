@@ -1358,6 +1358,8 @@ pub async fn alert(
 #[derive(Deserialize)]
 pub struct SuggestionBody {
     suggestion: String,
+    #[serde(default)]
+    track_id: Option<i64>,
 }
 
 pub async fn suggestion(
@@ -1377,25 +1379,49 @@ pub async fn suggestion(
     if body.suggestion.is_empty() {
         return validation("suggestion", "The suggestion field is required.");
     }
-    let allowed = user.is_administrator || {
-        match state.auth.created_at_and_total_score(user.id).await {
+    let veteran = user.is_administrator
+        || state.auth.is_public_moderator(user.id).await
+        || match state.auth.created_at_and_total_score(user.id).await {
             Ok(Some((Some(created), total))) => {
                 created < chrono::Utc::now() - chrono::Duration::days(60) && total > 500.0
             }
             _ => false,
+        };
+    // Fresh accounts may still report broken data (they are the ones who find
+    // it), but throttled so the notification queue cannot be flooded.
+    if !veteran {
+        if let Some(secs) = state
+            .suggestion_rate
+            .retry_after(&format!("sugg|{}", user.id), 10, 3600)
+        {
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(json!({"error": "rate_limited", "retry_after": secs})),
+            )
+                .into_response();
         }
-    };
-    if !allowed {
-        return forbidden();
     }
-    let playlists: Vec<String> = state
+    let room_playlists = state
         .rooms
         .room_playlists(room.id)
         .await
-        .unwrap_or_default()
+        .unwrap_or_default();
+    let playlists: Vec<String> = room_playlists.iter().map(|(_, name)| name.clone()).collect();
+    let playlist_list: Vec<Value> = room_playlists
         .iter()
-        .map(|(_, name)| name.clone())
+        .map(|(pid, name)| json!({"id": pid, "name": name}))
         .collect();
+    let mut track_json = Value::Null;
+    if let Some(tid) = body.track_id {
+        let answers = state
+            .playlists
+            .track_answers_labeled(tid)
+            .await
+            .unwrap_or_default();
+        if !answers.is_empty() {
+            track_json = json!({"id": tid, "answers": answers});
+        }
+    }
     for (mod_id, _name) in state.rooms.moderators(room.id).await.unwrap_or_default() {
         let _ = state
             .notifications
@@ -1407,8 +1433,10 @@ pub async fn suggestion(
                         "id": room.id,
                         "name": room.name,
                         "playlists": playlists.join(","),
+                        "playlist_list": playlist_list,
                     },
                     "user": {"id": user.id, "name": user.name},
+                    "track": track_json,
                     "created_at": notif_timestamp(),
                     "message": body.suggestion,
                 }),

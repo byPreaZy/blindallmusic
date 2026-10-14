@@ -38,6 +38,18 @@ fn sensitive(user: &blindall_db::entities::User) -> bool {
 
 // ---- dashboard -------------------------------------------------------------
 
+pub async fn suggestions(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
+    if !require_moderator(&state, &user).await {
+        return forbidden();
+    }
+    let list = state
+        .notifications
+        .suggestions(user.id, 200)
+        .await
+        .unwrap_or_default();
+    Json(json!({"suggestions": list})).into_response()
+}
+
 pub async fn dashboard(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
     if !require_moderator(&state, &user).await {
         return forbidden();

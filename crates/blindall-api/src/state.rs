@@ -29,6 +29,7 @@ pub struct AppState {
     pub check_rate: std::sync::Arc<crate::auth_session::RateBucket>,
     pub contact_rate: std::sync::Arc<crate::auth_session::RateBucket>,
     pub reset_rate: std::sync::Arc<crate::auth_session::RateBucket>,
+    pub suggestion_rate: std::sync::Arc<crate::auth_session::RateBucket>,
     pub ws_tickets: std::sync::Arc<crate::auth_session::WsTickets>,
     pub levels: std::sync::Arc<crate::levels::LevelDispatcher>,
     pub password_resets: blindall_db::PasswordResetRepo,

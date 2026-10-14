@@ -363,6 +363,29 @@ impl PlaylistRepo {
         Ok((tracks, total))
     }
 
+    pub async fn track_answers_labeled(
+        &self,
+        track_id: i64,
+    ) -> Result<Vec<serde_json::Value>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT at.name AS type, ta.value FROM track_answers ta \
+             JOIN answer_types at ON at.id = ta.answer_type_id \
+             WHERE ta.track_id = $1 ORDER BY at.id, ta.id",
+        )
+        .bind(track_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "type": r.get::<String, _>("type"),
+                    "value": r.get::<String, _>("value"),
+                })
+            })
+            .collect())
+    }
+
     pub async fn track_answers(&self, track_id: i64) -> Result<Vec<AnswerRow>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT id, answer_type_id, value, score, aliases \
