@@ -114,7 +114,7 @@ pub fn PlaylistPanel(
             </header>
             <main class="retro-card__body">
                 <div class="h-64 overflow-y-auto pr-2 md:h-80 2xl:h-96"
-                    style="scrollbar-width:thin;scrollbar-color:rgb(0 173 181 / 0.5) rgb(26 26 46 / 0.5)">
+                    style="scrollbar-width:thin;scrollbar-color:rgb(242 75 67 / 0.5) rgb(30 25 46 / 0.5)">
                     <ul class="space-y-3 md:space-y-4">
                         {move || {
                             let list = played_tracks.get();

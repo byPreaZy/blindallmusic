@@ -243,7 +243,7 @@ fn ProfileHeader(profile: RwSignal<Value>, on_level: impl Fn(leptos::ev::MouseEv
                                     }.into_any()
                                 }}
                                 <button type="button"
-                                    class="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-brand-midnight bg-brand-primary text-sm font-black text-white shadow-lg transition hover:scale-110"
+                                    class="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-brand-midnight bg-brand-primary text-sm font-black text-brand-midnight shadow-lg transition hover:scale-110"
                                     title={t("XP Breakdown")}
                                     on:click=on_level>
                                     {level}
@@ -597,7 +597,7 @@ fn LevelInfoCard(profile: RwSignal<Value>, compact: bool) -> impl IntoView {
             view! {
                 <div class="space-y-4">
                     <div class="flex items-center gap-3">
-                        <span class=format!("flex h-9 w-9 items-center justify-center rounded-full bg-brand-primary text-sm font-black text-white")>
+                        <span class=format!("flex h-9 w-9 items-center justify-center rounded-full bg-brand-primary text-sm font-black text-brand-midnight")>
                             {level}
                         </span>
                         <div>

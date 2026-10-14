@@ -1803,17 +1803,18 @@ body {
   }
 }
 .gold {
-  background: #f9ed69;
-  color: #1a1a2e;
+  background: #f2c94c;
+  color: #161220;
   box-shadow: var(--glow-secondary);
 }
 .silver {
-  background: #00adb5;
-  color: #1a1a2e;
+  background: #c9ccd3;
+  color: #161220;
   box-shadow: var(--glow-accent);
 }
 .bronze {
-  background: #e94560;
+  background: #cd7f4e;
+  color: #161220;
   box-shadow: var(--glow-primary);
 }
 @keyframes grow-up {

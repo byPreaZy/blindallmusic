@@ -259,7 +259,7 @@ fn MobileBottomNav() -> impl IntoView {
                 </A>
                 <A href="/rankings" attr:title=t("Rankings") attr:class="flex min-w-0 flex-1 items-center justify-center px-2 py-2">
                     <div class="retro-icon-btn text-brand-secondary">
-                        {trophy_icon("h-5 w-5 drop-shadow-[0_0_8px_rgb(249_237_105/0.5)]")}
+                        {trophy_icon("h-5 w-5 drop-shadow-[0_0_8px_rgb(242_201_76/0.5)]")}
                     </div>
                 </A>
                 {move || {
@@ -344,7 +344,7 @@ pub fn Navbar() -> impl IntoView {
                     <div class="flex items-center gap-3">
                         <A href="/rankings" attr:title=t("Rankings")
                             attr:class="retro-icon-btn text-brand-secondary hover:text-brand-secondary">
-                            {trophy_icon("h-5 w-5 drop-shadow-[0_0_8px_rgb(249_237_105/0.5)]")}
+                            {trophy_icon("h-5 w-5 drop-shadow-[0_0_8px_rgb(242_201_76/0.5)]")}
                         </A>
                         <Show
                             when=move || auth.user.get().map(|u| !u.is_guest).unwrap_or(false)

@@ -73,7 +73,7 @@ pub fn RankingPanel(
                 </header>
                 <main class="retro-card__body">
                     <div class="h-48 overflow-y-auto pr-2 sm:h-64 md:h-80 2xl:h-96"
-                        style="scrollbar-width:thin;scrollbar-color:rgb(249 237 105 / 0.4) rgb(26 26 46 / 0.5)">
+                        style="scrollbar-width:thin;scrollbar-color:rgb(242 201 76 / 0.4) rgb(30 25 46 / 0.5)">
                         {move || {
                             let list = sorted.get();
                             if list.is_empty() {
@@ -95,7 +95,7 @@ pub fn RankingPanel(
                                         let square = match i {
                                             0 => "bg-brand-secondary text-brand-midnight",
                                             1 => "bg-brand-accent text-brand-midnight",
-                                            2 => "bg-brand-primary text-white",
+                                            2 => "bg-brand-primary text-brand-midnight",
                                             _ => "bg-brand-midnight text-white/70",
                                         };
                                         let ring = match i {

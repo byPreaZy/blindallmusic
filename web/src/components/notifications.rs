@@ -96,7 +96,7 @@ pub fn Notifications() -> impl IntoView {
             <button type="button" class="retro-icon-btn relative cursor-pointer" title="Notifications"
                 on:click=move |_| open.update(|o| *o = !*o)>
                 {move || (count() > 0).then(|| view! {
-                    <span class="absolute -right-1 -top-1 z-10 flex h-5 w-5 items-center justify-center truncate rounded-full border-2 border-brand-midnight bg-brand-primary text-[10px] font-bold text-white shadow-lg">
+                    <span class="absolute -right-1 -top-1 z-10 flex h-5 w-5 items-center justify-center truncate rounded-full border-2 border-brand-midnight bg-brand-primary text-[10px] font-bold text-brand-midnight shadow-lg">
                         {if count() > 99 { "99+".to_string() } else { count().to_string() }}
                     </span>
                 })}

@@ -401,7 +401,7 @@ pub fn ModUsers() -> impl IntoView {
                             class="mt-1 w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white outline-none"
                             prop:value=ban_duration on:input=move |ev| ban_duration.set(event_target_value(&ev))/></label>
                     <div class="flex gap-2">
-                        <button type="submit" class="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white">{t("Ban")}</button>
+                        <button type="submit" class="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-brand-midnight">{t("Ban")}</button>
                         <button type="button" class="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/70"
                             on:click=move |_| ban_user.set(None)>{t("Cancel")}</button>
                     </div>
@@ -527,7 +527,7 @@ pub fn ModUserShow() -> impl IntoView {
                                         class="mt-1 w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white outline-none"
                                         prop:value=ban_duration on:input=move |ev| ban_duration.set(event_target_value(&ev))/></label>
                                 <div class="flex gap-2">
-                                    <button type="submit" class="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white">{t("Ban")}</button>
+                                    <button type="submit" class="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-brand-midnight">{t("Ban")}</button>
                                     <button type="button" class="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/70"
                                         on:click=move |_| show_ban.set(false)>{t("Cancel")}</button>
                                 </div>

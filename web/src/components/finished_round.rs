@@ -114,7 +114,7 @@ fn podium_extra(offset: usize, entry: &Value) -> impl IntoView {
                 />
                 <div class=format!(
                     "absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center text-[10px] font-bold {}",
-                    if offset == 0 { "bg-brand-accent text-brand-midnight" } else { "bg-brand-primary text-white" }
+                    if offset == 0 { "bg-brand-accent text-brand-midnight" } else { "bg-brand-primary text-brand-midnight" }
                 )>
                     {offset + 4}
                 </div>
