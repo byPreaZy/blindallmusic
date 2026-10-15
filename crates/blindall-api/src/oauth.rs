@@ -113,7 +113,7 @@ fn authorize_url(state: &AppState, provider: &str) -> Result<String, Response> {
         ("state".into(), oauth_state),
         ("scope".into(), scope.to_string()),
     ];
-    Ok(format!("{auth_url}{}", serde_urlencoded(&q)))
+    Ok(format!("{auth_url}?{}", serde_urlencoded(&q)))
 }
 
 fn serde_urlencoded(pairs: &[(String, String)]) -> String {

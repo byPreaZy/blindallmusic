@@ -65,7 +65,7 @@ services:
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8080/callback/google}
       DISCORD_APP_ID: ${DISCORD_APP_ID:-}
       DISCORD_APP_SECRET: ${DISCORD_APP_SECRET:-}
-      DISCORD_REDIRECT_URI: ${DISCORD_APP_REDIRECT:-http://localhost:8080/callback/discord}
+      DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI:-http://localhost:8080/callback/discord}
     depends_on:
       db:
         condition: service_healthy
