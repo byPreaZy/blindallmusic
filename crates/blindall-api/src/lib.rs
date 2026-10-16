@@ -499,7 +499,8 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/version",
             get(|| async {
                 Json(serde_json::json!({
-                    "version": std::env::var("APP_VERSION").unwrap_or_else(|_| "dev".into()),
+                    "version": env!("CARGO_PKG_VERSION"),
+                    "build": std::env::var("APP_VERSION").unwrap_or_else(|_| "dev".into()),
                 }))
             }),
         )

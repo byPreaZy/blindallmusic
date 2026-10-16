@@ -28,20 +28,23 @@ const PARTNERS: &[Partner] = &[
     },
 ];
 
-// Deploy version, fetched once from /api/v1/version (build sha in prod).
+// App semver + deploy build sha, fetched once from /api/v1/version.
 #[component]
 fn AppVersion() -> impl IntoView {
     let version = RwSignal::new(String::new());
+    let build = RwSignal::new(String::new());
     leptos::task::spawn_local(async move {
         if let Ok(v) = api::get::<Value>("/api/v1/version").await {
             if let Some(s) = v["version"].as_str() {
-                // short sha is enough for humans
-                version.set(s.chars().take(8).collect());
+                version.set(s.to_string());
+            }
+            if let Some(s) = v["build"].as_str() {
+                build.set(s.chars().take(8).collect());
             }
         }
     });
     view! {
-        <span class="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-white/40" title=t("Deployed version")>
+        <span class="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-white/40" title=move || format!("{} {}", t("Deployed version"), build.get())>
             {move || if version.get().is_empty() { "v…".to_string() } else { format!("v{}", version.get()) }}
         </span>
     }
