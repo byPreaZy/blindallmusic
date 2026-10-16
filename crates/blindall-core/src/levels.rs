@@ -81,6 +81,7 @@ mod tests {
             playlists_created_count: 500, // capped 2000
             tracks_liked_count: 500,      // capped 1000
             consecutive_days_streak: 100, // capped 300
+            season_bonus_xp: 0,
         });
         assert_eq!(d.total_xp, 1000 + 600 + 1000 + 200 + 2000 + 1000 + 300);
     }

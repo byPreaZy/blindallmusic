@@ -4,6 +4,7 @@ use std::collections::HashMap;
 pub const PLACEMENT_ROUNDS: usize = 10;
 pub const INITIAL_ELO: i64 = 1500;
 pub const TARGET_AVERAGE_ELO: i64 = 1500;
+pub const MIN_ELO: i64 = 100;
 pub const MIN_TRACKS_PLAYED_PERCENTAGE: f64 = 0.8;
 
 pub fn calculate_elo_change(
@@ -44,8 +45,15 @@ fn k_factor(user_elo: i64, placement_rounds_played: usize) -> f64 {
     }
 }
 
+// Multiplayer Elo : linear rank normalisation over [0,1] (1st -> 1.0,
+// last -> 0.0). Sum of actuals over a field = N/2 = sum of expected
+// pairwise scores for equal ratings, so the system is zero-sum instead
+// of inflating +0.5*K every round like the old (pos+1)/N mapping did.
 fn actual_score(position: usize, total_players: usize) -> f64 {
-    (total_players - position + 1) as f64 / total_players as f64
+    if total_players <= 1 {
+        return 0.5;
+    }
+    (total_players - position) as f64 / (total_players - 1) as f64
 }
 
 fn expected_score(user_elo: i64, opponent_elo: f64) -> f64 {
@@ -152,7 +160,8 @@ pub fn update_elos_for_round(
             );
             change = apply_inflation_protection(change, user_elo);
             change = (change as f64 * pct).round() as i64;
-            (change, user_elo + change)
+            let after = (user_elo + change).max(MIN_ELO);
+            (after - user_elo, after)
         } else {
             (0, user_elo)
         };
@@ -201,7 +210,17 @@ mod tests {
     #[test]
     fn actual_score_positions() {
         assert_eq!(actual_score(1, 4), 1.0);
-        assert_eq!(actual_score(4, 4), 0.25);
+        assert_eq!(actual_score(4, 4), 0.0);
+        assert!((actual_score(2, 4) - 2.0 / 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn actual_scores_are_zero_sum_for_equal_elos() {
+        let opp = [1500, 1500, 1500];
+        let sum: i64 = (1..=4)
+            .map(|pos| calculate_elo_change(1500, &opp, pos, 4, 10))
+            .sum();
+        assert_eq!(sum, 0);
     }
 
     #[test]
@@ -221,10 +240,25 @@ mod tests {
     }
 
     #[test]
-    fn php_exact_values() {
+    fn symmetric_values() {
         let opp = [1500, 1500, 1500];
         assert_eq!(calculate_elo_change(1500, &opp, 1, 4, 10), 16);
-        assert_eq!(calculate_elo_change(1500, &opp, 4, 4, 10), -8);
+        assert_eq!(calculate_elo_change(1500, &opp, 4, 4, 10), -16);
+    }
+
+    #[test]
+    fn favorite_loses_big_underdog_wins_big() {
+        let weak = [1400, 1400, 1400];
+        let strong = [1800, 1800, 1800];
+        let fav_win = calculate_elo_change(1800, &weak, 1, 4, 10);
+        let fav_lose = calculate_elo_change(1800, &weak, 4, 4, 10);
+        let dog_win = calculate_elo_change(1400, &strong, 1, 4, 10);
+        assert!(fav_win < dog_win);
+        // Expected-score gap is symmetric (0.909 vs 0.091); the underdog's
+        // bigger K (32 vs 24 at 1800) makes his win worth more in absolute
+        // terms. The meaningful invariant: the favorite's downside dwarfs
+        // his upside — he can lose ~22 but only gain ~2.
+        assert!(fav_lose.abs() > fav_win * 5);
     }
 
     #[test]

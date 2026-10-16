@@ -677,10 +677,11 @@ impl RoomRepo {
     ) -> Result<Vec<serde_json::Value>, sqlx::Error> {
         let totals: Vec<(i64, f64)> = match since_days {
             None => sqlx::query(
-                "SELECT totalscorable_id AS user_id, ROUND(SUM(score)::numeric, 1)::float8 AS total \
-                 FROM total_scores \
-                 WHERE room_id = $1 AND totalscorable_type = 'App\\Models\\User' \
-                 GROUP BY totalscorable_id ORDER BY total DESC LIMIT 50",
+                "SELECT ts.totalscorable_id AS user_id, ROUND(SUM(ts.score)::numeric, 1)::float8 AS total \
+                 FROM total_scores ts \
+                 JOIN users u ON u.id = ts.totalscorable_id AND u.is_guest = false \
+                 WHERE ts.room_id = $1 AND ts.totalscorable_type = 'App\\Models\\User' \
+                 GROUP BY ts.totalscorable_id ORDER BY total DESC LIMIT 50",
             )
             .bind(room_id)
             .fetch_all(&self.pool)
@@ -689,10 +690,11 @@ impl RoomRepo {
             .map(|r| (r.get("user_id"), r.get("total")))
             .collect(),
             Some(days) => sqlx::query(
-                "SELECT user_id, ROUND(SUM(total_score)::numeric, 1)::float8 AS total \
-                 FROM round_standings \
-                 WHERE room_id = $1 AND created_at >= $2 \
-                 GROUP BY user_id ORDER BY total DESC LIMIT 50",
+                "SELECT rs.user_id, ROUND(SUM(rs.total_score)::numeric, 1)::float8 AS total \
+                 FROM round_standings rs \
+                 JOIN users u ON u.id = rs.user_id AND u.is_guest = false \
+                 WHERE rs.room_id = $1 AND rs.created_at >= $2 \
+                 GROUP BY rs.user_id ORDER BY total DESC LIMIT 50",
             )
             .bind(room_id)
             .bind(chrono::Utc::now() - chrono::Duration::days(days))

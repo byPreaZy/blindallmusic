@@ -83,7 +83,7 @@ impl RankingsRepo {
 
     fn standings_scope(room_id: Option<i64>, n: usize) -> String {
         match room_id {
-            Some(_) => format!("FROM round_standings rs WHERE rs.room_id = ${n}"),
+            Some(_) => format!("FROM round_standings rs JOIN users u ON u.id = rs.user_id AND u.is_guest = false WHERE rs.room_id = ${n}"),
             None => {
                 "FROM round_standings rs JOIN rooms r ON r.id = rs.room_id AND r.is_public \
                  WHERE 1=1"
@@ -124,7 +124,7 @@ impl RankingsRepo {
                 format!(
                     "SELECT ul.user_id, ul.level AS sort_value \
                      FROM user_levels ul JOIN users u ON u.id = ul.user_id \
-                     WHERE u.deleted_at IS NULL {} \
+                     WHERE u.deleted_at IS NULL AND u.is_guest = false {} \
                      ORDER BY ul.level DESC, ul.total_xp DESC LIMIT ${lim} OFFSET ${off}",
                     if room_id.is_some() {
                         format!("AND ul.user_id IN ({sub})")
@@ -134,7 +134,7 @@ impl RankingsRepo {
                 ),
                 format!(
                     "SELECT COUNT(*) FROM user_levels ul JOIN users u ON u.id = ul.user_id \
-                     WHERE u.deleted_at IS NULL {}",
+                     WHERE u.deleted_at IS NULL AND u.is_guest = false {}",
                     if room_id.is_some() {
                         format!("AND ul.user_id IN ({sub})")
                     } else {
@@ -159,11 +159,11 @@ impl RankingsRepo {
                     (
                         "SELECT ul.user_id, ul.score_public_rooms AS sort_value \
                          FROM user_levels ul JOIN users u ON u.id = ul.user_id \
-                         WHERE u.deleted_at IS NULL \
+                         WHERE u.deleted_at IS NULL AND u.is_guest = false \
                          ORDER BY ul.score_public_rooms DESC, ul.total_xp DESC LIMIT $1 OFFSET $2"
                             .to_string(),
                         "SELECT COUNT(*) FROM user_levels ul JOIN users u ON u.id = ul.user_id \
-                         WHERE u.deleted_at IS NULL"
+                         WHERE u.deleted_at IS NULL AND u.is_guest = false"
                             .to_string(),
                     )
                 }
@@ -172,22 +172,22 @@ impl RankingsRepo {
                 if room_id.is_some() {
                     format!(
                         "SELECT id AS user_id, elo AS sort_value FROM users \
-                         WHERE elo IS NOT NULL AND deleted_at IS NULL AND id IN ({sub}) \
+                         WHERE elo IS NOT NULL AND deleted_at IS NULL AND is_guest = false AND id IN ({sub}) \
                          ORDER BY elo DESC, id ASC LIMIT ${lim} OFFSET ${off}"
                     )
                 } else {
                     "SELECT id AS user_id, elo AS sort_value FROM users \
-                     WHERE elo IS NOT NULL AND deleted_at IS NULL \
+                     WHERE elo IS NOT NULL AND deleted_at IS NULL AND is_guest = false \
                      ORDER BY elo DESC, id ASC LIMIT $1 OFFSET $2"
                         .to_string()
                 },
                 if room_id.is_some() {
                     format!(
                         "SELECT COUNT(*) FROM users \
-                         WHERE elo IS NOT NULL AND deleted_at IS NULL AND id IN ({sub})"
+                         WHERE elo IS NOT NULL AND deleted_at IS NULL AND is_guest = false AND id IN ({sub})"
                     )
                 } else {
-                    "SELECT COUNT(*) FROM users WHERE elo IS NOT NULL AND deleted_at IS NULL"
+                    "SELECT COUNT(*) FROM users WHERE elo IS NOT NULL AND deleted_at IS NULL AND is_guest = false"
                         .to_string()
                 },
             ),
@@ -235,12 +235,12 @@ impl RankingsRepo {
                     (
                         "SELECT ul.user_id, ul.best_round_score AS sort_value \
                          FROM user_levels ul JOIN users u ON u.id = ul.user_id \
-                         WHERE u.deleted_at IS NULL \
+                         WHERE u.deleted_at IS NULL AND u.is_guest = false \
                          ORDER BY ul.best_round_score DESC, ul.score_public_rooms DESC \
                          LIMIT $1 OFFSET $2"
                             .to_string(),
                         "SELECT COUNT(*) FROM user_levels ul JOIN users u ON u.id = ul.user_id \
-                         WHERE u.deleted_at IS NULL"
+                         WHERE u.deleted_at IS NULL AND u.is_guest = false"
                             .to_string(),
                     )
                 }
@@ -454,7 +454,7 @@ impl RankingsRepo {
                     if room_id.is_some() { (2, 3, 4) } else { (1, 2, 3) };
                 let q = format!(
                     "SELECT COUNT(*) + 1 FROM user_levels ul JOIN users u ON u.id = ul.user_id \
-                     WHERE u.deleted_at IS NULL {} \
+                     WHERE u.deleted_at IS NULL AND u.is_guest = false {} \
                      AND (ul.level > ${a} OR (ul.level = ${b} AND ul.total_xp > ${c}))",
                     if room_id.is_some() {
                         format!("AND ul.user_id IN ({})", Self::scoped_users_subquery(room_id, 1))
@@ -503,7 +503,7 @@ impl RankingsRepo {
                         Some(s) if s > 0 => Some(
                             sqlx::query_scalar::<_, i64>(
                                 "SELECT COUNT(*) + 1 FROM user_levels ul JOIN users u \
-                                 ON u.id = ul.user_id WHERE u.deleted_at IS NULL \
+                                 ON u.id = ul.user_id WHERE u.deleted_at IS NULL AND u.is_guest = false \
                                  AND ul.score_public_rooms > $1",
                             )
                             .bind(s)
@@ -522,7 +522,7 @@ impl RankingsRepo {
                 .fetch_one(&self.pool)
                 .await?;
                 let q = format!(
-                    "SELECT COUNT(*) + 1 FROM users WHERE elo IS NOT NULL AND elo > $1 {}",
+                    "SELECT COUNT(*) + 1 FROM users WHERE elo IS NOT NULL AND is_guest = false AND deleted_at IS NULL AND elo > $1 {}",
                     if room_id.is_some() {
                         format!("AND id IN ({})", Self::scoped_users_subquery(room_id, 2))
                     } else {
@@ -637,7 +637,7 @@ impl RankingsRepo {
                     Some(
                         sqlx::query_scalar::<_, i64>(
                             "SELECT COUNT(*) + 1 FROM user_levels ul JOIN users u \
-                             ON u.id = ul.user_id WHERE u.deleted_at IS NULL \
+                             ON u.id = ul.user_id WHERE u.deleted_at IS NULL AND u.is_guest = false \
                              AND ul.best_round_score > $1",
                         )
                         .bind(my)
@@ -748,7 +748,7 @@ impl RankingsRepo {
              u.name, u.photo_path, u.elo, \
              ul.level, ul.total_xp, ul.current_xp, ul.xp_for_next_level \
              FROM minigame_scores ms \
-             JOIN users u ON u.id = ms.user_id AND u.deleted_at IS NULL \
+             JOIN users u ON u.id = ms.user_id AND u.deleted_at IS NULL AND u.is_guest = false \
              LEFT JOIN user_levels ul ON ul.user_id = u.id \
              GROUP BY ms.user_id, u.name, u.photo_path, u.elo, \
              ul.level, ul.total_xp, ul.current_xp, ul.xp_for_next_level \

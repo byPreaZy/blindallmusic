@@ -197,7 +197,7 @@ impl AdminRepo {
              JOIN rounds r ON rs.round_id = r.id \
              JOIN rooms rm ON rs.room_id = rm.id AND rm.is_public = true \
              JOIN users u ON u.id = rs.user_id \
-             WHERE rs.created_at >= now() - interval '7 days' \
+             WHERE rs.created_at >= now() - interval '7 days' AND u.is_guest = false \
              GROUP BY rs.user_id, u.id, u.name, u.photo_path, u.elo \
              ORDER BY total_score DESC LIMIT 10",
         )

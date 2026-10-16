@@ -239,7 +239,7 @@ impl HomeRepo {
              JOIN rounds rd ON rs.round_id = rd.id \
              JOIN rooms rm ON rs.room_id = rm.id \
              JOIN users u ON u.id = rs.user_id \
-             WHERE rm.is_public = true AND rs.created_at >= now() - interval '7 days' \
+             WHERE rm.is_public = true AND u.is_guest = false AND rs.created_at >= now() - interval '7 days' \
              GROUP BY rs.user_id, u.name, u.photo_path, u.elo \
              ORDER BY total_score DESC LIMIT 10",
         )

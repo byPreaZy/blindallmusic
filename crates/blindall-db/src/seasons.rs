@@ -131,6 +131,7 @@ impl SeasonRepo {
                 "SELECT rs.user_id, ROUND(SUM(rs.total_score)::numeric, 1)::float8 AS total \
                  FROM round_standings rs \
                  JOIN rooms r ON r.id = rs.room_id AND r.is_public \
+                 JOIN users u ON u.id = rs.user_id AND u.is_guest = false \
                  WHERE rs.created_at >= $1 AND rs.created_at < $2 \
                  GROUP BY rs.user_id ORDER BY total DESC LIMIT $3",
             )
@@ -245,6 +246,7 @@ impl SeasonRepo {
              ROUND(MAX(rs.total_score)::numeric, 1)::float8 AS best_round \
              FROM round_standings rs \
              JOIN rooms r ON r.id = rs.room_id AND r.is_public \
+                 JOIN users u ON u.id = rs.user_id AND u.is_guest = false \
              WHERE rs.created_at >= $1 AND rs.created_at < $2 \
              GROUP BY rs.user_id ORDER BY total DESC \
              LIMIT $3 OFFSET $4",
@@ -259,6 +261,7 @@ impl SeasonRepo {
         let total_players: i64 = sqlx::query_scalar(
             "SELECT COUNT(DISTINCT rs.user_id) FROM round_standings rs \
              JOIN rooms r ON r.id = rs.room_id AND r.is_public \
+                 JOIN users u ON u.id = rs.user_id AND u.is_guest = false \
              WHERE rs.created_at >= $1 AND rs.created_at < $2",
         )
         .bind(start)
@@ -338,6 +341,7 @@ impl SeasonRepo {
                  RANK() OVER (ORDER BY SUM(rs.total_score) DESC) AS rank \
                  FROM round_standings rs \
                  JOIN rooms r ON r.id = rs.room_id AND r.is_public \
+                 JOIN users u ON u.id = rs.user_id AND u.is_guest = false \
                  WHERE rs.created_at >= $1 AND rs.created_at < $2 \
                  GROUP BY rs.user_id) t WHERE t.user_id = $3",
         )

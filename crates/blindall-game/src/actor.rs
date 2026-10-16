@@ -436,7 +436,11 @@ impl RoomActor {
                 }
             }
             Phase::InterTrack { .. } => {
-                self.play_next_track().await;
+                if self.audience_empty().await {
+                    self.stop().await;
+                } else {
+                    self.play_next_track().await;
+                }
             }
             Phase::Finalizing { .. } => {
                 if self.room.is_autostart
@@ -453,7 +457,22 @@ impl RoomActor {
         }
     }
 
+    // Presence-based audience check : a heartbeating player counts for ~90s,
+    // so a momentary WS drop (metro) doesn't kill the round. Everyone truly
+    // gone -> stop the chain instead of playing to an empty room; the
+    // finalize broadcast resets the public track counter to 0.
+    async fn audience_empty(&self) -> bool {
+        self.presence
+            .member_count(self.room.id, Utc::now().timestamp())
+            .await
+            == 0
+    }
+
     async fn on_track_end(&mut self) {
+        if self.audience_empty().await {
+            self.stop().await;
+            return;
+        }
         let Some(round) = self.round.as_ref() else {
             return;
         };
