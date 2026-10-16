@@ -25,6 +25,8 @@ jobs:
           file: Dockerfile
           load: true
           tags: blindall:latest
+          build-args: |
+            BUILD_VERSION=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

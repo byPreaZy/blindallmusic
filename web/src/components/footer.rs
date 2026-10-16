@@ -28,6 +28,25 @@ const PARTNERS: &[Partner] = &[
     },
 ];
 
+// Deploy version, fetched once from /api/v1/version (build sha in prod).
+#[component]
+fn AppVersion() -> impl IntoView {
+    let version = RwSignal::new(String::new());
+    leptos::task::spawn_local(async move {
+        if let Ok(v) = api::get::<Value>("/api/v1/version").await {
+            if let Some(s) = v["version"].as_str() {
+                // short sha is enough for humans
+                version.set(s.chars().take(8).collect());
+            }
+        }
+    });
+    view! {
+        <span class="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-white/40" title=t("Deployed version")>
+            {move || if version.get().is_empty() { "v…".to_string() } else { format!("v{}", version.get()) }}
+        </span>
+    }
+}
+
 #[component]
 fn PartnersCarousel() -> impl IntoView {
     let idx = RwSignal::new(0usize);
@@ -154,7 +173,8 @@ pub fn Footer() -> impl IntoView {
                     <div class="col-span-1">
                         <h3 class="retro-footer-title">{t("Legal")}</h3>
                         <ul class="space-y-2">
-                            <li><A href="/pages/mentions-legales" attr:class="text-white/70 transition-colors hover:text-white">{t("Terms and Conditions")}</A></li>
+                            <li><A href="/pages/conditions-generales" attr:class="text-white/70 transition-colors hover:text-white">{t("Terms and Conditions")}</A></li>
+                            <li><A href="/pages/mentions-legales" attr:class="text-white/70 transition-colors hover:text-white">{t("Legal Notice")}</A></li>
                             <li><A href="/pages/politique-de-confidentialite" attr:class="text-white/70 transition-colors hover:text-white">{t("Privacy Policy")}</A></li>
                         </ul>
                     </div>
@@ -174,7 +194,10 @@ pub fn Footer() -> impl IntoView {
                     <div class="mb-4 text-white/50 md:mb-0">
                         {format!("© {} Blind'All Music. {}", js_sys::Date::new_0().get_full_year(), t("All rights reserved."))}
                     </div>
-                    <div class="text-white/50">{t("Site personnel fait bénévolement avec")}" ❤️ "{t("en France")}</div>
+                    <div class="flex items-center gap-3 text-white/50">
+                        <span>{t("Site personnel fait bénévolement avec")}" ❤️ "{t("en France")}</span>
+                        <AppVersion/>
+                    </div>
                 </div>
             </div>
         </footer>

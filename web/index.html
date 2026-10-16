@@ -71,7 +71,21 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
+          navigator.serviceWorker
+            .register('/sw.js')
+            .then((reg) => {
+              // Poll for a new deploy so long-lived sessions pick it up.
+              setInterval(() => reg.update().catch(() => {}), 5 * 60 * 1000);
+            })
+            .catch(() => {});
+          // The worker skipWaiting+claims clients on install: when control
+          // changes, a new version is live -> reload to run fresh code.
+          let reloaded = false;
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (reloaded) return;
+            reloaded = true;
+            location.reload();
+          });
         });
       }
     </script>

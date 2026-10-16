@@ -78,10 +78,14 @@ COPY --from=web-build    /build/dist          /app/web/dist
 USER blindall
 WORKDIR /app
 
+# Deploy identifier surfaced via /api/v1/version (git sha at build time).
+ARG BUILD_VERSION=dev
+
 ENV BIND=0.0.0.0:8080 \
     SPA_DIR=/app/web/dist \
     STORAGE_ROOT=/app/storage \
     STORAGE_PUBLIC_PREFIX=/storage \
+    APP_VERSION=${BUILD_VERSION} \
     RUST_LOG=blindall=info,tower_http=info
 
 EXPOSE 8080

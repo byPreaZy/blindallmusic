@@ -163,6 +163,7 @@ pub async fn callback(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "invalid_state"}))).into_response();
     }
 
+    let t0 = Instant::now();
     let token = match exchange_code(&state.http, cfg, token_url, &code).await {
         Ok(t) => t,
         Err(e) => {
@@ -170,6 +171,8 @@ pub async fn callback(
             return (StatusCode::BAD_GATEWAY, Json(json!({"error": "oauth_exchange_failed"}))).into_response();
         }
     };
+    let t_exchange = t0.elapsed();
+    let t1 = Instant::now();
     let info = match fetch_profile(&state.http, &provider, user_url, &token).await {
         Ok(i) => i,
         Err(e) => {
@@ -177,6 +180,7 @@ pub async fn callback(
             return (StatusCode::BAD_GATEWAY, Json(json!({"error": "oauth_profile_failed"}))).into_response();
         }
     };
+    let t_profile = t1.elapsed();
     let Some(email) = info.email.filter(|e| !e.is_empty()) else {
         return (
             StatusCode::UNPROCESSABLE_ENTITY,
@@ -228,6 +232,7 @@ pub async fn callback(
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
 
+    let t_resolve = t0.elapsed() - t_exchange - t_profile;
     let ip = client_ip(&headers, &addr.ip().to_string());
     state.auth.update_ip(user.id, &ip).await;
     let token = match state.auth.issue_token(user.id, &provider).await {
@@ -235,9 +240,20 @@ pub async fn callback(
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
     let is_mod = state.auth.is_public_moderator(user.id).await;
+    let t2 = Instant::now();
+    let payload = crate::auth_session::enriched_user_json(&state, &user, is_mod).await;
+    tracing::info!(
+        provider,
+        exchange_ms = t_exchange.as_millis() as u64,
+        profile_ms = t_profile.as_millis() as u64,
+        resolve_ms = t_resolve.as_millis() as u64,
+        enrich_ms = t2.elapsed().as_millis() as u64,
+        total_ms = t0.elapsed().as_millis() as u64,
+        "oauth callback timing"
+    );
     Json(json!({
         "token": token,
-        "user": crate::auth_session::enriched_user_json(&state, &user, is_mod).await,
+        "user": payload,
     }))
     .into_response()
 }

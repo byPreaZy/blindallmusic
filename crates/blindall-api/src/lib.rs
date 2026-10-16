@@ -482,6 +482,14 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/ws", get(ws::handler))
         .route("/healthz", get(|| async { "ok" }))
+        .route(
+            "/api/v1/version",
+            get(|| async {
+                Json(serde_json::json!({
+                    "version": std::env::var("APP_VERSION").unwrap_or_else(|_| "dev".into()),
+                }))
+            }),
+        )
         .route("/api/{*rest}", axum::routing::any(api_not_found))
         .route(
             &format!("{}/{{*path}}", state.storage_prefix),
