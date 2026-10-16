@@ -158,7 +158,13 @@ impl ScoreStore for blindall_redis::RoundScoreStore {
 #[async_trait::async_trait]
 impl PresenceStore for blindall_redis::RoomPresenceStore {
     async fn member_count(&self, room_id: i64, now_unix: i64) -> i64 {
-        Self::member_count(self, room_id, now_unix).await.unwrap_or(0)
+        match Self::member_count(self, room_id, now_unix).await {
+            Ok(n) => n,
+            Err(e) => {
+                tracing::warn!(error = %e, room = room_id, "presence member_count failed");
+                0
+            }
+        }
     }
 }
 

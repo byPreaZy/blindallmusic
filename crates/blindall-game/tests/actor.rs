@@ -389,6 +389,23 @@ async fn recover_survives_empty_presence_during_grace() {
     assert_eq!(played["track"]["id"], json!(2));
 }
 
+// Regression: presence member_count collapses to 0 on any Redis error. A
+// connected player (WS subscribed) must keep the round alive even when the
+// presence store reports nobody — a Redis blip must never kill a game.
+#[tokio::test(start_paused = true)]
+async fn empty_presence_with_subscriber_keeps_playing() {
+    let mut fx = spawn_fixture().await;
+    fx.presence.counts.lock().unwrap().insert(1, 0);
+    start(&fx).await;
+    next_event(&mut fx.rx, "TrackPlayed").await; // track 1 playing
+
+    advance(Duration::from_secs(31)).await; // past the 30s track
+    next_event(&mut fx.rx, "TrackEnded").await;
+    advance(Duration::from_secs(4)).await; // past the 3s pause
+    let played = next_event(&mut fx.rx, "TrackPlayed").await;
+    assert_eq!(played["track"]["id"], json!(2));
+}
+
 #[tokio::test(start_paused = true)]
 async fn track_mismatch_is_rejected() {
     let fx = spawn_fixture().await;

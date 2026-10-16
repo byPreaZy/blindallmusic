@@ -475,6 +475,17 @@ impl RoomActor {
         {
             return false;
         }
+        // A live websocket subscriber is an audience member even when Redis
+        // presence reports 0 — member_count collapses to 0 on any Redis error,
+        // and a transient failure must never kill a running round.
+        if self
+            .hub
+            .channel_conn_count(&events::room_channel(self.room.id))
+            .await
+            > 0
+        {
+            return false;
+        }
         self.presence
             .member_count(self.room.id, Utc::now().timestamp())
             .await
