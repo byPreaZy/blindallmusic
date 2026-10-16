@@ -164,6 +164,7 @@ pub fn Footer() -> impl IntoView {
                         <h3 class="retro-footer-title">{t("Quick Links")}</h3>
                         <ul class="space-y-2">
                             <li><A href="/" attr:class="text-white/70 transition-colors hover:text-white">{t("Home")}</A></li>
+                            <li><A href="/docs" attr:class="text-white/70 transition-colors hover:text-white">{t("Documentation")}</A></li>
                             <li><A href="/docs/faq" attr:class="text-white/70 transition-colors hover:text-white">{t("FAQ")}</A></li>
                             <li><A href="/contact" attr:class="text-white/70 transition-colors hover:text-white">{t("Contact")}</A></li>
                             <li><A href="/contact" attr:class="text-white/70 transition-colors hover:text-white">{t("Report a bug")}</A></li>

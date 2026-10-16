@@ -35,9 +35,11 @@ pub fn should_serve_ads(path: &str, ads_disabled: bool) -> bool {
     !ads_disabled && !excluded(path)
 }
 
-fn ads_state_sig() -> ArcRwSignal<Option<(bool, String, String, String)>> {
+// (fetched_at_ms, ads_disabled, client, slot, goal) — refreshed every 60s so a
+// newly reached donation goal actually turns ads off without a full reload.
+fn ads_state_sig() -> ArcRwSignal<Option<(f64, bool, String, String, String)>> {
     thread_local! {
-        static SIG: ArcRwSignal<Option<(bool, String, String, String)>> = ArcRwSignal::new(None);
+        static SIG: ArcRwSignal<Option<(f64, bool, String, String, String)>> = ArcRwSignal::new(None);
     }
     SIG.with(|s| s.clone())
 }
@@ -55,23 +57,34 @@ pub fn goal_or(goal: &str) -> String {
     if goal.is_empty() { "150".into() } else { goal.to_string() }
 }
 
+const ADS_STATE_TTL_MS: f64 = 60_000.0;
+
 fn ads_state() -> (bool, String, String, String) {
     let s = ads_state_sig();
-    if s.get_untracked().is_none() {
+    let fetched_at = s.get_untracked().map(|v| v.0).unwrap_or(0.0);
+    if js_sys::Date::now() - fetched_at > ADS_STATE_TTL_MS {
+        // Stamp the attempt first so concurrent render passes don't double-fetch.
+        s.update(|v| {
+            let entry = v.get_or_insert((0.0, false, String::new(), String::new(), String::new()));
+            entry.0 = js_sys::Date::now();
+        });
+        let sig = s.clone();
         leptos::task::spawn_local(async move {
             let v = crate::api::get::<serde_json::Value>("/api/v1/donations/progress")
                 .await
                 .unwrap_or_default();
-            s.set(Some((
+            sig.set(Some((
+                js_sys::Date::now(),
                 v["ads_disabled"].as_bool().unwrap_or(false),
                 v["adsense_client"].as_str().unwrap_or("").to_string(),
                 v["adsense_slot"].as_str().unwrap_or("").to_string(),
                 v["goal_cents"].as_i64().map(euros).unwrap_or_default(),
             )));
         });
-        return (false, String::new(), String::new(), String::new());
     }
-    s.get().unwrap_or_default()
+    s.get()
+        .map(|(_, d, c, sl, g)| (d, c, sl, g))
+        .unwrap_or_default()
 }
 
 fn ensure_adsense_script(client: &str) {
