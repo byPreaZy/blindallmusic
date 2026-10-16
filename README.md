@@ -35,7 +35,7 @@ titre ou l'artiste avant les autres, grimpe au classement ELO.
 | Données | PostgreSQL (image `supabase/postgres`) · Redis |
 | E-mails | SMTP générique via `lettre` (`MAIL_*`, n'importe quel provider) |
 | Dons | Stripe |
-| Déploiement | Docker Compose + Traefik (ou Caddy) — TLS Let's Encrypt auto |
+| Déploiement | Docker Compose + Traefik — TLS Let's Encrypt auto |
 
 ## Arborescence
 
@@ -77,17 +77,12 @@ permet de lire les e-mails envoyés sans rien configurer.
 
 ## Production
 
-Deux options de reverse proxy (TLS automatique dans les deux cas) :
+TLS terminé par l'instance Traefik de l'hôte (`docker-compose.traefik.yml`) :
 
 ```sh
-# Avec Traefik existant sur l'hôte :
 docker compose --env-file .env.production \
   -f docker-compose.yml -f docker-compose.prod.yml \
   -f docker-compose.traefik.yml up -d
-
-# Ou avec le Caddy embarqué :
-docker compose --env-file .env.production \
-  -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 Variables requises : voir `.env.example` (SMTP `MAIL_*`, OAuth Google/Discord,

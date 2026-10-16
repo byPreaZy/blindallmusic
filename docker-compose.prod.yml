@@ -10,20 +10,3 @@ services:
   redis:
     restart: always
 
-  caddy:
-    image: caddy:2-alpine
-    restart: always
-    depends_on:
-      server:
-        condition: service_started
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-
-volumes:
-  caddy_data:
-  caddy_config:

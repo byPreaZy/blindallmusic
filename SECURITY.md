@@ -14,7 +14,7 @@ Accusé de réception sous 72 h, correctif prioritaire selon la sévérité.
 
 - `blindall-server` et l'API `/api/v1` (auth, rooms, gameplay, admin)
 - Le hub WebSocket `/ws` (autorisation des channels, presence)
-- La chaîne de déploiement (Dockerfile, Compose, Caddyfile)
+- La chaîne de déploiement (Dockerfile, Compose, Traefik)
 
 ## Hors périmètre
 

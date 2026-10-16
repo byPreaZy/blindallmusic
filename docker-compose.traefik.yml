@@ -1,4 +1,4 @@
-# Override Traefik : remplace le service `caddy` de docker-compose.prod.yml.
+# Override Traefik : TLS terminé par l'instance Traefik de l'hôte (prod).
 # Calé sur la conf VPS existante (my-vps) : réseau externe `traefik`,
 # entrypoints web/websecure (redirect 80->443 déjà global dans traefik.yml),
 # resolver ACME `customresolver`, exposedByDefault=false -> labels requis.
