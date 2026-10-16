@@ -1,0 +1,50 @@
+# Override Traefik : remplace le service `caddy` de docker-compose.prod.yml.
+# Calé sur la conf VPS existante (my-vps) : réseau externe `traefik`,
+# entrypoints web/websecure (redirect 80->443 déjà global dans traefik.yml),
+# resolver ACME `customresolver`, exposedByDefault=false -> labels requis.
+#
+# Usage (env-file requis pour résoudre ${DOMAIN} / ${TRAEFIK_NETWORK}) :
+#   docker compose --env-file .env.production \
+#       -f docker-compose.yml -f docker-compose.prod.yml \
+#       -f docker-compose.traefik.yml up -d
+name: blindall
+
+services:
+  server:
+    image: blindall:latest   # chargé par le CI (docker load) ; sans lui, compose rebuilderait
+    restart: always
+    networks:
+      - default   # interne : accès db + redis
+      - traefik   # externe : joint Traefik
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
+      - traefik.http.routers.blindall.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.blindall.entrypoints=websecure
+      - traefik.http.routers.blindall.tls=true
+      - traefik.http.routers.blindall.tls.certresolver=customresolver
+      - traefik.http.routers.blindall.priority=1
+      - traefik.http.routers.blindall.middlewares=blindall-secure-headers@docker
+      - traefik.http.services.blindall.loadbalancer.server.port=8080
+      # secure-headers : même convention que la stack maria du VPS
+      - traefik.http.middlewares.blindall-secure-headers.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.blindall-secure-headers.headers.frameDeny=true
+      - traefik.http.middlewares.blindall-secure-headers.headers.referrerPolicy=strict-origin-when-cross-origin
+      - traefik.http.middlewares.blindall-secure-headers.headers.permissionsPolicy=camera=(), microphone=(self), geolocation=()
+      - traefik.http.middlewares.blindall-secure-headers.headers.stsSeconds=31536000
+      - traefik.http.middlewares.blindall-secure-headers.headers.stsIncludeSubdomains=true
+      - traefik.http.middlewares.blindall-secure-headers.headers.stsPreload=true
+
+  db:
+    restart: always
+
+  redis:
+    restart: always
+
+  # caddy absent : Traefik termine TLS à sa place.
+
+networks:
+  traefik:
+    external: true
+    # Nom réel du réseau Traefik sur le VPS (`docker network ls`) — "traefik" sur my-vps
+    name: ${TRAEFIK_NETWORK:-traefik}

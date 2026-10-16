@@ -8,6 +8,7 @@ pub struct XpInputs {
     pub playlists_created_count: i64,
     pub tracks_liked_count: i64,
     pub consecutive_days_streak: i64,
+    pub season_bonus_xp: i64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,7 +27,8 @@ pub fn compute_level(i: &XpInputs) -> LevelData {
         + if i.has_team { 200 } else { 0 }
         + (i.playlists_created_count * 20).min(2000)
         + (i.tracks_liked_count * 5).min(1000)
-        + (i.consecutive_days_streak * 10).min(300);
+        + (i.consecutive_days_streak * 10).min(300)
+        + i.season_bonus_xp.min(5000);
 
     level_from_total_xp(total_xp)
 }

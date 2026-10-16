@@ -17,6 +17,7 @@ pub mod playlists;
 pub mod profiles;
 pub mod rankings;
 pub mod rooms;
+pub mod seasons;
 pub mod seo;
 pub mod teams;
 pub mod votes;
@@ -38,6 +39,7 @@ pub use playlists::{PlaylistRepo, PlaylistRow};
 pub use profiles::ProfileRepo;
 pub use rankings::RankingsRepo;
 pub use rooms::{RoomOptions, RoomRepo, RoomRow};
+pub use seasons::SeasonRepo;
 pub use seo::SeoRepo;
 pub use teams::{TeamRepo, TeamRow, TEAM_SEATS};
 pub use votes::VoteRepo;
@@ -148,6 +150,20 @@ fn migrations() -> sqlx::migrate::Migrator {
             "media_fill_null".into(),
             sqlx::migrate::MigrationType::Simple,
             include_str!("../../../migrations/0015_media_fill_null.sql").into(),
+            false,
+        ),
+        sqlx::migrate::Migration::new(
+            16,
+            "seasons".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0016_seasons.sql").into(),
+            false,
+        ),
+        sqlx::migrate::Migration::new(
+            17,
+            "seasons_unique".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0017_seasons_unique.sql").into(),
             false,
         ),
     ];

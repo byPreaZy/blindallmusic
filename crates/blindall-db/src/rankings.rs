@@ -818,7 +818,7 @@ impl RankingsRepo {
             "SELECT level, current_xp, xp_for_next_level, total_xp, \
              score_public_rooms, minigame_scores_total, months_seniority, \
              consecutive_days_streak, rooms_created_count, playlists_created_count, \
-             tracks_liked_count \
+             tracks_liked_count, season_bonus_xp \
              FROM user_levels WHERE user_id = $1",
         )
         .bind(user_id)
@@ -851,6 +851,7 @@ impl RankingsRepo {
                 "rooms_created_count": r.get::<i64, _>("rooms_created_count"),
                 "playlists_created_count": r.get::<i64, _>("playlists_created_count"),
                 "tracks_liked_count": r.get::<i64, _>("tracks_liked_count"),
+                "season_bonus_xp": r.get::<i64, _>("season_bonus_xp"),
                 "has_team": has_team,
             },
         }))

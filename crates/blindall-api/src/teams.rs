@@ -20,7 +20,7 @@ fn validation(field: &str, msg: &str) -> Response {
 }
 
 fn alpha_dash(s: &str) -> bool {
-    !s.is_empty() && s.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    !s.is_empty() && s.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == ' ')
 }
 
 #[derive(Deserialize)]
@@ -112,7 +112,7 @@ pub async fn store(
     }
     let name = body.name.trim();
     if name.is_empty() || name.chars().count() > 30 || !alpha_dash(name) {
-        return validation("name", "The name field is required, must not exceed 30 characters and may only contain letters, numbers, dashes and underscores.");
+        return validation("name", "The name field is required, must not exceed 30 characters and may only contain letters, numbers, spaces, dashes and underscores.");
     }
     let mods = state.auth.reserved_moderator_names().await.unwrap_or_default();
     if crate::auth_session::validate_name(name, &mods).is_err() {
@@ -216,7 +216,7 @@ pub async fn update(
     }
     let name = body.name.trim();
     if name.is_empty() || name.chars().count() > 30 || !alpha_dash(name) {
-        return validation("name", "The name field is required, must not exceed 30 characters and may only contain letters, numbers, dashes and underscores.");
+        return validation("name", "The name field is required, must not exceed 30 characters and may only contain letters, numbers, spaces, dashes and underscores.");
     }
     let mods = state.auth.reserved_moderator_names().await.unwrap_or_default();
     if !name.eq_ignore_ascii_case(&team.name)

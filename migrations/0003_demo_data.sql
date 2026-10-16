@@ -16,7 +16,7 @@ WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'e2e-admin@blindall.test');
 INSERT INTO playlists (name, user_id, is_public, description, created_at, updated_at)
 SELECT 'Démo : Hits', u.id, true, 'Playlist de démonstration locale (previews SoundHelix).', NOW(), NOW()
 FROM users u WHERE u.email = 'demo@blindall.test'
-  AND NOT EXISTS (SELECT 1 FROM playlists WHERE name = 'Démo, Hits');
+  AND NOT EXISTS (SELECT 1 FROM playlists WHERE name = 'Démo : Hits');
 
 INSERT INTO rooms (user_id, name, description, category_id, slug, tracks_by_round,
                    track_duration, pause_between_tracks, pause_between_rounds,
@@ -38,7 +38,7 @@ INSERT INTO tracks (user_id, playlist_id, provider, provider_id, provider_url,
                     preview_url, artwork_url, created_at, updated_at)
 SELECT u.id, p.id, 'demo', CONCAT('demo-', t.n), NULL, t.url, t.art, NOW(), NOW()
 FROM users u
-JOIN playlists p ON p.name = 'Démo, Hits'
+JOIN playlists p ON p.name = 'Démo : Hits'
 JOIN (
     SELECT 1 AS n, 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' AS url, 'https://picsum.photos/seed/demo1/300/300' AS art
     UNION ALL SELECT 2, 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3', 'https://picsum.photos/seed/demo2/300/300'

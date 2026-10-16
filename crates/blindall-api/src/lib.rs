@@ -22,6 +22,7 @@ pub mod providers;
 pub mod rankings;
 pub mod rooms;
 pub mod round;
+pub mod seasons;
 pub mod seo;
 pub mod state;
 pub mod storage;
@@ -340,6 +341,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/rankings", get(rankings::players))
         .route("/api/v1/rankings/teams", get(rankings::teams))
         .route("/api/v1/rankings/minigames", get(rankings::minigames))
+        .route("/api/v1/seasons", get(seasons::index))
         .route(
             "/api/v1/rankings/users/{user}/level-metrics",
             get(rankings::user_level_metrics),

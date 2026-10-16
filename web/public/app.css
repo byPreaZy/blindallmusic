@@ -5525,6 +5525,9 @@ video {
 .h-\[48dvh\]{
   height: 48dvh;
 }
+.h-\[72px\]{
+  height: 72px;
+}
 .h-auto{
   height: auto;
 }
@@ -7238,10 +7241,6 @@ video {
 }
 .fill-white\/40{
   fill: rgb(255 255 255 / 0.4);
-}
-.object-contain{
-  -o-object-fit: contain;
-     object-fit: contain;
 }
 .object-cover{
   -o-object-fit: cover;
@@ -8991,6 +8990,10 @@ body {
 
 .hover\:border-white\/20:hover{
   border-color: rgb(255 255 255 / 0.2);
+}
+
+.hover\:border-white\/25:hover{
+  border-color: rgb(255 255 255 / 0.25);
 }
 
 .hover\:border-white\/30:hover{

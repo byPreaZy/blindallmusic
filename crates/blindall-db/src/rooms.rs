@@ -798,7 +798,7 @@ impl RoomRepo {
              FROM total_scores ts \
              JOIN teams t ON t.id = ts.totalscorable_id \
              WHERE ts.room_id = $1 AND ts.totalscorable_type = 'App\\Models\\Team' \
-             GROUP BY ts.totalscorable_id ORDER BY total DESC LIMIT 50",
+             GROUP BY t.id, t.name, t.photo_path ORDER BY total DESC LIMIT 50",
         )
         .bind(room_id)
         .fetch_all(&self.pool)

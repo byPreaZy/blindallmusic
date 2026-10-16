@@ -73,6 +73,82 @@ pub fn slug_with_space(title: &str) -> String {
     t.trim().to_lowercase()
 }
 
+static IMPORT_JUNK_PAREN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(concat!(
+        r"(?i)\s*[\(\[]\s*",
+        r"(?:re-?master(?:ed|is[eé])?|remastered \d+|radio edit|single version|album version|",
+        r"original (?:version|mix|recording)|mono|stereo|edit|version|demo|bonus track(?:s)?|",
+        r"deluxe|live(?: at [^\)\]]*)?|acoustic|instrumental|karaoke(?: version)?|",
+        r"extended(?: version| mix| edit)?|remix|remixed|mix|re-?recorded|re-?enregistr[eé]|",
+        r"\d{4} (?:remaster|remix|version|mix)|digital remaster|explicit|clean)",
+        r"[^\)\]]*[\)\]]"
+    ))
+    .unwrap()
+});
+static IMPORT_BRACKET: Lazy<Regex> = Lazy::new(|| Regex::new(r"\[[^\]]*\]").unwrap());
+static IMPORT_FEAT: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?i)[\(\[]?\s*\b(?:feat\.?|featuring|ft\.?)\s+([^)\[\]]+?)(?:\s*[\)\]]|\s+[-:]\s|$)")
+        .unwrap()
+});
+static IMPORT_MEDLEY: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s+/\s+").unwrap());
+
+/// Nettoie un titre provider avant import : retire les suffixes "(Remastered)",
+/// "(Radio Edit)", "[feat. X]"… et retourne les artistes en featuring detectes
+/// ainsi que les segments d'un medley "A / B / C" (a utiliser comme alias).
+/// Ne touche PAS aux references de source "(De "X")" / "(from "X")".
+pub fn clean_import_title(input: &str) -> (String, Vec<String>, Vec<String>) {
+    let mut title = input.trim().to_string();
+    let mut feats: Vec<String> = Vec::new();
+
+    // extrait les featurings avant tout stripping de parentheses
+    while let Some(c) = IMPORT_FEAT.captures(&title.clone()) {
+        let cap = c.get(0).unwrap().range();
+        let inner = c.get(1).unwrap().as_str().to_string();
+        for f in inner
+            .split(|ch: char| ch == ',' || ch == '&')
+            .flat_map(|p| p.split(" et "))
+            .flat_map(|p| p.split(" and "))
+        {
+            let f = f.trim();
+            if f.len() > 1 && !feats.iter().any(|x| x.eq_ignore_ascii_case(f)) {
+                feats.push(f.to_string());
+            }
+        }
+        title = format!("{}{}", &title[..cap.start], &title[cap.end..]);
+    }
+
+    title = IMPORT_JUNK_PAREN.replace_all(&title, "").into_owned();
+    title = IMPORT_BRACKET.replace_all(&title, "").into_owned();
+
+    // re-equilibre les parentheses orphelines (ex: "Ocarina of Time")" )
+    while title.matches(')').count() > title.matches('(').count() {
+        if let Some(pos) = title.rfind(')') {
+            title.remove(pos);
+        } else {
+            break;
+        }
+    }
+    title = title.trim_end_matches(['"', '\'', '»', '“', '”']).trim_end().to_string();
+    while title.matches('(').count() > title.matches(')').count() {
+        if let Some(pos) = title.rfind('(') {
+            title.truncate(pos);
+            title = title.trim_end().to_string();
+        } else {
+            break;
+        }
+    }
+
+    let medley: Vec<String> = IMPORT_MEDLEY
+        .split(&title)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .collect();
+
+    let title = WHITESPACE_RUN.replace_all(title.trim(), " ").into_owned();
+    (title, feats, medley)
+}
+
 pub fn str_slug(title: &str, separator: char) -> String {
     let mut t = deunicode::deunicode(title);
     let flip = if separator == '-' { '_' } else { '-' };
@@ -152,5 +228,38 @@ mod tests {
         assert_eq!(sanitize_string("((( )))"), "");
         assert_eq!(sanitize_string("AC/DC"), "acdc");
         assert_eq!(sanitize_string("2Pac & Biggie"), "2pac biggie");
+    }
+
+    #[test]
+    fn import_title_strips_provider_junk() {
+        let (t, f, m) = clean_import_title("Yeah! [feat. Lil Jon & Ludacris]");
+        assert_eq!(t, "Yeah!");
+        assert_eq!(f, vec!["Lil Jon", "Ludacris"]);
+        assert!(m.len() <= 1);
+
+        let (t, f, _) = clean_import_title("Song (Remastered 2011) (Radio Edit)");
+        assert_eq!(t, "Song");
+        assert!(f.is_empty());
+
+        let (t, f, _) = clean_import_title("Defeat at Midnight");
+        assert_eq!(t, "Defeat at Midnight");
+        assert!(f.is_empty());
+    }
+
+    #[test]
+    fn import_title_keeps_media_refs() {
+        let (t, _, _) = clean_import_title("Shallow (De \"A Star Is Born\")");
+        assert_eq!(t, "Shallow (De \"A Star Is Born\")");
+        let (t, _, _) =
+            clean_import_title("My Heart Will Go On (Love Theme from \"Titanic\")");
+        assert_eq!(t, "My Heart Will Go On (Love Theme from \"Titanic\")");
+    }
+
+    #[test]
+    fn import_title_fixes_orphan_parens_and_medleys() {
+        let (t, _, _) = clean_import_title("Ocarina of Time\")");
+        assert_eq!(t, "Ocarina of Time");
+        let (_, _, m) = clean_import_title("Intro / Verse / Chorus");
+        assert_eq!(m, vec!["Intro", "Verse", "Chorus"]);
     }
 }

@@ -34,8 +34,20 @@ use crate::pages::settings::SettingsPage;
 use crate::pages::teams::{TeamShowPage, TeamsPage};
 use leptos::prelude::*;
 use leptos_router::components::{Route, Router, Routes};
-use leptos_router::hooks::use_location;
+use leptos_router::hooks::{use_location, use_params_map};
 use leptos_router::path;
+
+/// Remounts its children whenever the route params change. Navigating between
+/// two param'd URLs of the same route (e.g. `/rooms/a` -> `/rooms/b`) does not
+/// recreate the view otherwise, so param-driven pages would stay stale.
+#[component]
+fn ParamRemount(children: ChildrenFn) -> impl IntoView {
+    let params = use_params_map();
+    move || {
+        params.get();
+        children()
+    }
+}
 
 #[component]
 fn AppFooter() -> impl IntoView {
@@ -148,12 +160,13 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/oauth/:provider/callback") view=OAuthCallbackPage/>
                         <Route path=path!("/playlists") view=PlaylistsPage/>
                         <Route path=path!("/playlists/create") view=PlaylistCreatePage/>
-                        <Route path=path!("/playlists/:id/edit") view=PlaylistEditPage/>
+                        <Route path=path!("/playlists/:id/edit") view=|| view! { <ParamRemount><PlaylistEditPage/></ParamRemount> }/>
                         <Route path=path!("/rooms/create") view=RoomCreatePage/>
                         <Route path=path!("/rooms") view=RoomsIndexPage/>
-                        <Route path=path!("/rooms/:id") view=RoomPage/>
-                        <Route path=path!("/rooms/:id/edit") view=RoomEditPage/>
+                        <Route path=path!("/rooms/:id") view=|| view! { <ParamRemount><RoomPage/></ParamRemount> }/>
+                        <Route path=path!("/rooms/:id/edit") view=|| view! { <ParamRemount><RoomEditPage/></ParamRemount> }/>
                         <Route path=path!("/rankings") view=RankingsPage/>
+                        <Route path=path!("/rankings/season") view=RankingsPage/>
                         <Route path=path!("/rankings/teams") view=RankingsPage/>
                         <Route path=path!("/rankings/minigames") view=RankingsPage/>
                         <Route path=path!("/rankings/:sort") view=RankingSortRedirect/>
@@ -167,21 +180,21 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/docs/support") view=DocsSupportPage/>
                         <Route path=path!("/contact") view=ContactPage/>
                         <Route path=path!("/banned") view=BannedPage/>
-                        <Route path=path!("/profile/:id") view=ProfilePage/>
+                        <Route path=path!("/profile/:id") view=|| view! { <ParamRemount><ProfilePage/></ParamRemount> }/>
                         <Route path=path!("/me") view=SettingsPage/>
                         <Route path=path!("/teams") view=TeamsPage/>
-                        <Route path=path!("/teams/:id") view=TeamShowPage/>
+                        <Route path=path!("/teams/:id") view=|| view! { <ParamRemount><TeamShowPage/></ParamRemount> }/>
                         <Route path=path!("/minigames") view=GamesIndexPage/>
-                        <Route path=path!("/minigames/:type") view=GamePlayPage/>
+                        <Route path=path!("/minigames/:type") view=|| view! { <ParamRemount><GamePlayPage/></ParamRemount> }/>
                         <Route path=path!("/games") view=GamesIndexPage/>
-                        <Route path=path!("/games/:type") view=GamePlayPage/>
+                        <Route path=path!("/games/:type") view=|| view! { <ParamRemount><GamePlayPage/></ParamRemount> }/>
                         <Route path=path!("/minigames") view=GamesIndexPage/>
                         <Route path=path!("/minigames/:type") view=GamePlayPage/>
                         <Route path=path!("/donations") view=DonationsPage/>
                         <Route path=path!("/faq") view=FaqRedirect/>
                         <Route path=path!("/user/banned") view=BannedPage/>
                         <Route path=path!("/settings") view=SettingsPage/>
-                        <Route path=path!("/pages/:slug") view=StaticPage/>
+                        <Route path=path!("/pages/:slug") view=|| view! { <ParamRemount><StaticPage/></ParamRemount> }/>
                         <Route path=path!("/admin") view=AdminDashboard/>
                         <Route path=path!("/admin/users") view=AdminUsers/>
                         <Route path=path!("/admin/teams") view=AdminTeams/>
@@ -193,7 +206,7 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/admin/faqs") view=AdminFaqs/>
                         <Route path=path!("/moderation") view=ModDashboard/>
                         <Route path=path!("/moderation/users") view=ModUsers/>
-                        <Route path=path!("/moderation/users/:id") view=ModUserShow/>
+                        <Route path=path!("/moderation/users/:id") view=|| view! { <ParamRemount><ModUserShow/></ParamRemount> }/>
                         <Route path=path!("/moderation/banned-users") view=ModBannedUsers/>
                         <Route path=path!("/moderation/trashed-messages") view=ModTrashedMessages/>
                         <Route path=path!("/moderation/moderators") view=ModModerators/>
@@ -208,6 +221,7 @@ pub fn App() -> impl IntoView {
                     </Routes>
                 </main>
                 <AppFooter/>
+                <crate::components::install_prompt::InstallPrompt/>
             </div>
         </Router>
     }

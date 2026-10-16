@@ -68,5 +68,12 @@
     <!-- lamejs : MP3 encoder for the local-track upload 30s segment picker
          (`UploadTrack.vue` parity; Blade loads the same build from jsdelivr). -->
     <script src="/js/lame.all.js" defer></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
   </body>
 </html>

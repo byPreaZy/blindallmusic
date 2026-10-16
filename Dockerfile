@@ -30,7 +30,9 @@ COPY web/ ./
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/build/target \
     --mount=type=cache,target=/root/.cache/trunk \
-    trunk build --release
+    trunk build --release \
+ && HASH=$(ls dist/blindall-web-*.js | head -1 | sed -E 's/.*blindall-web-([a-f0-9]+)\.js/\1/') \
+ && sed -i "s/const VERSION = '[^']*'/const VERSION = '${HASH}'/" dist/sw.js
 
 # ------------------------------------------------------------------- server
 FROM ${RUST_IMAGE} AS server-build

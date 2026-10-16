@@ -45,13 +45,14 @@ impl ModerationRepo {
     ) -> Result<Page, sqlx::Error> {
         let like = search.map(|s| format!("%{s}%"));
         let rows = sqlx::query(
-            "SELECT m.id, m.body, m.room_id, m.deleted_at, m.created_at, \
+            "SELECT m.id, m.body, m.messagable_id AS room_id, m.deleted_at, m.created_at, \
              u.id AS user_id, u.name AS user_name, u.photo_path, \
              r.name AS room_name \
              FROM messages m \
              JOIN users u ON u.id = m.user_id \
-             LEFT JOIN rooms r ON r.id = m.room_id \
-             WHERE m.deleted_at IS NOT NULL \
+             LEFT JOIN rooms r ON r.id = m.messagable_id \
+             WHERE m.messagable_type = 'App\\Models\\Room' \
+             AND m.deleted_at IS NOT NULL \
              AND ($1 IS NULL OR m.body LIKE $2 OR u.name LIKE $3) \
              ORDER BY m.deleted_at DESC LIMIT $4 OFFSET $5",
         )
@@ -64,7 +65,8 @@ impl ModerationRepo {
         .await?;
         let total: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM messages m JOIN users u ON u.id = m.user_id \
-             WHERE m.deleted_at IS NOT NULL \
+             WHERE m.messagable_type = 'App\\Models\\Room' \
+             AND m.deleted_at IS NOT NULL \
              AND ($1 IS NULL OR m.body LIKE $2 OR u.name LIKE $3)",
         )
         .bind(&like)
@@ -454,7 +456,7 @@ impl ModerationRepo {
             "total_playlists": one("SELECT COUNT(*) FROM playlists").await,
             "public_playlists": one("SELECT COUNT(*) FROM playlists WHERE is_public = true").await,
             "private_playlists": one("SELECT COUNT(*) FROM playlists WHERE is_public = false").await,
-            "todays_messages": one("SELECT COUNT(*) FROM messages WHERE DATE(created_at) = CURDATE()").await,
+            "todays_messages": one("SELECT COUNT(*) FROM messages WHERE DATE(created_at) = CURRENT_DATE").await,
             "banned_users": one(
                 "SELECT COUNT(DISTINCT bannable_id) FROM bans \
                  WHERE bannable_type = 'App\\Models\\User' AND deleted_at IS NULL \

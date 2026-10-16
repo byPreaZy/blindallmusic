@@ -155,6 +155,7 @@ async fn main() -> anyhow::Result<()> {
         admin: blindall_db::AdminRepo::new(pool.clone()),
         faqs: blindall_db::FaqRepo::new(pool.clone()),
         rankings: blindall_db::RankingsRepo::new(pool.clone()),
+        seasons: blindall_db::SeasonRepo::new(pool.clone()),
         notifications: blindall_db::NotificationRepo::new(pool.clone()),
         rankings_cache: std::sync::Arc::new(blindall_api::rankings::RankingsCache::default()),
         local_tracks: blindall_db::LocalTrackRepo::new(pool.clone()),

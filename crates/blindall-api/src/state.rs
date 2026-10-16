@@ -41,6 +41,7 @@ pub struct AppState {
     pub admin: blindall_db::AdminRepo,
     pub faqs: blindall_db::FaqRepo,
     pub rankings: blindall_db::RankingsRepo,
+    pub seasons: blindall_db::SeasonRepo,
     pub notifications: blindall_db::NotificationRepo,
     pub rankings_cache: std::sync::Arc<crate::rankings::RankingsCache>,
     pub local_tracks: blindall_db::LocalTrackRepo,

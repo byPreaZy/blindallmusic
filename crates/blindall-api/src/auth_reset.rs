@@ -34,7 +34,7 @@ pub async fn forgot_password(
     match state.password_resets.create_token(email).await {
         Ok(token) => {
             let url = format!(
-                "{}/reset-password/{}$1email={}",
+                "{}/reset-password/{}?email={}",
                 state.mail.app_url.trim_end_matches('/'),
                 token,
                 urlencoding(email)
@@ -140,7 +140,7 @@ fn verification_url(state: &AppState, user_id: i64, email: &str) -> String {
     let expires = (chrono::Utc::now() + chrono::Duration::minutes(60)).timestamp();
     let hash = sha1_hex(email);
     let base = format!(
-        "{}/api/v1/auth/email/verify/{}/{}$1expires={}",
+        "{}/api/v1/auth/email/verify/{}/{}?expires={}",
         state.mail.app_url.trim_end_matches('/'),
         user_id,
         hash,
@@ -169,7 +169,7 @@ pub async fn verify_email(
         .unwrap_or(false);
     let spa = |suffix: &str| {
         axum::response::Redirect::to(&format!(
-            "/verify-email/{user_id}/{hash}$1expires={}&signature={}{}",
+            "/verify-email/{user_id}/{hash}?expires={}&signature={}{}",
             q.expires, q.signature, suffix
         ))
         .into_response()
@@ -179,7 +179,7 @@ pub async fn verify_email(
             return spa("&err=expired");
         }
         let base = format!(
-            "{}/api/v1/auth/email/verify/{}/{}$1expires={}",
+            "{}/api/v1/auth/email/verify/{}/{}?expires={}",
             state.mail.app_url.trim_end_matches('/'),
             user_id,
             hash,
@@ -203,7 +203,7 @@ pub async fn verify_email(
         return StatusCode::FORBIDDEN.into_response();
     }
     let base = format!(
-        "{}/api/v1/auth/email/verify/{}/{}$1expires={}",
+        "{}/api/v1/auth/email/verify/{}/{}?expires={}",
         state.mail.app_url.trim_end_matches('/'),
         user_id,
         hash,
@@ -252,7 +252,7 @@ mod tests {
         let app_key = "base64:testkey";
         let app_url = "https://blindall.test";
         let (id, hash, expires) = (42i64, "abc123", 1_800_000_000i64);
-        let base = format!("{app_url}/api/v1/auth/email/verify/{id}/{hash}$1expires={expires}");
+        let base = format!("{app_url}/api/v1/auth/email/verify/{id}/{hash}?expires={expires}");
         let sig = hmac_sha256_hex(app_key, &base);
         assert_eq!(sig, hmac_sha256_hex(app_key, &base));
         assert_ne!(sig, hmac_sha256_hex(app_key, &format!("{base}&x=1")));

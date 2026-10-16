@@ -1,0 +1,61 @@
+name: Deploy
+
+# Push sur main -> build de l'image sur le runner GitHub, transfert
+# `docker save | ssh docker load` vers le VPS, puis `compose up`.
+# Secrets requis (repo Settings -> Secrets -> Actions) :
+#   VPS_HOST, VPS_USER, VPS_SSH_KEY, ENV_PRODUCTION (contenu de .env.production)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          load: true
+          tags: blindall:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          ENV_PRODUCTION: ${{ secrets.ENV_PRODUCTION }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+
+          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes $VPS_USER@$VPS_HOST"
+          SCP="scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes"
+
+          $SSH "mkdir -p ~/blindall"
+          $SCP docker-compose.yml docker-compose.prod.yml docker-compose.traefik.yml \
+               "$VPS_USER@$VPS_HOST:~/blindall/"
+
+          # .env.production : seed seulement si absent (les secrets vivent sur
+          # le VPS / dans le secret GitHub, pas dans le repo)
+          printf '%s' "$ENV_PRODUCTION" | $SSH \
+            "test -f ~/blindall/.env.production || cat > ~/blindall/.env.production"
+
+          docker save blindall:latest | gzip | $SSH "docker load"
+
+          $SSH "cd ~/blindall && \
+            docker compose --env-file .env.production \
+              -f docker-compose.yml -f docker-compose.prod.yml \
+              -f docker-compose.traefik.yml up -d --remove-orphans && \
+            docker image prune -f"

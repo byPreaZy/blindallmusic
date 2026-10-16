@@ -34,6 +34,7 @@ pub fn RankingPanel(
             .collect::<Vec<_>>()
     });
     let podium_data = RwSignal::new(Option::<Value>::None);
+    let podium_tab = RwSignal::new("lifetime");
 
     Effect::new(move |_| {
         if !podium_open.get() {
@@ -263,44 +264,155 @@ pub fn RankingPanel(
                                 </svg>
                             </button>
                         </div>
-                        <div class="grid gap-6 p-6 md:grid-cols-2">
+                        <div class="p-6">
                             {move || {
                                 let Some(d) = podium_data.get() else {
                                     return view! { <p class="text-sm text-white/50">{t("Loading")}"…"</p> }.into_any();
                                 };
-                                ["week", "lifetime"].iter().map(|key| {
-                                    let title = if *key == "week" { t("This week") } else { t("All time") };
-                                    let rows = d[key].as_array().cloned().unwrap_or_default();
-                                    view! {
-                                        <div>
-                                            <h4 class="mb-2 text-sm font-medium uppercase tracking-wider text-brand-secondary">{title}</h4>
-                                            <ul class="space-y-1">
-                                                {if rows.is_empty() {
-                                                    view! { <li class="py-2 text-sm text-white/40">"…"</li> }.into_any()
+                                let tab = podium_tab.get();
+                                let my = d["user"][tab].clone();
+                                let my_rank = my["rank"].as_i64();
+                                let my_total = my["total"].as_f64();
+                                let tabs: [(&'static str, &'static str); 3] = [
+                                    ("lifetime", t("All time")),
+                                    ("teams", t("Teams")),
+                                    ("week", t("This week")),
+                                ];
+                                view! {
+                                    <div>
+                                        <Show when=move || podium_tab.get() != "teams">
+                                            {move || {
+                                                if let (Some(rank), Some(total)) = (my_rank, my_total) {
+                                                    view! {
+                                                        <div class="mb-4 flex items-center justify-between rounded-lg border border-brand-secondary/30 bg-brand-secondary/10 px-4 py-2 text-sm">
+                                                            <span class="font-medium text-white/80">{t("Your ranking")}</span>
+                                                            <span class="font-bold text-brand-secondary">
+                                                                {format!("#{rank} · {total:.0} pts")}
+                                                            </span>
+                                                        </div>
+                                                    }.into_any()
                                                 } else {
-                                                    rows.iter().take(10).enumerate().map(|(i, r)| {
-                                                        let name = r["name"].as_str()
-                                                            .or(r["user"]["name"].as_str())
-                                                            .unwrap_or("?")
-                                                            .to_string();
-                                                        let score = r["total"].as_f64()
-                                                            .or(r["score"].as_f64())
-                                                            .unwrap_or(0.0);
-                                                        view! {
-                                                            <li class="flex items-center justify-between rounded bg-brand-deep/60 px-3 py-1.5 text-sm">
-                                                                <span class="min-w-0 truncate text-white/85">
-                                                                    <span class="mr-2 inline-block w-5 text-center font-bold text-white/40">{i + 1}</span>
-                                                                    {name}
-                                                                </span>
-                                                                <span class="font-semibold text-brand-accent-light">{format!("{score:.0}")}</span>
-                                                            </li>
+                                                    view! {
+                                                        <div class="mb-4 rounded-lg border border-white/10 bg-brand-deep/40 px-4 py-2 text-sm text-white/40">
+                                                            {t("Not ranked yet")}
+                                                        </div>
+                                                    }.into_any()
+                                                }
+                                            }}
+                                        </Show>
+                                        <div class="mb-4 flex gap-1 rounded-lg bg-brand-deep/60 p-1">
+                                            {tabs.into_iter().map(|(key, label)| {
+                                                view! {
+                                                    <button type="button"
+                                                        class=move || if podium_tab.get() == key {
+                                                            "flex-1 rounded-md bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white sm:text-sm"
+                                                        } else {
+                                                            "flex-1 rounded-md px-3 py-1.5 text-xs text-white/50 hover:text-white sm:text-sm"
                                                         }
-                                                    }).collect_view().into_any()
-                                                }}
-                                            </ul>
+                                                        on:click=move |_| podium_tab.set(key)>
+                                                        {label}
+                                                    </button>
+                                                }
+                                            }).collect_view()}
                                         </div>
-                                    }
-                                }).collect_view().into_any()
+                                        {move || {
+                                            if podium_tab.get() == "teams" {
+                                                let rows = d["teams"].as_array().cloned().unwrap_or_default();
+                                                if rows.is_empty() {
+                                                    return view! { <p class="py-6 text-center text-sm text-white/40">{t("No scores yet")}</p> }.into_any();
+                                                }
+                                                view! {
+                                                    <ul class="space-y-1">
+                                                        {rows.iter().take(15).enumerate().map(|(i, r)| {
+                                                            let name = r["team"]["name"].as_str().unwrap_or("?").to_string();
+                                                            let score = r["total"].as_f64().unwrap_or(0.0);
+                                                            view! {
+                                                                <li class="flex items-center justify-between rounded bg-brand-deep/60 px-3 py-1.5 text-sm">
+                                                                    <span class="min-w-0 truncate text-white/85">
+                                                                        <span class="mr-2 inline-block w-5 text-center font-bold text-white/40">{i + 1}</span>
+                                                                        {name}
+                                                                    </span>
+                                                                    <span class="font-semibold text-brand-accent-light">{format!("{score:.0}")}</span>
+                                                                </li>
+                                                            }
+                                                        }).collect_view()}
+                                                    </ul>
+                                                }.into_any()
+                                            } else {
+                                                let key = if podium_tab.get() == "week" { "week" } else { "lifetime" };
+                                                let rows = d[key].as_array().cloned().unwrap_or_default();
+                                                if rows.is_empty() {
+                                                    return view! { <p class="py-6 text-center text-sm text-white/40">{t("No scores yet")}</p> }.into_any();
+                                                }
+                                                view! {
+                                                    <ul class="max-h-[50vh] space-y-1 overflow-y-auto pr-1"
+                                                        style="scrollbar-width:thin;scrollbar-color:rgb(242 201 76 / 0.4) rgb(30 25 46 / 0.5)">
+                                                        {rows.iter().take(50).map(|r| {
+                                                            let rank = r["rank"].as_i64().unwrap_or(0);
+                                                            let name = r["user"]["name"].as_str().unwrap_or("?").to_string();
+                                                            let uid = r["user_id"].as_i64().unwrap_or(0);
+                                                            let score = r["total"].as_f64().unwrap_or(0.0);
+                                                            let stats = &r["stats"];
+                                                            let level = stats["level"].as_i64().unwrap_or(1);
+                                                            let elo = stats["elo"].as_i64().unwrap_or(1500);
+                                                            let rounds = stats["rounds_played"].as_i64().unwrap_or(0);
+                                                            let avg = stats["avg_score_per_round"].as_f64();
+                                                            let avg_t = stats["avg_response_time"].as_f64();
+                                                            let best = stats["best_round_score"].as_f64();
+                                                            let streak = stats["best_win_streak"].as_i64();
+                                                            let is_me = me_id.get() == Some(uid);
+                                                            let square = match rank {
+                                                                1 => "bg-brand-secondary text-brand-midnight",
+                                                                2 => "bg-brand-accent text-brand-midnight",
+                                                                3 => "bg-brand-primary text-brand-midnight",
+                                                                _ => "bg-brand-midnight text-white/70",
+                                                            };
+                                                            let row_cls = if is_me {
+                                                                "rounded bg-brand-secondary/15 px-3 py-1.5 ring-1 ring-brand-secondary/50"
+                                                            } else {
+                                                                "rounded bg-brand-deep/60 px-3 py-1.5"
+                                                            };
+                                                            let mut chips = vec![
+                                                                format!("{} {level}", t("Level")),
+                                                                format!("ELO {elo}"),
+                                                            ];
+                                                            if let Some(v) = avg {
+                                                                chips.push(format!("{} {v:.1}", t("Avg. per round")));
+                                                            }
+                                                            if let Some(v) = avg_t {
+                                                                chips.push(format!("{} {v:.1}s", t("Avg. time")));
+                                                            }
+                                                            if let Some(v) = best {
+                                                                chips.push(format!("{} {v:.0}", t("Best round")));
+                                                            }
+                                                            if let Some(v) = streak {
+                                                                chips.push(format!("{} {v}", t("Best streak")));
+                                                            }
+                                                            chips.push(format!("{rounds} {}", t("Rounds played")));
+                                                            view! {
+                                                                <li class=row_cls>
+                                                                    <div class="flex items-center justify-between text-sm">
+                                                                        <span class="flex min-w-0 items-center gap-2">
+                                                                            <span class=format!("inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-xs font-bold {square}")>{rank}</span>
+                                                                            <A href=format!("/users/{uid}")
+                                                                                attr:class="truncate text-white/85 hover:text-brand-secondary">
+                                                                                {name}
+                                                                            </A>
+                                                                        </span>
+                                                                        <span class="ml-2 shrink-0 font-semibold text-brand-accent-light">{format!("{score:.0}")}</span>
+                                                                    </div>
+                                                                    <div class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 pl-8 text-[11px] text-white/40">
+                                                                        {chips.into_iter().map(|c| view! { <span>{c}</span> }).collect_view()}
+                                                                    </div>
+                                                                </li>
+                                                            }
+                                                        }).collect_view()}
+                                                    </ul>
+                                                }.into_any()
+                                            }
+                                        }}
+                                    </div>
+                                }.into_any()
                             }}
                         </div>
                     </div>

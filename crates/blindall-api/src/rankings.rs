@@ -39,7 +39,7 @@ fn db_error() -> Response {
     StatusCode::INTERNAL_SERVER_ERROR.into_response()
 }
 
-fn enrich_photos(state: &AppState, payload: &mut Value) {
+pub(crate) fn enrich_photos(state: &AppState, payload: &mut Value) {
     let Some(items) = payload["data"].as_array_mut() else {
         return;
     };

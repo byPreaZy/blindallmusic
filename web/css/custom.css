@@ -1836,3 +1836,45 @@ body {
     transform: scale(1);
   }
 }
+
+/* ---- mobile / PWA ergonomics --------------------------------------------- */
+
+/* Kill the 300ms tap delay & the grey flash on controls. */
+button, a, [role="button"], .room-track-vote, .room-input-submit {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent pull-to-refresh / rubber-band navigation inside the room. */
+.room-show-root,
+.room-show-scroll,
+.chat-messages {
+  overscroll-behavior: contain;
+}
+body {
+  overscroll-behavior-y: none;
+}
+
+/* Notch / home-indicator safe areas. */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .room-mobile-shell {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .chat-panel {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .chat-composer {
+    padding-bottom: calc(0.25rem + env(safe-area-inset-bottom));
+  }
+  .mobile-tab-bar {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Inputs already render at 16px+ (iOS auto-zoom threshold); keep selects and
+   textareas aligned too so nothing zooms on focus. */
+@media (max-width: 768px) {
+  select, textarea, input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="number"] {
+    font-size: 16px;
+  }
+}

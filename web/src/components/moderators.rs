@@ -54,7 +54,7 @@ pub fn ModeratorsSection(
                             view! {
                                 <li class="flex items-center gap-3 text-sm">
                                     <span class="text-white/80">{mname}</span>
-                                    <span class="text-white/30">"#{mid}"</span>
+                                    <span class="text-white/30">"#"{mid}</span>
                                     {can_manage.then(|| view! {
                                         <button type="button"
                                             class="ml-auto text-xs text-red-400 hover:underline"
@@ -146,7 +146,7 @@ fn UserSearchPicker(
                                             open.set(false);
                                         }>
                                         {u.name.clone()}
-                                        <span class="ml-auto text-xs text-white/30">"#{u.id}"</span>
+                                        <span class="ml-auto text-xs text-white/30">"#"{u.id}</span>
                                     </button>
                                 </li>
                             }

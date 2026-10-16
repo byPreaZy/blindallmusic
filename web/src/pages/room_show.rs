@@ -290,13 +290,18 @@ fn resolved_faq(room: &RoomConfig, s: &Value) -> Vec<(String, String)> {
 }
 
 #[component]
-fn RoomSeoPanel(room: RwSignal<RoomConfig>, seo: RwSignal<Option<Value>>) -> impl IntoView {
+fn RoomSeoPanel(
+    room: RwSignal<RoomConfig>,
+    seo: RwSignal<Option<Value>>,
+    players_online: RwSignal<i64>,
+) -> impl IntoView {
     view! {
         <Show when=move || seo.get().is_some()>
             {move || {
                 let s = seo.get().unwrap();
                 let crumbs = s["breadcrumbs"].as_array().cloned().unwrap_or_default();
                 let stats = s["stats"].clone();
+                let stats_online = stats["players_online"].as_i64().unwrap_or_default();
                 let similar = s["similar_rooms"].as_array().cloned().unwrap_or_default();
                 let r = room.get();
                 let intro = resolved_intro(&r, &s, false);
@@ -347,7 +352,12 @@ fn RoomSeoPanel(room: RwSignal<RoomConfig>, seo: RwSignal<Option<Value>>) -> imp
                                 </div>
                                 <div class="col-span-2 rounded-lg border border-white/10 bg-brand-midnight/80 px-3 py-2.5 sm:col-span-1">
                                     <dt class="text-xs uppercase tracking-wide text-white/50">{t("Players online")}</dt>
-                                    <dd class="text-lg font-bold text-white">{stats["players_online"].as_i64().unwrap_or_default()}</dd>
+                                    <dd class="text-lg font-bold text-white">
+                                        {move || {
+                                            let n = players_online.get();
+                                            if n > 0 { n } else { stats_online }
+                                        }}
+                                    </dd>
                                 </div>
                             </dl>
 
@@ -496,6 +506,7 @@ pub fn RoomPage() -> impl IntoView {
     let room_password = RwSignal::new(String::new());
     let show_done = RwSignal::new(false);
     let seo_data = RwSignal::new(Option::<Value>::None);
+    let players_online = RwSignal::new(0_i64);
     Effect::new(move |_| {
         let _ = auth.user.get();
         let pwd = room_password.get();
@@ -532,6 +543,11 @@ pub fn RoomPage() -> impl IntoView {
                         t("Room title suffix")
                     )));
                     apply_room_head(&resp.room, resp.seo.as_ref(), !pwd.is_empty());
+                    if let Some(n) = resp.seo.as_ref().and_then(|s| {
+                        s["stats"]["players_online"].as_i64()
+                    }) {
+                        players_online.set(n);
+                    }
                     seo_data.set(resp.seo);
                     room.set(resp.room);
                     public_rooms.set(resp.public_rooms);
@@ -714,6 +730,13 @@ pub fn RoomPage() -> impl IntoView {
         on!("UserLevelUpdated", move |_| {});
 
         realtime.join(&channel);
+        let pub_channel = format!("room.public:{rid}");
+        realtime.subscribe(&pub_channel);
+        realtime.listen(&pub_channel, "RoomPublicState", Rc::new(move |e: &Value| {
+            if let Some(n) = e["memberCount"].as_i64() {
+                players_online.set(n);
+            }
+        }));
         {
             let hb = SendWrapper::new(realtime.start_heartbeat());
             on_cleanup(move || drop(hb));
@@ -757,6 +780,7 @@ pub fn RoomPage() -> impl IntoView {
             }
             if let Some(realtime) = rt.get_untracked() {
                 realtime.leave(&format!("room:{rid}"));
+                realtime.leave(&format!("room.public:{rid}"));
             }
             leptos::task::spawn_local(async move {
                 let _ = api::post_empty::<Value>(&format!(
@@ -806,6 +830,11 @@ pub fn RoomPage() -> impl IntoView {
             .iter()
             .filter_map(|m| m["id"].as_i64())
             .collect::<std::collections::HashSet<i64>>()
+    });
+    let chat_visible = Memo::new(move |_| {
+        room.get().is_chat_active
+            && rt.get().is_some()
+            && (display_chat.get() || mobile_tab.get() == "chat")
     });
 
     view! {
@@ -923,12 +952,12 @@ pub fn RoomPage() -> impl IntoView {
                         <div class="room-show-player mb-2 min-w-0 md:mb-8">
                             <Player
                                 track=track
-                                track_duration=room.get().track_duration.max(1.0)
+                                track_duration=room.get_untracked().track_duration.max(1.0)
                                 start_offset=start_offset
                                 next_track_at=next_track_at
                                 next_audio_url=next_audio_url
                                 paused=paused
-                                pause_between_tracks=room.get().pause_between_tracks.max(1.0)
+                                pause_between_tracks=room.get_untracked().pause_between_tracks.max(1.0)
                                 current_time=current_time
                                 found_all=found_all_markers
                                 volume=volume
@@ -963,16 +992,16 @@ pub fn RoomPage() -> impl IntoView {
                                 }).collect_view()}
                             </div>
                             <Show when=move || mobile_tab.get() == "playlist">
-                                <PlaylistPanel played_tracks=played_tracks round=round room_id=room_id.get() can_vote=can_vote/>
+                                <PlaylistPanel played_tracks=played_tracks round=round room_id=room_id.get_untracked() can_vote=can_vote/>
                             </Show>
                             <Show when=move || mobile_tab.get() == "ranking">
-                                <RankingPanel users=users scores=scores answers_by_user=answers_by_user track=track room_id=room_id.get() me_id=me_sig podium_open=podium_open/>
+                                <RankingPanel users=users scores=scores answers_by_user=answers_by_user track=track room_id=room_id.get_untracked() me_id=me_sig podium_open=podium_open/>
                             </Show>
                         </div>
 
                         <div class="hidden gap-8 md:grid md:grid-cols-2">
-                            <PlaylistPanel played_tracks=played_tracks round=round room_id=room_id.get() can_vote=can_vote/>
-                            <RankingPanel users=users scores=scores answers_by_user=answers_by_user track=track room_id=room_id.get() me_id=me_sig podium_open=podium_open/>
+                            <PlaylistPanel played_tracks=played_tracks round=round room_id=room_id.get_untracked() can_vote=can_vote/>
+                            <RankingPanel users=users scores=scores answers_by_user=answers_by_user track=track room_id=room_id.get_untracked() me_id=me_sig podium_open=podium_open/>
                         </div>
 
                         <section class="retro-card mt-8 hidden md:block">
@@ -1069,7 +1098,7 @@ pub fn RoomPage() -> impl IntoView {
                             </section>
                         </Show>
 
-                        <RoomSeoPanel room=room seo=seo_data/>
+                        <RoomSeoPanel room=room seo=seo_data players_online=players_online/>
 
                         <Show when=move || {
                             joined.get()
@@ -1080,25 +1109,17 @@ pub fn RoomPage() -> impl IntoView {
                         </Show>
                     </div>
 
-                    {move || {
-                        let mobile = mobile_tab.get() == "chat";
-                        let show = room.get().is_chat_active
-                            && rt.get().is_some()
-                            && (display_chat.get() || mobile);
-                        show.then(|| {
-                            let r = rt.get().unwrap();
-                            let cls = if mobile {
+                    <Show when=move || chat_visible.get()>
+                        <div class=move || {
+                            if mobile_tab.get() == "chat" {
                                 "chat-panel flex h-[48dvh] max-h-[32rem] min-h-[24rem] w-full shrink-0 flex-col md:h-full md:max-h-none md:min-h-0 md:w-1/5"
                             } else {
                                 "chat-panel hidden h-full w-1/5 shrink-0 flex-col md:flex"
-                            };
-                            view! {
-                                <div class=cls>
-                                    <RoomChat room_id=room_id.get() rt=r can_delete=can_moderate_chat is_guest=is_guest_sig moderator_ids=moderator_ids/>
-                                </div>
                             }
-                        })
-                    }}
+                        }>
+                            <RoomChat room_id=room_id.get_untracked() rt=rt.get_untracked().unwrap() can_delete=can_moderate_chat is_guest=is_guest_sig moderator_ids=moderator_ids/>
+                        </div>
+                    </Show>
                 </div>
 
                 <Show when=move || finalizing.get() && !round_finished.get()>

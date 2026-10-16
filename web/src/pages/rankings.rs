@@ -25,6 +25,7 @@ pub fn RankingsPage() -> impl IntoView {
         .pathname
         .get_untracked();
     let initial_tab = match path.as_str() {
+        "/rankings/season" => "season",
         "/rankings/teams" => "teams",
         "/rankings/minigames" => "minigames",
         _ => "players",
@@ -40,7 +41,7 @@ pub fn RankingsPage() -> impl IntoView {
         .unwrap_or(0);
     let initial_tab_q = initial
         .get("tab")
-        .filter(|s| ["players", "teams", "minigames"].contains(&s.as_str()))
+        .filter(|s| ["players", "season", "teams", "minigames"].contains(&s.as_str()))
         .map(|s| s.to_string());
     let tab = RwSignal::new(
         initial_tab_q.unwrap_or_else(|| initial_tab.to_string()),
@@ -96,6 +97,7 @@ pub fn RankingsPage() -> impl IntoView {
         loading.set(true);
         leptos::task::spawn_local(async move {
             let url = match tab_v.as_str() {
+                "season" => format!("/api/v1/seasons?page={page_v}"),
                 "teams" => format!("/api/v1/rankings/teams?page={page_v}"),
                 "minigames" => format!("/api/v1/rankings/minigames?page={page_v}"),
                 _ => format!(
@@ -152,9 +154,9 @@ pub fn RankingsPage() -> impl IntoView {
                 <nav class="-mb-px flex gap-2 overflow-x-auto" aria-label="Tabs">
                     {move || {
                         let authed = auth.user.get().is_some();
-                        [("players", "/rankings"), ("minigames", "/rankings/minigames"), ("teams", "/rankings/teams")]
+                        [("players", "/rankings"), ("season", "/rankings/season"), ("minigames", "/rankings/minigames"), ("teams", "/rankings/teams")]
                             .into_iter()
-                            .filter(|(tb, _)| *tb == "players" || authed)
+                            .filter(|(tb, _)| *tb == "players" || *tb == "season" || authed)
                             .map(|(tb, href)| {
                                 let tb_s = tb.to_string();
                                 view! {
@@ -164,7 +166,7 @@ pub fn RankingsPage() -> impl IntoView {
                                         } else {
                                             "group inline-flex flex-shrink-0 items-center gap-2 border-b-2 border-transparent px-3 py-2 text-xs font-medium text-white/50 transition-all duration-200 hover:border-white/30 hover:text-white/80 sm:px-4 sm:py-3 sm:text-sm"
                                         }>
-                                        {t(match tb { "players" => "Players", "teams" => "Teams", _ => "Mini-games" })}
+                                        {t(match tb { "players" => "Players", "season" => "Season", "teams" => "Teams", _ => "Mini-games" })}
                                     </A>
                                 }
                             }).collect::<Vec<_>>()
@@ -174,6 +176,7 @@ pub fn RankingsPage() -> impl IntoView {
 
             {move || {
                 match tab.get().as_str() {
+                    "season" => view! { <SeasonBoard payload=payload loading=loading page=page /> }.into_any(),
                     "teams" => view! { <TeamsBoard payload=payload loading=loading page=page /> }.into_any(),
                     "minigames" => view! { <MinigamesBoard payload=payload loading=loading page=page /> }.into_any(),
                     _ => view! {
@@ -764,5 +767,205 @@ fn Pagination(page: RwSignal<i64>, last: i64, total: i64) -> impl IntoView {
                 <p class="mt-2 text-center text-xs text-white/40">{total} " " {t("results")}</p>
             </div>
         </Show>
+    }
+}
+
+// ---- season --------------------------------------------------------------------
+
+#[component]
+fn SeasonBoard(payload: RwSignal<Value>, loading: RwSignal<bool>, page: RwSignal<i64>) -> impl IntoView {
+    let me_id = Signal::derive(move || crate::auth::use_auth().user.get().map(|u| u.id));
+    view! {
+        <div>
+            {move || {
+                if loading.get() {
+                    return view! { <div class="text-white/60">{t("Loading")}"…"</div> }.into_any();
+                }
+                let p = payload.get();
+                if p.is_null() {
+                    return view! {
+                        <div class="py-16 text-center">
+                            <p class="text-white/40">{t("No rankings available")}</p>
+                        </div>
+                    }.into_any();
+                }
+                let cur = p["current"].clone();
+                let name = cur["name"].as_str().unwrap_or("").to_string();
+                let ends_in = cur["ends_in_seconds"].as_i64().unwrap_or(0);
+                let days = ends_in / 86400;
+                let hours = (ends_in % 86400) / 3600;
+                let countdown = crate::i18n::tr("Season ends in", &[
+                    ("time", crate::i18n::tr("Season duration format", &[
+                        ("d", days.to_string()),
+                        ("h", hours.to_string()),
+                    ])),
+                ]);
+                let my = p["user_rank"].clone();
+                let rows = p["board"]["data"].as_array().cloned().unwrap_or_default();
+                let total = p["board"]["total"].as_i64().unwrap_or(0);
+                let last = p["board"]["last_page"].as_i64().unwrap_or(1);
+                let past = p["past"].as_array().cloned().unwrap_or_default();
+                let first_page = page.get() == 1;
+                view! {
+                    <div>
+                        <div class="mb-5 rounded-xl border border-yellow-500/25 bg-gradient-to-r from-yellow-500/10 to-amber-600/5 p-4 sm:p-5">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <p class="text-[11px] font-semibold uppercase tracking-widest text-yellow-500/80">{t("Season")}</p>
+                                    <h2 class="text-xl font-extrabold text-white sm:text-2xl">{name}</h2>
+                                    <p class="mt-1 text-xs text-white/50">{t("Season reward hint")}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-[11px] uppercase tracking-widest text-white/40">{countdown}</p>
+                                    {if my["rank"].is_number() {
+                                        view! {
+                                            <p class="mt-1 text-sm font-bold text-yellow-400">
+                                                {t("Your ranking")} " · #" {my["rank"].as_i64().unwrap_or(0)}
+                                                " · " {format!("{:.0}", my["total"].as_f64().unwrap_or(0.0))} " pts"
+                                            </p>
+                                        }.into_any()
+                                    } else {
+                                        view! {
+                                            <p class="mt-1 text-sm text-white/40">{t("Not ranked yet")}</p>
+                                        }.into_any()
+                                    }}
+                                </div>
+                            </div>
+                        </div>
+
+                        {if rows.is_empty() {
+                            view! {
+                                <div class="py-16 text-center">
+                                    <p class="text-white/40">{t("No scores yet")}</p>
+                                </div>
+                            }.into_any()
+                        } else {
+                            view! {
+                                <div class="space-y-2.5 sm:space-y-3">
+                                    {rows.into_iter().map(|e| {
+                                        let u = e["user"].clone();
+                                        let rank = e["rank"].as_i64().unwrap_or(0);
+                                        let uid = u["id"].as_i64().unwrap_or(0);
+                                        let is_guest = u["is_guest"].as_bool().unwrap_or(false);
+                                        let is_me = me_id.get() == Some(uid);
+                                        let medal = if first_page {
+                                            ["🥇","🥈","🥉"].get((rank - 1) as usize).copied()
+                                        } else { None };
+                                        let row_cls = if is_me {
+                                            "border-yellow-500/50 bg-yellow-500/10"
+                                        } else {
+                                            match (first_page, rank) {
+                                                (true, 1) => "border-yellow-500/30 bg-yellow-500/5",
+                                                (true, 2) => "border-gray-400/25 bg-gray-400/5",
+                                                (true, 3) => "border-amber-600/25 bg-amber-600/5",
+                                                _ => "border-neutral-800 bg-neutral-900/40",
+                                            }
+                                        };
+                                        let photo_src = photo(&u);
+                                        let name = u["name"].as_str().unwrap_or("").to_string();
+                                        let alt = name.clone();
+                                        let total_v = e["total"].as_f64().unwrap_or(0.0);
+                                        let rounds_v = e["rounds_played"].as_i64().unwrap_or(0);
+                                        let best_v = e["best_round"].as_f64();
+                                        let level_v = u["level"].as_i64().unwrap_or(1);
+                                        let elo_v = u["elo"].as_i64().unwrap_or(1500);
+                                        view! {
+                                            <article class=format!("rounded-xl border p-3 shadow-sm transition-colors hover:border-neutral-700 sm:p-4 {row_cls}")>
+                                                <div class="flex items-center gap-3">
+                                                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-800 text-sm font-bold sm:h-11 sm:w-11">
+                                                        {match medal {
+                                                            Some(m) => view! { <span class="text-lg">{m}</span> }.into_any(),
+                                                            None => view! { <span class="text-neutral-400">"#"{rank}</span> }.into_any(),
+                                                        }}
+                                                    </div>
+                                                    {if !is_guest {
+                                                        let alt2 = alt.clone();
+                                                        view! {
+                                                            <A href=user_link(uid) attr:class="shrink-0">
+                                                                <img src=photo_src.clone() alt=alt2 class="h-10 w-10 rounded-full border-2 border-neutral-600 object-cover sm:h-11 sm:w-11" loading="lazy"/>
+                                                            </A>
+                                                        }.into_any()
+                                                    } else {
+                                                        view! {
+                                                            <img src=photo_src.clone() alt=alt.clone() class="h-10 w-10 shrink-0 rounded-full border-2 border-neutral-600 object-cover sm:h-11 sm:w-11" loading="lazy"/>
+                                                        }.into_any()
+                                                    }}
+                                                    <div class="min-w-0 flex-1">
+                                                        {if !is_guest {
+                                                            let nm = name.clone();
+                                                            view! {
+                                                                <A href=user_link(uid) attr:class="block truncate text-base font-bold text-white hover:text-yellow-400">
+                                                                    {nm}
+                                                                </A>
+                                                            }.into_any()
+                                                        } else {
+                                                            let nm = if name.is_empty() { t("Deleted user").to_string() } else { name.clone() };
+                                                            view! {
+                                                                <span class="block truncate text-base font-bold text-neutral-400">{nm}</span>
+                                                            }.into_any()
+                                                        }}
+                                                        <div class="mt-1.5 flex flex-wrap gap-1.5 text-[11px] text-neutral-400">
+                                                            <span class="rounded-md border border-neutral-700/60 bg-neutral-800/50 px-1.5 py-0.5">{t("Level")} " " {level_v}</span>
+                                                            <span class="rounded-md border border-neutral-700/60 bg-neutral-800/50 px-1.5 py-0.5">"ELO " {elo_v}</span>
+                                                            <span class="rounded-md border border-neutral-700/60 bg-neutral-800/50 px-1.5 py-0.5">{rounds_v} " " {t("Rounds played")}</span>
+                                                            {best_v.map(|b| view! {
+                                                                <span class="rounded-md border border-neutral-700/60 bg-neutral-800/50 px-1.5 py-0.5">{t("Best round")} " " {format!("{b:.0}")}</span>
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                    <div class="shrink-0 text-right">
+                                                        <span class="block text-lg font-extrabold text-yellow-400 sm:text-xl">{format!("{total_v:.0}")}</span>
+                                                        <span class="block text-[10px] uppercase text-neutral-500">{t("PTS")}</span>
+                                                    </div>
+                                                </div>
+                                            </article>
+                                        }
+                                    }).collect_view()}
+                                </div>
+                                <Pagination page=page last=last total=total />
+                            }.into_any()
+                        }}
+
+                        {if !past.is_empty() {
+                            view! {
+                                <div class="mt-10">
+                                    <h3 class="mb-3 text-sm font-semibold uppercase tracking-widest text-white/40">{t("Past seasons")}</h3>
+                                    <div class="grid gap-3 sm:grid-cols-2">
+                                        {past.into_iter().map(|s| {
+                                            let sname = s["name"].as_str().unwrap_or("").to_string();
+                                            let podium = s["podium"].as_array().cloned().unwrap_or_default();
+                                            view! {
+                                                <div class="rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
+                                                    <p class="mb-2 text-xs font-semibold uppercase tracking-widest text-white/40">{sname}</p>
+                                                    <ul class="space-y-1.5">
+                                                        {podium.into_iter().take(3).map(|e| {
+                                                            let prank = e["rank"].as_i64().unwrap_or(0);
+                                                            let pname = e["name"].as_str().unwrap_or("?").to_string();
+                                                            let ptotal = e["total"].as_f64().unwrap_or(0.0);
+                                                            let pxp = e["reward_xp"].as_i64().unwrap_or(0);
+                                                            let pm = ["🥇","🥈","🥉"].get((prank - 1) as usize).copied().unwrap_or("");
+                                                            view! {
+                                                                <li class="flex items-center justify-between text-sm">
+                                                                    <span class="min-w-0 truncate text-white/80">{pm} " " {pname}</span>
+                                                                    <span class="ml-2 shrink-0 text-xs text-white/50">
+                                                                        {format!("{ptotal:.0} pts · +{pxp} XP")}
+                                                                    </span>
+                                                                </li>
+                                                            }
+                                                        }).collect_view()}
+                                                    </ul>
+                                                </div>
+                                            }
+                                        }).collect_view()}
+                                    </div>
+                                </div>
+                            }.into_any()
+                        } else {
+                            view! { <span></span> }.into_any()
+                        }}
+                    </div>
+                }.into_any()
+            }}
+        </div>
     }
 }

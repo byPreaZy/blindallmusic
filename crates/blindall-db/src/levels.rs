@@ -179,7 +179,7 @@ impl LevelRepo {
         let row = sqlx::query(
             "SELECT l.score_public_rooms, l.rooms_created_count, \
              l.playlists_created_count, l.tracks_liked_count, \
-             l.consecutive_days_streak, u.created_at, u.team_id \
+             l.consecutive_days_streak, l.season_bonus_xp, u.created_at, u.team_id \
              FROM user_levels l JOIN users u ON u.id = l.user_id \
              WHERE l.user_id = $1",
         )
@@ -206,6 +206,7 @@ impl LevelRepo {
             playlists_created_count: row.get("playlists_created_count"),
             tracks_liked_count: row.get("tracks_liked_count"),
             consecutive_days_streak: row.get("consecutive_days_streak"),
+            season_bonus_xp: row.get("season_bonus_xp"),
         });
         let blindall_core::levels::LevelData {
             level,
@@ -243,6 +244,7 @@ impl LevelRepo {
                 "rooms_created_count": row.get::<i64, _>("rooms_created_count"),
                 "playlists_created_count": row.get::<i64, _>("playlists_created_count"),
                 "tracks_liked_count": row.get::<i64, _>("tracks_liked_count"),
+                "season_bonus_xp": row.get::<i64, _>("season_bonus_xp"),
                 "has_team": row.get::<Option<i64>, _>("team_id").is_some(),
             },
         }))

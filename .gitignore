@@ -40,3 +40,7 @@ Thumbs.db
 web/target*/
 target*/
 prod_seed.sql
+
+# Playwright MCP artifacts
+.playwright-mcp/
+blindall_seed.sql.gz

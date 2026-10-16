@@ -99,17 +99,19 @@ impl PlaylistRepo {
     pub async fn list_for_user(
         &self,
         user_id: i64,
+        is_admin: bool,
     ) -> Result<Vec<PlaylistListItem>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT p.id, p.name, p.user_id, p.is_public, p.description, \
              p.updated_at, u.name AS owner_name, \
              (SELECT COUNT(*) FROM tracks t WHERE t.playlist_id = p.id) AS total_tracks \
              FROM playlists p JOIN users u ON u.id = p.user_id \
-             WHERE p.id IN (SELECT moderable_id FROM moderables \
+             WHERE $2 OR p.id IN (SELECT moderable_id FROM moderables \
                WHERE user_id = $1 AND moderable_type = 'App\\Models\\Playlist') \
              ORDER BY p.updated_at DESC",
         )
         .bind(user_id)
+        .bind(is_admin)
         .fetch_all(&self.pool)
         .await?;
 
@@ -514,7 +516,21 @@ impl PlaylistRepo {
             }
         };
 
-        for (type_id, value) in [(1i64, artist_name), (2i64, track_name)] {
+        let (clean_title, feats, medley) =
+            blindall_core::sanitize::clean_import_title(track_name);
+        let title = if clean_title.is_empty() {
+            track_name
+        } else {
+            clean_title.as_str()
+        };
+        let aliases = if medley.len() > 1 {
+            serde_json::to_value(&medley).unwrap_or_default()
+        } else {
+            serde_json::json!([])
+        };
+        let empty_aliases = serde_json::json!([]);
+
+        for (type_id, value) in [(1i64, artist_name), (2i64, title)] {
             let found = sqlx::query_scalar::<_, i64>(
                 "SELECT id FROM track_answers WHERE track_id = $1 AND answer_type_id = $2",
             )
@@ -536,17 +552,35 @@ impl PlaylistRepo {
                 None => {
                     sqlx::query(
                         "INSERT INTO track_answers (track_id, answer_type_id, value, \
-                         score, created_at, updated_at) VALUES ($1, $2, $3, 0.5, $4, $5)",
+                         aliases, score, created_at, updated_at) \
+                         VALUES ($1, $2, $3, $4, 0.5, $5, $6)",
                     )
                     .bind(track_id)
                     .bind(type_id)
                     .bind(value)
+                    .bind(if type_id == 2 { &aliases } else { &empty_aliases })
                     .bind(now)
                     .bind(now)
                     .execute(&mut *tx)
                     .await?;
                 }
             }
+        }
+
+        for feat in &feats {
+            sqlx::query(
+                "INSERT INTO track_answers (track_id, answer_type_id, value, aliases, \
+                 score, created_at, updated_at) \
+                 SELECT $1, 5, $2, '[]'::jsonb, 0.5, $3, $4 \
+                 WHERE NOT EXISTS (SELECT 1 FROM track_answers \
+                 WHERE track_id = $1 AND value ILIKE $2)",
+            )
+            .bind(track_id)
+            .bind(feat)
+            .bind(now)
+            .bind(now)
+            .execute(&mut *tx)
+            .await?;
         }
         tx.commit().await?;
         Ok(track_id)

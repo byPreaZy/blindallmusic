@@ -3,7 +3,7 @@ use crate::types::Track;
 use leptos::prelude::*;
 use send_wrapper::SendWrapper;
 use serde_json::Value;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -36,6 +36,67 @@ fn youtube_id(url: &str) -> Option<String> {
     }
 }
 
+/// Holds a Screen Wake Lock while a room is playing so the phone does not
+/// sleep mid-round (e.g. on a subway ride). Re-acquires on visibility change
+/// because the OS drops locks when the tab hides.
+fn install_wake_lock() -> Option<SendWrapper<Rc<dyn Fn()>>> {
+    let w = web_sys::window()?;
+    let nav = w.navigator();
+    let wl = js_sys::Reflect::get(&nav, &JsValue::from_str("wakeLock")).ok()?;
+    if wl.is_undefined() || wl.is_null() {
+        return None;
+    }
+    let sentinel = Rc::new(RefCell::new(Option::<JsValue>::None));
+    let request = {
+        let sentinel = sentinel.clone();
+        let wl = wl.clone();
+        Rc::new(move || {
+            let Ok(req) = js_sys::Reflect::get(&wl, &JsValue::from_str("request")) else {
+                return;
+            };
+            let Ok(f) = req.dyn_into::<js_sys::Function>() else {
+                return;
+            };
+            let Ok(v) = f.call1(&wl, &JsValue::from_str("screen")) else {
+                return;
+            };
+            let sentinel2 = sentinel.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                if let Ok(s) = wasm_bindgen_futures::JsFuture::from(js_sys::Promise::from(v)).await {
+                    *sentinel2.borrow_mut() = Some(s);
+                }
+            });
+        })
+    };
+    request();
+    // The lock is released when the tab goes hidden: re-acquire on return.
+    let doc = w.document()?;
+    let vis_cb = Closure::wrap(Box::new({
+        let doc = doc.clone();
+        let request = request.clone();
+        move || {
+            let hidden = js_sys::Reflect::get(&doc, &JsValue::from_str("hidden"))
+                .ok()
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            if !hidden {
+                request();
+            }
+        }
+    }) as Box<dyn FnMut()>);
+    let _ = doc.add_event_listener_with_callback("visibilitychange", vis_cb.as_ref().unchecked_ref());
+    let release = Rc::new(move || {
+        let _ = doc.remove_event_listener_with_callback("visibilitychange", vis_cb.as_ref().unchecked_ref());
+        if let Some(s) = sentinel.borrow_mut().take() {
+            let _ = js_sys::Reflect::get(&s, &JsValue::from_str("release"))
+                .ok()
+                .and_then(|f| f.dyn_into::<js_sys::Function>().ok())
+                .map(|f| f.call0(&s));
+        }
+    });
+    Some(SendWrapper::new(release))
+}
+
 #[component]
 pub fn Player(
     track: RwSignal<Option<Track>>,
@@ -61,6 +122,16 @@ pub fn Player(
     let preloaded_id = SendWrapper::new(Rc::new(RefCell::new(Option::<i64>::None)));
     let pending_start = SendWrapper::new(Rc::new(RefCell::new(0.0_f64)));
     let applied_initial = SendWrapper::new(Rc::new(RefCell::new(false)));
+    let active_id = SendWrapper::new(Rc::new(Cell::new(Option::<i64>::None)));
+
+    {
+        let release = install_wake_lock();
+        on_cleanup(move || {
+            if let Some(release) = release {
+                release();
+            }
+        });
+    }
 
     {
         let audio = audio.clone();
@@ -200,11 +271,24 @@ pub fn Player(
         let pending_start = pending_start.clone();
         let applied_initial = applied_initial.clone();
         let preloaded_id = preloaded_id.clone();
+        let active_id = active_id.clone();
         let play_now = play_now.clone();
         Effect::new(move |_| {
             let t = track.get();
             match t {
                 Some(tr) => {
+                    if active_id.get() == Some(tr.id) {
+                        loading.set(false);
+                        if let Some(a) = audio.borrow().as_ref() {
+                            if a.paused() {
+                                let _ = a.play();
+                                is_playing.set(true);
+                                waiting.set(false);
+                            }
+                        }
+                        return;
+                    }
+                    active_id.set(Some(tr.id));
                     waiting.set(false);
                     error.set(None);
                     loading.set(true);
@@ -250,6 +334,7 @@ pub fn Player(
                     }
                 }
                 None => {
+                    active_id.set(None);
                     if let Some(a) = audio.borrow().as_ref() {
                         let _ = a.pause();
                     }

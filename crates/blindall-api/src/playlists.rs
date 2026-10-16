@@ -69,7 +69,7 @@ pub async fn index(
             }
         };
     }
-    match state.playlists.list_for_user(user.id()).await {
+    match state.playlists.list_for_user(user.id(), user.0.is_administrator).await {
         Ok(playlists) => Json(json!({ "playlists": playlists })).into_response(),
         Err(e) => {
             tracing::error!(error = %e, "playlists.index failed");
