@@ -99,7 +99,7 @@ pub fn DonationsPage() -> impl IntoView {
                                     {days} " " {t("days left this month")}
                                     {goal_reached.then(|| view! {
                                         <span class="ml-2 rounded bg-teal-500/20 px-2 py-0.5 text-xs text-teal-300">
-                                            {t("Goal reached : ads disabled!")}
+                                            {t("Goal reached — thank you!")}
                                         </span>
                                     })}
                                 </span>
