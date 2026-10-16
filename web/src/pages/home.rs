@@ -795,6 +795,7 @@ fn HomeSidebar(
     featured: RwSignal<Vec<HomeRoom>>,
     logged_in: Signal<bool>,
 ) -> impl IntoView {
+    let _ = logged_in; // kept for when mini-games are re-enabled
     view! {
         <aside class="w-full shrink-0 lg:w-80 xl:w-96">
             <div class="retro-panel lg:sticky lg:top-6 lg:self-start">
@@ -821,14 +822,6 @@ fn HomeSidebar(
                     <p class="game-section-kicker">{t("Play")}</p>
                     <h3 class="retro-title retro-title--secondary mb-3 text-sm">{t("Quick Links")}</h3>
                     <div class="grid grid-cols-2 gap-2">
-                        {move || logged_in.get().then(|| view! {
-                            <A href="/minigames" attr:class="sidebar-tile group">
-                                <span class="sidebar-tile__icon group-hover:scale-105" aria-hidden="true">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5"><path d="M8 5v14l11-7z"/></svg>
-                                </span>
-                                <span class="text-xs font-semibold text-white">{t("Mini-games")}</span>
-                            </A>
-                        })}
                         <a href=crate::api::DISCORD_INVITE_URL target="_blank" rel="external nofollow" class="sidebar-tile group" title=t("Join the Blind'All Music community on Discord")>
                             <span class="sidebar-tile__icon group-hover:scale-105" aria-hidden="true">
                                 <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d=DISCORD_SVG /></svg>
@@ -990,7 +983,6 @@ pub fn HomePage() -> impl IntoView {
         if logged_in.get() {
             v.push(("mine", t("My rooms").to_string()));
         }
-        v.push(("minigames", t("Mini-games").to_string()));
         if logged_in.get() {
             v.push(("favorites", t("Bookmarks").to_string()));
         }

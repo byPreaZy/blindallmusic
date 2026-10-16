@@ -24,6 +24,30 @@ fn game_meta(ty: &str) -> (&'static str, &'static str) {
     }
 }
 
+// ---- disabled state --------------------------------------------------------------
+
+// Mini-games are feature-gated off while they are being finished : the
+// routes render this stub instead of the real pages. To re-enable, point
+// app.rs back to GamesIndexPage / GamePlayPage and restore the home and
+// rankings entry points.
+#[component]
+pub fn MinigamesDisabled() -> impl IntoView {
+    crate::i18n::set_title_key("Mini-games");
+    view! {
+        <div class="mx-auto max-w-2xl px-4 py-16 text-center">
+            <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-neutral-800/80">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-8 w-8 text-teal-400">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.25 6.087c0-.355.186-.676.401-.959.221-.29.349-.634.349-1.003 0-1.036-1.007-1.875-2.25-1.875s-2.25.84-2.25 1.875c0 .369.128.713.349 1.003.215.283.401.604.401.959v.128c0 .763-.62 1.383-1.384 1.383H6.75c-1.243 0-2.25 1.007-2.25 2.25v.584c0 .355.186.676.401.959.221.29.349.634.349 1.003 0 1.036-1.007 1.875-2.25 1.875s-2.25-.84-2.25-1.875c0-.369.128-.713.349-1.003.215-.283.401-.604.401-.959v-.128"/>
+                </svg>
+            </div>
+            <span class="rounded-full border border-teal-500/30 bg-teal-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-teal-300">{t("Coming soon")}</span>
+            <h1 class="mt-4 text-2xl font-black uppercase tracking-widest text-white sm:text-3xl">{t("Mini-games")}</h1>
+            <p class="mt-3 text-neutral-400">{t("Mini-games are temporarily unavailable while we finish them.")}</p>
+            <A href="/" attr:class="mt-8 inline-block rounded-lg bg-teal-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-teal-500">{t("Back")}</A>
+        </div>
+    }
+}
+
 // ---- index -----------------------------------------------------------------------
 
 #[component]
