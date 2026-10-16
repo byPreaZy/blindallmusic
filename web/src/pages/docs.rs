@@ -1041,7 +1041,7 @@ pub fn DocsSupportPage() -> impl IntoView {
         <div class="mx-auto max-w-5xl space-y-8 px-4 py-8">
             <div class="space-y-4 text-center">
                 <h1 class="text-4xl font-bold text-white">{t("Support Blind'All Music")}</h1>
-                <p class="mx-auto max-w-2xl text-lg text-neutral-400">{t("Docs support intro")}</p>
+                <p class="mx-auto max-w-2xl text-lg text-neutral-400">{move || crate::i18n::tr("Docs support intro", &[("goal", crate::ads::goal_or(&progress.get()["goal_cents"].as_i64().map(crate::ads::euros).unwrap_or_default()))])}</p>
             </div>
 
             {move || {
@@ -1068,9 +1068,9 @@ pub fn DocsSupportPage() -> impl IntoView {
             {section(view! {
                 <h2 class="mb-4 text-2xl font-bold text-white">{t("How donations work")}</h2>
                 <ul class=format!("ml-4 list-inside list-disc space-y-2 {TXT}")>
-                    <li>{t("Donation howto goal")}</li>
+                    <li>{move || crate::i18n::tr("Donation howto goal", &[("goal", crate::ads::goal_or(&progress.get()["goal_cents"].as_i64().map(crate::ads::euros).unwrap_or_default()))])}</li>
                     <li>{t("Donation howto ads")}</li>
-                    <li>{t("Donation howto surplus")}</li>
+                    <li>{move || crate::i18n::tr("Donation howto surplus", &[("goal", crate::ads::goal_or(&progress.get()["goal_cents"].as_i64().map(crate::ads::euros).unwrap_or_default()))])}</li>
                     <li>{t("Donation howto transparency")}</li>
                 </ul>
             })}

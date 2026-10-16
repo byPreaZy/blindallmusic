@@ -47,7 +47,9 @@ pub fn DonationsPage() -> impl IntoView {
         <div class="mx-auto max-w-4xl px-4 py-8">
             <h1 class="retro-title retro-title--white mb-2 text-2xl">{t("Support Blind'All Music")}</h1>
             <p class="mb-8 text-white/60">
-                {t("Docs support intro")}
+                {move || crate::i18n::tr("Docs support intro", &[("goal", crate::ads::goal_or(
+                    &progress.get()["goal_cents"].as_i64().map(crate::ads::euros).unwrap_or_default()
+                ))])}
             </p>
 
             <Show

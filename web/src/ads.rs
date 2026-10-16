@@ -35,14 +35,27 @@ pub fn should_serve_ads(path: &str, ads_disabled: bool) -> bool {
     !ads_disabled && !excluded(path)
 }
 
-fn ads_state_sig() -> ArcRwSignal<Option<(bool, String, String)>> {
+fn ads_state_sig() -> ArcRwSignal<Option<(bool, String, String, String)>> {
     thread_local! {
-        static SIG: ArcRwSignal<Option<(bool, String, String)>> = ArcRwSignal::new(None);
+        static SIG: ArcRwSignal<Option<(bool, String, String, String)>> = ArcRwSignal::new(None);
     }
     SIG.with(|s| s.clone())
 }
 
-fn ads_state() -> (bool, String, String) {
+pub fn euros(cents: i64) -> String {
+    if cents % 100 == 0 {
+        format!("{}", cents / 100)
+    } else {
+        format!("{:.2}", cents as f64 / 100.0)
+    }
+}
+
+// :goal replacement for donation i18n — defaults to the historical 150 until loaded
+pub fn goal_or(goal: &str) -> String {
+    if goal.is_empty() { "150".into() } else { goal.to_string() }
+}
+
+fn ads_state() -> (bool, String, String, String) {
     let s = ads_state_sig();
     if s.get_untracked().is_none() {
         leptos::task::spawn_local(async move {
@@ -53,9 +66,10 @@ fn ads_state() -> (bool, String, String) {
                 v["ads_disabled"].as_bool().unwrap_or(false),
                 v["adsense_client"].as_str().unwrap_or("").to_string(),
                 v["adsense_slot"].as_str().unwrap_or("").to_string(),
+                v["goal_cents"].as_i64().map(euros).unwrap_or_default(),
             )));
         });
-        return (false, String::new(), String::new());
+        return (false, String::new(), String::new(), String::new());
     }
     s.get().unwrap_or_default()
 }
@@ -125,7 +139,7 @@ pub fn Adsense(
     let pushed = RwSignal::new(false);
 
     let visible = move || {
-        let (disabled, client, _) = ads_state();
+        let (disabled, client, _, _) = ads_state();
         if client.is_empty() {
             return false;
         }
@@ -151,7 +165,7 @@ pub fn Adsense(
         }
         if !pushed.get_untracked() {
             pushed.set(true);
-            let (_, client, _) = ads_state();
+            let (_, client, _, _) = ads_state();
             ensure_adsense_script(&client);
             push_adsense_slot();
         }
