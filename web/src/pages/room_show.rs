@@ -802,6 +802,12 @@ pub fn RoomPage() -> impl IntoView {
         .get_untracked()
         .map(|u| u.is_administrator || u.is_public_moderator)
         .unwrap_or(false);
+    let can_moderate_tracks = Signal::derive(move || {
+        auth.user
+            .get()
+            .map(|u| u.is_administrator || u.is_public_moderator)
+            .unwrap_or(false)
+    });
 
     let chat_inited = RwSignal::new(false);
     Effect::new(move |_| {
@@ -992,7 +998,7 @@ pub fn RoomPage() -> impl IntoView {
                                 }).collect_view()}
                             </div>
                             <Show when=move || mobile_tab.get() == "playlist">
-                                <PlaylistPanel played_tracks=played_tracks round=round room_id=room_id.get_untracked() can_vote=can_vote/>
+                                <PlaylistPanel played_tracks=played_tracks round=round room_id=room_id.get_untracked() can_vote=can_vote can_moderate=can_moderate_tracks/>
                             </Show>
                             <Show when=move || mobile_tab.get() == "ranking">
                                 <RankingPanel users=users scores=scores answers_by_user=answers_by_user track=track room_id=room_id.get_untracked() me_id=me_sig podium_open=podium_open/>
@@ -1000,7 +1006,7 @@ pub fn RoomPage() -> impl IntoView {
                         </div>
 
                         <div class="hidden gap-8 md:grid md:grid-cols-2">
-                            <PlaylistPanel played_tracks=played_tracks round=round room_id=room_id.get_untracked() can_vote=can_vote/>
+                            <PlaylistPanel played_tracks=played_tracks round=round room_id=room_id.get_untracked() can_vote=can_vote can_moderate=can_moderate_tracks/>
                             <RankingPanel users=users scores=scores answers_by_user=answers_by_user track=track room_id=room_id.get_untracked() me_id=me_sig podium_open=podium_open/>
                         </div>
 

@@ -530,13 +530,15 @@ async fn editable_track(
 
 #[derive(Deserialize)]
 pub struct AnswerBody {
-    answer_type_id: i64,
-    value: String,
-    score: Option<f64>,
-    aliases: Option<Vec<String>>,
+    pub answer_type_id: i64,
+    pub value: String,
+    pub score: Option<f64>,
+    pub aliases: Option<Vec<String>>,
 }
 
-fn validate_answer(b: &AnswerBody) -> Result<Option<Vec<String>>, axum::response::Response> {
+pub(crate) fn validate_answer(
+    b: &AnswerBody,
+) -> Result<Option<Vec<String>>, axum::response::Response> {
     let value_len = b.value.trim().len();
     if value_len == 0 || value_len > 255 {
         return Err(err(StatusCode::UNPROCESSABLE_ENTITY, "invalid_value"));

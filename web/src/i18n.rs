@@ -846,6 +846,14 @@ fn en<'a>(key: &'a str) -> &'a str {
         "tracks imported" => "tracks imported",
         "tracks" => "tracks",
 
+        "Edit answers" => "Edit answers",
+        "Remove track from playlist" => "Remove track from playlist",
+        "Delete this track from the playlist?" => "Delete this track from the playlist?",
+        "Add answer" => "Add answer",
+        "Aliases (comma separated)" => "Aliases (comma separated)",
+        "No answers" => "No answers",
+        "Failed to save" => "Failed to save",
+
         k => k,
     }
 }
@@ -1636,6 +1644,14 @@ fn es<'a>(key: &'a str) -> &'a str {
         "tracks imported" => "tracks imported",
         "tracks" => "extractos",
 
+        "Edit answers" => "Editar respuestas",
+        "Remove track from playlist" => "Quitar el título de la playlist",
+        "Delete this track from the playlist?" => "¿Eliminar este título de la playlist?",
+        "Add answer" => "Añadir respuesta",
+        "Aliases (comma separated)" => "Alias (separados por comas)",
+        "No answers" => "Sin respuestas",
+        "Failed to save" => "Error al guardar",
+
         k => k,
     }
 }
@@ -2425,6 +2441,13 @@ fn fr<'a>(key: &'a str) -> &'a str {
         "to verify your email address." => "pour vérifier votre adresse email.",
         "tracks imported" => "titres importés",
         "tracks" => "extraits",
+        "Edit answers" => "Modifier les réponses",
+        "Remove track from playlist" => "Retirer ce titre de la playlist",
+        "Delete this track from the playlist?" => "Supprimer ce titre de la playlist ?",
+        "Add answer" => "Ajouter une réponse",
+        "Aliases (comma separated)" => "Alias (séparés par des virgules)",
+        "No answers" => "Aucune réponse",
+        "Failed to save" => "Échec de l'enregistrement",
 
         k => k,
     }

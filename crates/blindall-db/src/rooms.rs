@@ -569,6 +569,19 @@ impl RoomRepo {
         Ok(())
     }
 
+    /// Track belongs to a playlist attached to this room (in-room moderation scope).
+    pub async fn track_in_room(&self, room_id: i64, track_id: i64) -> Result<bool, sqlx::Error> {
+        sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM tracks t \
+             JOIN playlist_room pr ON pr.playlist_id = t.playlist_id \
+             WHERE pr.room_id = $1 AND t.id = $2)",
+        )
+        .bind(room_id)
+        .bind(track_id)
+        .fetch_one(&self.pool)
+        .await
+    }
+
     pub async fn room_playlists(&self, room_id: i64) -> Result<Vec<(i64, String)>, sqlx::Error> {
         sqlx::query(
             "SELECT p.id, p.name FROM playlist_room pr \

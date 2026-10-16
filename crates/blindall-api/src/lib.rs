@@ -144,6 +144,19 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/rooms/{room}/tracks/{track}/downvote",
             post(rooms::downvote_track),
         )
+        .route(
+            "/api/v1/rooms/{room}/tracks/{track}",
+            axum::routing::delete(rooms::mod_track_destroy),
+        )
+        .route(
+            "/api/v1/rooms/{room}/tracks/{track}/answers",
+            get(rooms::mod_track_answers).post(rooms::mod_track_store_answer),
+        )
+        .route(
+            "/api/v1/rooms/{room}/tracks/{track}/answers/{aid}",
+            axum::routing::put(rooms::mod_track_update_answer)
+                .delete(rooms::mod_track_delete_answer),
+        )
         .route("/api/v1/rooms/{id}/user-count", post(rooms::update_user_count))
         .route("/api/v1/rooms/{id}/alert", post(rooms::alert))
         .route("/api/v1/rooms/{id}/suggestion", post(rooms::suggestion))

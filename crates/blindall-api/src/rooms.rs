@@ -1560,3 +1560,237 @@ pub async fn search_room_tracks(
     }
     Json(json!(out)).into_response()
 }
+
+// ---- in-room track moderation ------------------------------------------------
+//
+// Scoped moderation for tracks as they appear in a room's playlist: admins and
+// public moderators can fix answers (add/edit/delete) or remove a track that
+// doesn't belong, straight from the room page. Everything is scoped to tracks
+// actually attached to this room's playlists (track_in_room).
+
+async fn require_track_mod(
+    state: &AppState,
+    user: &blindall_db::entities::User,
+) -> Result<(), Response> {
+    if user.is_administrator || state.auth.is_public_moderator(user.id).await {
+        Ok(())
+    } else {
+        Err(forbidden())
+    }
+}
+
+async fn track_in_room(state: &AppState, room_id: i64, track_id: i64) -> Result<(), Response> {
+    match state.rooms.track_in_room(room_id, track_id).await {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(
+            (StatusCode::NOT_FOUND, Json(json!({"error": "track_not_found"}))).into_response(),
+        ),
+        Err(e) => {
+            tracing::warn!(error = %e, "track_in_room failed");
+            Err(StatusCode::INTERNAL_SERVER_ERROR.into_response())
+        }
+    }
+}
+
+async fn track_mod_gate(
+    state: &AppState,
+    user: &blindall_db::entities::User,
+    room_id: i64,
+    track_id: i64,
+) -> Result<(), Response> {
+    if let Some(r) = require_not_guest(user) {
+        return Err(r);
+    }
+    require_track_mod(state, user).await?;
+    track_in_room(state, room_id, track_id).await
+}
+
+/// GET /api/v1/rooms/{room}/tracks/{track}/answers — full answer rows incl. aliases
+/// and type ids, so the moderator form can edit without losing data.
+pub async fn mod_track_answers(
+    State(state): State<AppState>,
+    Path((room_id, track_id)): Path<(i64, i64)>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
+    if let Err(r) = track_mod_gate(&state, &user, room_id, track_id).await {
+        return r;
+    }
+    match state.playlists.track_answers(track_id).await {
+        Ok(rows) => Json(json!({
+            "answers": rows
+                .iter()
+                .map(|a| json!({
+                    "id": a.id,
+                    "answer_type_id": a.answer_type_id,
+                    "value": a.value,
+                    "score": a.score,
+                    "aliases": a.aliases,
+                }))
+                .collect::<Vec<_>>()
+        }))
+        .into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "mod_track_answers failed");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+/// POST /api/v1/rooms/{room}/tracks/{track}/answers
+pub async fn mod_track_store_answer(
+    State(state): State<AppState>,
+    Path((room_id, track_id)): Path<(i64, i64)>,
+    CurrentUser(user): CurrentUser,
+    Json(b): Json<crate::playlists::AnswerBody>,
+) -> Response {
+    if let Err(r) = track_mod_gate(&state, &user, room_id, track_id).await {
+        return r;
+    }
+    let known: Vec<i64> = state
+        .playlists
+        .answer_types()
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(id, _)| id)
+        .collect();
+    if !known.contains(&b.answer_type_id) {
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(json!({"error": "invalid_answer_type"})),
+        )
+            .into_response();
+    }
+    let aliases = match crate::playlists::validate_answer(&b) {
+        Ok(a) => a,
+        Err(r) => return r,
+    };
+    match state
+        .playlists
+        .create_answer(
+            track_id,
+            b.answer_type_id,
+            b.value.trim(),
+            b.score.unwrap_or(0.5),
+            aliases,
+        )
+        .await
+    {
+        Ok(id) => (StatusCode::CREATED, Json(json!({ "id": id }))).into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "mod_track_store_answer failed");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+/// PUT /api/v1/rooms/{room}/tracks/{track}/answers/{aid}
+pub async fn mod_track_update_answer(
+    State(state): State<AppState>,
+    Path((room_id, track_id, answer_id)): Path<(i64, i64, i64)>,
+    CurrentUser(user): CurrentUser,
+    Json(b): Json<crate::playlists::AnswerBody>,
+) -> Response {
+    if let Err(r) = track_mod_gate(&state, &user, room_id, track_id).await {
+        return r;
+    }
+    if !state
+        .playlists
+        .answer_belongs_to(track_id, answer_id)
+        .await
+    {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "answer_not_found"})),
+        )
+            .into_response();
+    }
+    let known: Vec<i64> = state
+        .playlists
+        .answer_types()
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(id, _)| id)
+        .collect();
+    if !known.contains(&b.answer_type_id) {
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(json!({"error": "invalid_answer_type"})),
+        )
+            .into_response();
+    }
+    let aliases = match crate::playlists::validate_answer(&b) {
+        Ok(a) => a,
+        Err(r) => return r,
+    };
+    match state
+        .playlists
+        .update_answer(
+            answer_id,
+            b.answer_type_id,
+            b.value.trim(),
+            b.score.unwrap_or(0.5),
+            aliases,
+        )
+        .await
+    {
+        Ok(()) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "mod_track_update_answer failed");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+/// DELETE /api/v1/rooms/{room}/tracks/{track}/answers/{aid}
+pub async fn mod_track_delete_answer(
+    State(state): State<AppState>,
+    Path((room_id, track_id, answer_id)): Path<(i64, i64, i64)>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
+    if let Err(r) = track_mod_gate(&state, &user, room_id, track_id).await {
+        return r;
+    }
+    if !state
+        .playlists
+        .answer_belongs_to(track_id, answer_id)
+        .await
+    {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "answer_not_found"})),
+        )
+            .into_response();
+    }
+    match state.playlists.delete_answer(answer_id).await {
+        Ok(()) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "mod_track_delete_answer failed");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+/// DELETE /api/v1/rooms/{room}/tracks/{track} — removes the track from the room's
+/// playlist entirely (with the standard moderator/Discord notifications).
+pub async fn mod_track_destroy(
+    State(state): State<AppState>,
+    Path((room_id, track_id)): Path<(i64, i64)>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
+    if let Err(r) = track_mod_gate(&state, &user, room_id, track_id).await {
+        return r;
+    }
+    match state
+        .store
+        .delete_track(track_id, Some(user.name.clone()))
+        .await
+    {
+        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "mod_track_destroy failed");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
