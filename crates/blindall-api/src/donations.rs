@@ -262,10 +262,20 @@ pub async fn progress(State(state): State<AppState>, OptionalUser(user): Optiona
     let raised = progress["raised_cents"].as_i64().unwrap_or(0);
     let carryover = progress["carryover_cents"].as_i64().unwrap_or(0);
     let goal = state.donations.monthly_goal_cents;
-    let goal_reached = progress["goal_reached"].clone();
+    let goal_reached = progress["goal_reached"].as_bool().unwrap_or(false);
+    // Ad-free perk: supporters get no ads for their donation month, even while
+    // the global monthly goal is not reached yet.
+    let user_supporter = match &user {
+        Some(u) if !u.is_guest => state
+            .donations_repo
+            .user_is_supporter(u.id, &key)
+            .await
+            .unwrap_or(false),
+        _ => false,
+    };
     if let Some(o) = progress.as_object_mut() {
         o.insert("days_remaining".into(), json!(days_remaining));
-        o.insert("ads_disabled".into(), goal_reached);
+        o.insert("ads_disabled".into(), json!(goal_reached || user_supporter));
         o.insert("adsense_client".into(), json!(state.adsense_client));
         o.insert("adsense_slot".into(), json!(state.adsense_slot));
         o.insert("progress_segments".into(), progress_segments(raised, carryover, goal));
