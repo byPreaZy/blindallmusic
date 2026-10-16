@@ -4,7 +4,7 @@ use crate::components::notifications::Notifications;
 use crate::i18n::{locale, set_locale, t};
 use leptos::prelude::*;
 use leptos_router::components::A;
-use leptos_router::hooks::{use_navigate, use_query_map};
+use leptos_router::hooks::{use_location, use_navigate, use_query_map};
 use send_wrapper::SendWrapper;
 use wasm_bindgen::JsCast;
 
@@ -141,6 +141,22 @@ fn help_icon(cls: &'static str) -> impl IntoView {
     }
 }
 
+fn home_icon(cls: &'static str) -> impl IntoView {
+    view! {
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class=cls aria-hidden="true">
+            <path fill-rule="evenodd" d="M11.293 3.293a1 1 0 011.414 0l6 6a1 1 0 01.293.707V19a2 2 0 01-2 2h-3a1 1 0 01-1-1v-4h-2v4a1 1 0 01-1 1H7a2 2 0 01-2-2v-8.997a1 1 0 01.293-.707l6-6z" clip-rule="evenodd"/>
+        </svg>
+    }
+}
+
+fn user_icon(cls: &'static str) -> impl IntoView {
+    view! {
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class=cls aria-hidden="true">
+            <path fill-rule="evenodd" d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z" clip-rule="evenodd"/>
+        </svg>
+    }
+}
+
 #[component]
 fn HelpDropdown() -> impl IntoView {
     let open = RwSignal::new(false);
@@ -249,55 +265,62 @@ fn UserDropdown() -> impl IntoView {
 #[component]
 fn MobileBottomNav() -> impl IntoView {
     let auth = use_auth();
+    let location = use_location();
+    let tab_cls = move |active: bool| {
+        if active {
+            "flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-brand-accent"
+        } else {
+            "flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-white/50 transition-colors hover:text-white/80"
+        }
+    };
     view! {
-        <nav class="surface-nav fixed bottom-0 left-0 right-0 z-50 border-t md:hidden" style="padding-bottom: env(safe-area-inset-bottom)">
-            <div class="flex items-center justify-evenly px-2 py-3">
-                <A href="/" attr:title=t("Home") attr:class="flex min-w-0 flex-1 items-center justify-center px-2 py-2">
-                    <div class="retro-icon-btn">
-                        <img src="/favicon.svg" alt="Blind'All Music" class="h-6 w-6"/>
-                    </div>
-                </A>
-                <A href="/rankings" attr:title=t("Rankings") attr:class="flex min-w-0 flex-1 items-center justify-center px-2 py-2">
-                    <div class="retro-icon-btn text-brand-secondary">
-                        {trophy_icon("h-5 w-5 drop-shadow-[0_0_8px_rgb(242_201_76/0.5)]")}
-                    </div>
-                </A>
+        <nav class="surface-nav fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 md:hidden" style="padding-bottom: env(safe-area-inset-bottom)">
+            <div class="flex items-stretch justify-evenly">
                 {move || {
+                    let path = location.pathname.get();
+                    let home_active = path == "/" || path.starts_with("/rooms");
+                    let rankings_active = path.starts_with("/rankings");
+                    let profile_active = path.starts_with("/profile") || path.starts_with("/settings");
                     let u = auth.user.get();
-                    match u {
-                        Some(u) if !u.is_guest => view! {
-                            <div class="flex min-w-0 flex-1 items-center justify-center px-2 py-2">
-                                <LevelDisplay/>
-                            </div>
-                            <div class="flex min-w-0 flex-1 items-center justify-center px-2 py-2">
-                                <Notifications/>
-                            </div>
-                            <div class="flex min-w-0 flex-1 items-center justify-center px-2 py-2">
-                                <UserDropdown/>
-                            </div>
-                        }.into_any(),
-                        Some(_) => view! {
-                            <div class="flex flex-1 items-center justify-center gap-2 px-2">
-                                <button title=t("Login") class="retro-nav-btn text-xs"
-                                    on:click=move |_| auth.guest_to("/login")>
-                                    {t("Login")}
-                                </button>
-                                <button title=t("Register") class="retro-nav-btn--primary text-xs"
-                                    on:click=move |_| auth.guest_to("/register")>
-                                    {t("Register")}
-                                </button>
-                            </div>
-                        }.into_any(),
-                        None => view! {
-                            <div class="flex flex-1 items-center justify-center gap-2 px-2">
-                                <A href="/login" attr:title=t("Login") attr:class="retro-nav-btn text-xs">
-                                    {t("Login")}
+                    let profile_href = u.as_ref().map(|u| format!("/profile/{}", u.id)).unwrap_or_else(|| "/login".to_string());
+                    view! {
+                        <A href="/" attr:class=tab_cls(home_active)>
+                            {home_icon("h-5 w-5")}
+                            <span class="text-[10px] font-semibold leading-tight">{t("Home")}</span>
+                        </A>
+                        <A href="/rankings" attr:class=tab_cls(rankings_active)>
+                            {trophy_icon("h-5 w-5")}
+                            <span class="text-[10px] font-semibold leading-tight">{t("Rankings")}</span>
+                        </A>
+                        {move || match u.clone() {
+                            Some(u) if !u.is_guest => view! {
+                                <A href=profile_href.clone() attr:class=tab_cls(profile_active)>
+                                    {user_icon("h-5 w-5")}
+                                    <span class="text-[10px] font-semibold leading-tight">{t("Profile")}</span>
                                 </A>
-                                <A href="/register" attr:title=t("Register") attr:class="retro-nav-btn--primary text-xs">
-                                    {t("Register")}
+                                <div class="flex min-w-0 flex-1 items-center justify-center px-1 py-1.5 text-white/50">
+                                    <UserDropdown/>
+                                </div>
+                            }.into_any(),
+                            Some(_) => view! {
+                                <button class=tab_cls(false) on:click=move |_| auth.guest_to("/login")>
+                                    {user_icon("h-5 w-5")}
+                                    <span class="text-[10px] font-semibold leading-tight">{t("Login")}</span>
+                                </button>
+                                <button class=tab_cls(false) on:click=move |_| auth.guest_to("/register")>
+                                    <span class="text-[10px] font-semibold leading-tight text-brand-accent">{t("Register")}</span>
+                                </button>
+                            }.into_any(),
+                            None => view! {
+                                <A href="/login" attr:class=tab_cls(false)>
+                                    {user_icon("h-5 w-5")}
+                                    <span class="text-[10px] font-semibold leading-tight">{t("Login")}</span>
                                 </A>
-                            </div>
-                        }.into_any(),
+                                <A href="/register" attr:class=tab_cls(false)>
+                                    <span class="text-[10px] font-semibold leading-tight text-brand-accent">{t("Register")}</span>
+                                </A>
+                            }.into_any(),
+                        }}
                     }
                 }}
             </div>
@@ -320,7 +343,16 @@ pub fn Navbar() -> impl IntoView {
 
     view! {
         <Show when=move || !is_room_show()>
-            <div class="surface-nav border-b border-white/10 px-4 py-3 md:hidden">
+            <div class="surface-nav border-b border-white/10 px-4 pb-3 pt-2 md:hidden">
+                <div class="mb-2 flex items-center justify-between">
+                    <A href="/" attr:class="retro-title retro-title--accent text-lg tracking-wider">"Blind'All Music"</A>
+                    <div class="flex items-center gap-2">
+                        <Show when=move || auth.user.get().map(|u| !u.is_guest).unwrap_or(false)>
+                            <Notifications/>
+                            <LevelDisplay/>
+                        </Show>
+                    </div>
+                </div>
                 <SearchRooms/>
             </div>
         </Show>
