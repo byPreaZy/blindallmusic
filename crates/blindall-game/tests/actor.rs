@@ -14,6 +14,7 @@ struct Fixture {
     tx: mpsc::Sender<RoomCommand>,
     store: Arc<FakeGameStore>,
     scores: Arc<FakeScoreStore>,
+    presence: Arc<FakePresenceStore>,
     _hub: Hub,
     rx: mpsc::Receiver<ServerOp>,
 }
@@ -47,6 +48,7 @@ async fn spawn_fixture() -> Fixture {
         tx,
         store,
         scores,
+        presence,
         _hub: hub,
         rx,
     }
@@ -347,6 +349,42 @@ async fn recover_resumes_at_next_boundary() {
         .unwrap();
 
     advance(Duration::from_secs(3)).await; // recovery delay is 2s
+    let played = next_event(&mut fx.rx, "TrackPlayed").await;
+    assert_eq!(played["track"]["id"], json!(2));
+}
+
+// Regression: a server restart drops all WS conns and lets presence scores go
+// stale; the recovered round must keep playing while clients reconnect (grace
+// window), not stop on the first empty member_count.
+#[tokio::test(start_paused = true)]
+async fn recover_survives_empty_presence_during_grace() {
+    let mut fx = spawn_fixture().await;
+    fx.presence.counts.lock().unwrap().insert(1, 0); // everyone "gone" as far as redis scores say
+    fx.store.insert_round(RoundRow {
+        id: 7,
+        room_id: 1,
+        tracks: vec![1, 2],
+        current: 1,
+        is_playing: true,
+        finished_at: None,
+        current_track_started_at: Some(chrono::Utc::now()),
+    });
+    fx.tx
+        .send(RoomCommand::Recover {
+            round: RoundRow {
+                id: 7,
+                room_id: 1,
+                tracks: vec![1, 2],
+                current: 1,
+                is_playing: true,
+                finished_at: None,
+                current_track_started_at: Some(chrono::Utc::now()),
+            },
+        })
+        .await
+        .unwrap();
+
+    advance(Duration::from_secs(3)).await;
     let played = next_event(&mut fx.rx, "TrackPlayed").await;
     assert_eq!(played["track"]["id"], json!(2));
 }

@@ -67,6 +67,7 @@ pub struct RoomActor {
     photo_prefix: String,
     inbox: mpsc::Receiver<RoomCommand>,
     timer: Pin<Box<Sleep>>,
+    presence_grace_until: Option<Instant>,
 }
 
 impl RoomActor {
@@ -91,6 +92,7 @@ impl RoomActor {
             photo_prefix,
             inbox: rx,
             timer: Box::pin(sleep_until(Instant::now() + Duration::from_secs(86400))),
+            presence_grace_until: None,
         };
         tokio::spawn(async move { actor.run().await });
         tx
@@ -101,6 +103,11 @@ impl RoomActor {
         self.phase = Phase::InterTrack {
             next_at: Instant::now() + Duration::from_secs(2),
         };
+        // After a restart, presence scores may all be stale (>90s) while the
+        // room is in fact full of players about to reconnect. Give them a
+        // window to heartbeat before the empty-audience check can kill the
+        // recovered round.
+        self.presence_grace_until = Some(Instant::now() + Duration::from_secs(90));
         self.arm_timer();
     }
 
@@ -462,6 +469,12 @@ impl RoomActor {
     // gone -> stop the chain instead of playing to an empty room; the
     // finalize broadcast resets the public track counter to 0.
     async fn audience_empty(&self) -> bool {
+        if self
+            .presence_grace_until
+            .is_some_and(|until| Instant::now() < until)
+        {
+            return false;
+        }
         self.presence
             .member_count(self.room.id, Utc::now().timestamp())
             .await
