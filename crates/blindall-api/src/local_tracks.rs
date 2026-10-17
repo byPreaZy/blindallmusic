@@ -160,13 +160,9 @@ pub struct SearchQuery {
 }
 
 pub async fn search(
-    user: CurrentUser,
     State(state): State<AppState>,
     Query(q): Query<SearchQuery>,
 ) -> Response {
-    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
-        return r;
-    }
     let Some(term) = q.term.filter(|t| !t.is_empty()) else {
         return Json(json!([])).into_response();
     };

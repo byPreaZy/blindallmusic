@@ -67,7 +67,6 @@ pub struct RoomActor {
     photo_prefix: String,
     inbox: mpsc::Receiver<RoomCommand>,
     timer: Pin<Box<Sleep>>,
-    presence_grace_until: Option<Instant>,
 }
 
 impl RoomActor {
@@ -92,7 +91,6 @@ impl RoomActor {
             photo_prefix,
             inbox: rx,
             timer: Box::pin(sleep_until(Instant::now() + Duration::from_secs(86400))),
-            presence_grace_until: None,
         };
         tokio::spawn(async move { actor.run().await });
         tx
@@ -103,11 +101,6 @@ impl RoomActor {
         self.phase = Phase::InterTrack {
             next_at: Instant::now() + Duration::from_secs(2),
         };
-        // After a restart, presence scores may all be stale (>90s) while the
-        // room is in fact full of players about to reconnect. Give them a
-        // window to heartbeat before the empty-audience check can kill the
-        // recovered round.
-        self.presence_grace_until = Some(Instant::now() + Duration::from_secs(90));
         self.arm_timer();
     }
 
@@ -443,11 +436,12 @@ impl RoomActor {
                 }
             }
             Phase::InterTrack { .. } => {
-                if self.audience_empty().await {
-                    self.stop().await;
-                } else {
-                    self.play_next_track().await;
-                }
+                // PHP parity: playNextTrack chains unconditionally — a round
+                // always plays its full track list. Audience only gates the
+                // post-round autostart restart (subscriptions > 0), so a
+                // REST-only poller or a player whose WS dropped in a tunnel
+                // sees the round progress instead of a dead room.
+                self.play_next_track().await;
             }
             Phase::Finalizing { .. } => {
                 if self.room.is_autostart
@@ -464,39 +458,7 @@ impl RoomActor {
         }
     }
 
-    // Presence-based audience check : a heartbeating player counts for ~90s,
-    // so a momentary WS drop (metro) doesn't kill the round. Everyone truly
-    // gone -> stop the chain instead of playing to an empty room; the
-    // finalize broadcast resets the public track counter to 0.
-    async fn audience_empty(&self) -> bool {
-        if self
-            .presence_grace_until
-            .is_some_and(|until| Instant::now() < until)
-        {
-            return false;
-        }
-        // A live websocket subscriber is an audience member even when Redis
-        // presence reports 0 — member_count collapses to 0 on any Redis error,
-        // and a transient failure must never kill a running round.
-        if self
-            .hub
-            .channel_conn_count(&events::room_channel(self.room.id))
-            .await
-            > 0
-        {
-            return false;
-        }
-        self.presence
-            .member_count(self.room.id, Utc::now().timestamp())
-            .await
-            == 0
-    }
-
     async fn on_track_end(&mut self) {
-        if self.audience_empty().await {
-            self.stop().await;
-            return;
-        }
         let Some(round) = self.round.as_ref() else {
             return;
         };
