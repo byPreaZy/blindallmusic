@@ -207,9 +207,9 @@ pub fn LevelDisplay() -> impl IntoView {
                         {move || show_modal.get().then(|| {
                             let u2 = auth.user.get();
                             view! {
-                                <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+                                <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4"
                                     on:click=move |_| show_modal.set(false)>
-                                    <div class="w-full max-w-2xl rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 shadow-2xl"
+                                    <div class="max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 shadow-2xl"
                                         on:click=move |e| e.stop_propagation()>
                                         <div class="flex items-center justify-between border-b border-neutral-700 px-6 py-6">
                                             <div class="flex items-center gap-4">

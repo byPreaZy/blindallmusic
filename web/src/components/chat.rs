@@ -643,9 +643,9 @@ fn ChatModerationModal(
         });
     };
     view! {
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+        <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4"
             on:click=move |_| on_close()>
-            <div class="w-full max-w-md rounded-xl border border-white/10 bg-surface-raised shadow-2xl"
+            <div class="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-xl border border-white/10 bg-surface-raised shadow-2xl"
                 on:click=move |e| e.stop_propagation()>
                 <div class="flex w-full items-center justify-between border-b border-white/10 px-4 py-3">
                     <h2 class="retro-title retro-title--primary">{t("Moderation")}</h2>

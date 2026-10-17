@@ -192,10 +192,10 @@ pub fn ProfilePage() -> impl IntoView {
 
                 {move || level_modal.get().then(|| {
                     view! {
-                        <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
+                        <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4"
                             on:click=move |_| level_modal.set(false)>
                             <div class="absolute inset-0 bg-black/70"></div>
-                            <div class="relative w-full max-w-md rounded-2xl border border-white/10 bg-brand-midnight p-6 shadow-2xl"
+                            <div class="relative max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-white/10 bg-brand-midnight p-6 shadow-2xl"
                                 on:click=move |ev| ev.stop_propagation()>
                                 <button type="button" class="absolute right-3 top-3 text-white/40 hover:text-white"
                                     on:click=move |_| level_modal.set(false)>
