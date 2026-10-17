@@ -119,6 +119,15 @@ fn badge(ok: bool, yes: &'static str, no: &'static str) -> impl IntoView {
     }
 }
 
+fn role_badge(role: &str) -> impl IntoView {
+    let (label, cls) = match role {
+        "admin" => ("Admin", "rounded bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300"),
+        "moderator" => ("Moderator", "rounded bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-300"),
+        _ => ("Player", "rounded bg-white/10 px-2 py-0.5 text-xs text-white/60"),
+    };
+    view! { <span class=cls>{t(label)}</span> }
+}
+
 // ---- dashboard -----------------------------------------------------------------
 
 #[component]
@@ -226,6 +235,8 @@ pub fn AdminUsers() -> impl IntoView {
                         prop:value=role on:change=move |ev| { role.set(event_target_value(&ev)); page.set(1); load(); }>
                         <option value="">{t("All")}</option>
                         <option value="admin">{t("Admins")}</option>
+                        <option value="moderator">{t("Moderators")}</option>
+                        <option value="user">{t("Players")}</option>
                         <option value="guest">{t("Guests")}</option>
                     </select>
                     <select class="rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-sm text-white"
@@ -238,7 +249,7 @@ pub fn AdminUsers() -> impl IntoView {
                 </form>
                 <button type="button" class="rounded-lg border border-emerald-500/30 px-3 py-2 text-sm text-emerald-300"
                     on:click=move |_| {
-                        form.set(json!({"name":"","email":"","team_id":null,"is_administrator":false,"password":""}));
+                        form.set(json!({"name":"","email":"","team_id":null,"role":"","password":""}));
                         creating.set(true); editing.set(None);
                     }>{t("New user")}</button>
             </div>
@@ -263,7 +274,7 @@ pub fn AdminUsers() -> impl IntoView {
                                     let name = u["name"].as_str().unwrap_or("").to_string();
                                     let email = u["email"].as_str().unwrap_or("—").to_string();
                                     let team = u["team"]["name"].as_str().unwrap_or("—").to_string();
-                                    let is_admin = u["is_administrator"].as_bool().unwrap_or(false);
+                                    let role_v = u["role"].as_str().unwrap_or("").to_string();
                                     let provider = u["provider"].as_str().unwrap_or("blindall").to_string();
                                     let deleted = !u["deleted_at"].is_null();
                                     let created = u["created_at"].as_str().unwrap_or("").chars().take(10).collect::<String>();
@@ -278,7 +289,7 @@ pub fn AdminUsers() -> impl IntoView {
                                             </td>
                                             <td class="px-4 py-2 text-white/70">{email}</td>
                                             <td class="px-4 py-2 text-white/70">{team}</td>
-                                            <td class="px-4 py-2">{badge(is_admin, "Admin", "User")}</td>
+                                            <td class="px-4 py-2">{role_badge(&role_v)}</td>
                                             <td class="px-4 py-2 text-white/50">{created}</td>
                                             <td class="px-4 py-2 text-right">
                                                 <div class="flex justify-end gap-1">
@@ -288,8 +299,9 @@ pub fn AdminUsers() -> impl IntoView {
                                                                 form.set(json!({
                                                                     "name": edit_u["name"].as_str().unwrap_or(""),
                                                                     "email": edit_u["email"].as_str().unwrap_or(""),
-                                                                    "team_id": edit_u["team_id"],
-                                                                    "is_administrator": edit_u["is_administrator"].as_bool().unwrap_or(false),
+                                                                    "team_id": edit_u["team"]["id"],
+                                                                    "role": edit_u["role"].as_str().unwrap_or(""),
+                                                                    "role_at_open": edit_u["role"].as_str().unwrap_or(""),
                                                                     "password": "",
                                                                 }));
                                                                 editing.set(Some(uid)); creating.set(false);
@@ -332,6 +344,13 @@ pub fn AdminUsers() -> impl IntoView {
                     let eid = editing.get();
                     leptos::task::spawn_local(async move {
                         let mut body = f.clone();
+                        let role = body["role"].as_str().unwrap_or("").to_string();
+                        let role_at_open = body["role_at_open"].as_str().unwrap_or("").to_string();
+                        body["is_administrator"] = json!(role == "admin");
+                        if let Some(o) = body.as_object_mut() {
+                            o.remove("role");
+                            o.remove("role_at_open");
+                        }
                         if body["password"].as_str().map(|p| p.is_empty()).unwrap_or(true) {
                             body.as_object_mut().map(|o| o.remove("password"));
                         }
@@ -341,7 +360,22 @@ pub fn AdminUsers() -> impl IntoView {
                             api::post::<Value,_>("/api/v1/admin/users", &body).await
                         };
                         match r {
-                            Ok(_) => { creating.set(false); editing.set(None); load(); }
+                            Ok(v) => {
+                                // Sync moderation/admin through the single role endpoint so
+                                // moderables stay consistent everywhere (badge, rooms, chat).
+                                let uid = eid.or_else(|| v["id"].as_i64());
+                                let role_changed = eid.map(|_| role != role_at_open)
+                                    .unwrap_or(role != "");
+                                if let Some(uid) = uid.filter(|_| role_changed) {
+                                    if let Err(e) = api::put::<Value,_>(
+                                        &format!("/api/v1/admin/users/{uid}/role"),
+                                        &json!({"role": if role.is_empty() { "user" } else { &role }}),
+                                    ).await {
+                                        error.set(Some(e.message));
+                                    }
+                                }
+                                creating.set(false); editing.set(None); load();
+                            }
                             Err(e) => error.set(Some(e.message)),
                         }
                     });
@@ -376,11 +410,14 @@ pub fn AdminUsers() -> impl IntoView {
                                 f["team_id"] = v.parse::<i64>().ok().map(|n| json!(n)).unwrap_or(Value::Null);
                             })/>
                     </label>
-                    <label class="flex items-center gap-2 text-sm text-white/70 md:col-span-2">
-                        <input type="checkbox"
-                            prop:checked=move || form.get()["is_administrator"].as_bool().unwrap_or(false)
-                            on:change=move |ev| form.update(|f| f["is_administrator"] = json!(event_target_checked(&ev)))/>
-                        {t("Administrator")}
+                    <label class="text-sm text-white/60 md:col-span-2">{t("Role")}
+                        <select class="mt-1 w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white outline-none"
+                            prop:value=move || form.get()["role"].as_str().unwrap_or("").to_string()
+                            on:change=move |ev| form.update(|f| f["role"] = json!(event_target_value(&ev)))>
+                            <option value="">{t("Player")}</option>
+                            <option value="moderator">{t("Moderator")}</option>
+                            <option value="admin">{t("Admin")}</option>
+                        </select>
                     </label>
                     <div class="flex gap-2 md:col-span-2">
                         <button type="submit" class="btn-primary !px-4 !py-2 text-sm">{t("Save")}</button>

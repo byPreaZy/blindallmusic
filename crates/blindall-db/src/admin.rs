@@ -21,10 +21,18 @@ impl AdminRepo {
         per_page: i64,
     ) -> Result<crate::moderation::Page, sqlx::Error> {
         let like = search.map(|s| format!("%{s}%"));
-        let (admin_only, guests_only) = match role {
-            Some("admin") => (true, false),
-            Some("guest") => (false, true),
-            _ => (false, false),
+        // Same moderator rule as everywhere else: moderables ∩ public rooms.
+        let mod_exists = "EXISTS(SELECT 1 FROM moderables m JOIN rooms r \
+             ON r.id = m.moderable_id AND r.is_public = true \
+             WHERE m.user_id = u.id AND m.moderable_type = 'App\\Models\\Room')";
+        let role_clause = match role {
+            Some("admin") => "AND u.is_administrator = true".to_string(),
+            Some("guest") => "AND u.is_guest = true".to_string(),
+            Some("moderator") => format!("AND {mod_exists}"),
+            Some("user") => format!(
+                "AND u.is_administrator = false AND u.is_guest = false AND NOT {mod_exists}"
+            ),
+            _ => String::new(),
         };
         let trashed_clause = match trashed {
             Some("with") => "",
@@ -34,29 +42,29 @@ impl AdminRepo {
         let sql = format!(
             "SELECT u.id, u.name, u.provider, u.is_administrator, u.email, \
              u.photo_path, u.created_at, u.deleted_at, u.team_id, \
+             {mod_exists} AS is_moderator, \
              t.name AS team_name FROM users u \
              LEFT JOIN teams t ON t.id = u.team_id \
              WHERE 1=1 {trashed} \
              AND ($1 IS NULL OR u.name LIKE $2 OR u.email LIKE $3) \
-             AND ($4 = 0 OR u.is_administrator = true) \
-             AND ($5 = 0 OR u.is_guest = true) \
-             ORDER BY u.created_at DESC LIMIT $6 OFFSET $7",
-            trashed = trashed_clause
+             {role} \
+             ORDER BY u.created_at DESC LIMIT $4 OFFSET $5",
+            trashed = trashed_clause,
+            mod_exists = mod_exists,
+            role = role_clause
         );
         let count_sql = format!(
             "SELECT COUNT(*) FROM users u WHERE 1=1 {trashed} \
              AND ($1 IS NULL OR u.name LIKE $2 OR u.email LIKE $3) \
-             AND ($4 = 0 OR u.is_administrator = true) \
-             AND ($5 = 0 OR u.is_guest = true)",
-            trashed = trashed_clause
+             {role}",
+            trashed = trashed_clause,
+            role = role_clause
         );
         let offset = (page.max(1) - 1) * per_page.max(1);
         let rows = sqlx::query(&sql)
             .bind(&like)
             .bind(&like)
             .bind(&like)
-            .bind(admin_only as i64)
-            .bind(guests_only as i64)
             .bind(per_page)
             .bind(offset)
             .fetch_all(&self.pool)
@@ -65,18 +73,20 @@ impl AdminRepo {
             .bind(&like)
             .bind(&like)
             .bind(&like)
-            .bind(admin_only as i64)
-            .bind(guests_only as i64)
             .fetch_one(&self.pool)
             .await?;
         let items = rows
             .iter()
             .map(|r| {
+                let is_admin = r.get::<bool, _>("is_administrator");
+                let is_mod = r.get::<bool, _>("is_moderator");
                 json!({
                     "id": r.get::<i64, _>("id"),
                     "name": r.get::<String, _>("name"),
                     "provider": r.get::<Option<String>, _>("provider"),
-                    "is_administrator": r.get::<bool, _>("is_administrator"),
+                    "is_administrator": is_admin,
+                    "is_moderator": is_mod,
+                    "role": if is_admin { "admin" } else if is_mod { "moderator" } else { "" },
                     "email": r.get::<Option<String>, _>("email"),
                     "team": r.get::<Option<String>, _>("team_name")
                         .map(|n| json!({"id": r.get::<Option<i64>, _>("team_id"), "name": n})),

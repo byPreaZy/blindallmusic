@@ -218,6 +218,38 @@ async fn admin_set_user_role() {
         .expect_ok("role=moderator");
     assert_eq!(profile_role(target.user_id).await, "moderator");
 
+    // admin users list exposes the same role + filters on it
+    let r = admin
+        .get(&format!(
+            "/api/v1/admin/users?search={}&role=moderator",
+            target.name
+        ))
+        .await
+        .expect_ok("users role=moderator");
+    let entry = r.body["users"]["data"]
+        .as_array()
+        .and_then(|a| a.iter().find(|u| u["id"].as_i64() == Some(target.user_id)));
+    let entry = entry.expect("moderator should appear in role=moderator filter");
+    assert_eq!(entry["role"].as_str(), Some("moderator"), "{}", r.text);
+    assert_eq!(entry["is_moderator"].as_bool(), Some(true));
+
+    // ... and is gone from the plain-player filter
+    let r = admin
+        .get(&format!(
+            "/api/v1/admin/users?search={}&role=user",
+            target.name
+        ))
+        .await
+        .expect_ok("users role=user");
+    assert!(
+        r.body["users"]["data"]
+            .as_array()
+            .map(|a| a.iter().all(|u| u["id"].as_i64() != Some(target.user_id)))
+            .unwrap_or(true),
+        "moderator must not appear in role=user filter: {}",
+        r.text
+    );
+
     // promote to admin
     admin
         .put(
