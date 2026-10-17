@@ -124,7 +124,8 @@ pub(crate) async fn enriched_user_json(
         .custom_tag_of(u.id)
         .await
         .ok()
-        .flatten());
+        .flatten()
+        .unwrap_or_default());
     let snap = state.levels.snapshot(u.id).await;
     base["level"] = snap.as_ref().and_then(|s| s["level"].as_i64()).map_or(json!(1), |v| v.into());
     base["current_xp"] = snap.as_ref().map(|s| s["current_xp"].clone()).unwrap_or(json!(0));

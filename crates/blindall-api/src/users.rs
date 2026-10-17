@@ -342,7 +342,8 @@ pub async fn me(State(state): State<AppState>, CurrentUser(user): CurrentUser) -
                 .custom_tag_of(user.id)
                 .await
                 .ok()
-                .flatten(),
+                .flatten()
+                .unwrap_or_default(),
         }
     }))
     .into_response()
