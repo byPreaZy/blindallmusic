@@ -167,3 +167,74 @@ async fn moderation_users_search() {
         .expect_ok("users");
     assert!(r.text.contains(&victim.name), "{}", &r.text[..r.text.len().min(400)]);
 }
+
+#[tokio::test]
+async fn admin_set_user_role() {
+    let admin = Client::admin().await;
+    let (target, _) = Client::register("rl").await;
+    let profile_role = |id: i64| async move {
+        let r = Client::anon()
+            .get(&format!("/api/v1/profile/{id}"))
+            .await
+            .expect_ok("profile");
+        r.json("/role").as_str().unwrap_or("").to_string()
+    };
+
+    // non-admin cannot set roles
+    let (plain, _) = Client::register("rl2").await;
+    let r = plain
+        .put(
+            &format!("/api/v1/admin/users/{}/role", target.user_id),
+            json!({"role": "admin"}),
+        )
+        .await;
+    assert_eq!(r.status, StatusCode::FORBIDDEN, "{}", r.text);
+
+    // invalid role rejected
+    let r = admin
+        .put(
+            &format!("/api/v1/admin/users/{}/role", target.user_id),
+            json!({"role": "superadmin"}),
+        )
+        .await;
+    assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY, "{}", r.text);
+
+    // self-role-change rejected (lockout guard)
+    let r = admin
+        .put(
+            &format!("/api/v1/admin/users/{}/role", admin.user_id),
+            json!({"role": "user"}),
+        )
+        .await;
+    assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY, "{}", r.text);
+
+    // promote to moderator -> profile role reflects it
+    admin
+        .put(
+            &format!("/api/v1/admin/users/{}/role", target.user_id),
+            json!({"role": "moderator"}),
+        )
+        .await
+        .expect_ok("role=moderator");
+    assert_eq!(profile_role(target.user_id).await, "moderator");
+
+    // promote to admin
+    admin
+        .put(
+            &format!("/api/v1/admin/users/{}/role", target.user_id),
+            json!({"role": "admin"}),
+        )
+        .await
+        .expect_ok("role=admin");
+    assert_eq!(profile_role(target.user_id).await, "admin");
+
+    // demote back to player
+    admin
+        .put(
+            &format!("/api/v1/admin/users/{}/role", target.user_id),
+            json!({"role": "user"}),
+        )
+        .await
+        .expect_ok("role=user");
+    assert_eq!(profile_role(target.user_id).await, "");
+}

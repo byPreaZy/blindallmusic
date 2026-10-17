@@ -555,7 +555,7 @@ fn CategoryFilter(
                 </svg>
             </button>
             <Show when=move || open.get()>
-                <div class="home-category-filter__panel absolute right-0 top-full z-30 mt-2 min-w-[240px]" role="listbox">
+                <div class="home-category-filter__panel retro-dropdown-panel absolute right-0 top-full z-30 mt-2 min-w-[240px]" role="listbox">
                     <button type="button" class="home-category-filter__option"
                         class:home-category-filter__option--selected=move || selected.get().is_empty()
                         on:click=move |_| { selected.set(vec![]); }>

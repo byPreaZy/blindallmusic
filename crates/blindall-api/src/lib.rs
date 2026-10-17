@@ -252,6 +252,10 @@ pub fn router(state: AppState) -> Router {
             axum::routing::put(admin::update_user).delete(admin::delete_user),
         )
         .route(
+            "/api/v1/admin/users/{user}/role",
+            axum::routing::put(admin::set_user_role),
+        )
+        .route(
             "/api/v1/admin/users/{user}/restore",
             axum::routing::put(admin::restore_user),
         )

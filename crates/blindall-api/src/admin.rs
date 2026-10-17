@@ -123,6 +123,33 @@ pub async fn update_user(
     }
 }
 
+#[derive(Deserialize)]
+pub struct SetRoleBody {
+    role: String,
+}
+
+pub async fn set_user_role(
+    State(state): State<AppState>,
+    Path(user_id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+    Json(body): Json<SetRoleBody>,
+) -> Response {
+    if !user.is_administrator {
+        return forbidden();
+    }
+    if user_id == user.id {
+        return err("role", "You cannot change your own role.");
+    }
+    if !matches!(body.role.as_str(), "user" | "moderator" | "admin") {
+        return err("role", "validation");
+    }
+    match state.admin.set_role(user_id, &body.role).await {
+        Ok(true) => Json(json!({"ok": true})).into_response(),
+        Ok(false) => StatusCode::NOT_FOUND.into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
 pub async fn delete_user(
     State(state): State<AppState>,
     Path(user_id): Path<i64>,

@@ -85,12 +85,16 @@ pub fn ProfilePage() -> impl IntoView {
 
     let unlike = move |track_id: i64| {
         leptos::task::spawn_local(async move {
-            let _ = api::delete::<Value>(&format!("/api/v1/profile/likes/{track_id}")).await;
-            tab_data.update(|d| {
-                if let Some(arr) = d["data"].as_array_mut() {
-                    arr.retain(|r| r["id"].as_i64() != Some(track_id));
-                }
-            });
+            if api::delete::<Value>(&format!("/api/v1/profile/likes/{track_id}"))
+                .await
+                .is_ok()
+            {
+                tab_data.update(|d| {
+                    if let Some(arr) = d["data"].as_array_mut() {
+                        arr.retain(|r| r["id"].as_i64() != Some(track_id));
+                    }
+                });
+            }
         });
     };
 
@@ -126,6 +130,14 @@ pub fn ProfilePage() -> impl IntoView {
 
                 <div class="grid gap-6 lg:grid-cols-12">
                     <aside class="space-y-4 lg:col-span-4">
+                        {move || {
+                            let me = auth.user.get();
+                            let p = profile.get();
+                            let pid = p["id"].as_i64().unwrap_or(0);
+                            (me.as_ref().map(|u| u.is_administrator).unwrap_or(false)
+                                && pid != 0 && Some(pid) != me.map(|u| u.id))
+                            .then(|| view! { <AdminRoleCard profile=profile /> })
+                        }}
                         <div class="rounded-xl border border-white/10 bg-surface-raised/60 p-4">
                             <LevelInfoCard profile=profile compact=true />
                         </div>
@@ -179,7 +191,9 @@ pub fn ProfilePage() -> impl IntoView {
                             {move || {
                                 match tab.get().as_str() {
                                     "likes" => view! {
-                                        <LikesTab data=tab_data auth=auth unlike=unlike />
+                                        <LikesTab data=tab_data auth=auth
+                                            owner=profile.get()["id"].as_i64().unwrap_or(0)
+                                            unlike=unlike />
                                     }.into_any(),
                                     "bookmarks" => view! { <BookmarksTab data=tab_data /> }.into_any(),
                                     "minigames" => view! { <MinigamesTab data=tab_data profile_id=user_id() /> }.into_any(),
@@ -335,6 +349,64 @@ fn ProfileHeader(profile: RwSignal<Value>, on_level: impl Fn(leptos::ev::MouseEv
                 </section>
             }.into_any()
         }}
+    }
+}
+
+#[component]
+fn AdminRoleCard(profile: RwSignal<Value>) -> impl IntoView {
+    let busy = RwSignal::new(false);
+    let error = RwSignal::new(String::new());
+    let set_role = move |role: &'static str| {
+        let pid = profile.get_untracked()["id"].as_i64().unwrap_or(0);
+        busy.set(true);
+        error.set(String::new());
+        leptos::task::spawn_local(async move {
+            match api::put::<Value, _>(
+                &format!("/api/v1/admin/users/{pid}/role"),
+                &serde_json::json!({"role": role}),
+            )
+            .await
+            {
+                Ok(_) => profile.update(|p| {
+                    p["role"] = Value::String(if role == "user" { String::new() } else { role.into() });
+                }),
+                Err(e) => error.set(e.message),
+            }
+            busy.set(false);
+        });
+    };
+    view! {
+        <div class="rounded-xl border border-amber-400/20 bg-amber-500/5 p-4">
+            <p class="mb-3 text-[10px] font-bold uppercase tracking-wider text-amber-300/80">
+                {t("Administration")}
+            </p>
+            <div class="flex gap-2">
+                {[("user", "Player"), ("moderator", "Moderator"), ("admin", "Admin")]
+                    .into_iter()
+                    .map(|(role, label)| {
+                        let current = move || {
+                            profile.get()["role"].as_str().unwrap_or("user") == role
+                                || (role == "user" && profile.get()["role"].as_str().unwrap_or("").is_empty())
+                        };
+                        view! {
+                            <button type="button"
+                                class=move || if current() {
+                                    "flex-1 rounded-lg bg-brand-primary/20 px-2 py-2 text-xs font-bold text-white ring-1 ring-brand-primary/50 transition"
+                                } else {
+                                    "flex-1 rounded-lg border border-white/10 bg-white/5 px-2 py-2 text-xs font-semibold text-white/60 transition hover:bg-white/10 hover:text-white"
+                                }
+                                disabled=move || busy.get()
+                                on:click=move |_| set_role(role)>
+                                {t(label)}
+                            </button>
+                        }
+                    })
+                    .collect::<Vec<_>>()}
+            </div>
+            <Show when=move || !error.get().is_empty()>
+                <p class="mt-2 text-xs text-red-400">{error.get()}</p>
+            </Show>
+        </div>
     }
 }
 
@@ -814,6 +886,7 @@ fn ScoresTab(data: RwSignal<Value>) -> impl IntoView {
 fn LikesTab(
     data: RwSignal<Value>,
     auth: crate::auth::Auth,
+    owner: i64,
     unlike: impl Fn(i64) + Copy + Send + Sync + 'static,
 ) -> impl IntoView {
     view! {
@@ -826,9 +899,7 @@ fn LikesTab(
                     </div>
                 }.into_any();
             }
-            let own = auth.user.get().map(|u| {
-                u.id
-            });
+            let own = auth.user.get().map(|u| u.id).filter(|id| *id == owner);
             view! {
                 <div class="overflow-hidden rounded-xl border border-white/10 bg-surface-raised/60">
                     {rows.into_iter().map(|r| {

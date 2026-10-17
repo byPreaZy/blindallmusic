@@ -155,6 +155,56 @@ impl AdminRepo {
         Ok(res.rows_affected() > 0)
     }
 
+    /// Global role change from the admin UI.
+    /// `admin` -> is_administrator flag; `moderator` -> moderator of every public room;
+    /// `user` -> strips admin flag and all room moderation rights.
+    pub async fn set_role(&self, user_id: i64, role: &str) -> Result<bool, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let now = chrono::Utc::now();
+        let res = sqlx::query(
+            "UPDATE users SET is_administrator = $1, updated_at = $2 \
+             WHERE id = $3 AND deleted_at IS NULL",
+        )
+        .bind(role == "admin")
+        .bind(now)
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await?;
+        if res.rows_affected() == 0 {
+            tx.rollback().await?;
+            return Ok(false);
+        }
+        match role {
+            "moderator" => {
+                sqlx::query(
+                    "INSERT INTO moderables (user_id, moderable_type, moderable_id, \
+                     created_at, updated_at) \
+                     SELECT $1, 'App\\Models\\Room', r.id, $2, $2 FROM rooms r \
+                     WHERE r.is_public = true AND r.deleted_at IS NULL \
+                     AND NOT EXISTS (SELECT 1 FROM moderables m WHERE m.user_id = $1 \
+                         AND m.moderable_type = 'App\\Models\\Room' \
+                         AND m.moderable_id = r.id)",
+                )
+                .bind(user_id)
+                .bind(now)
+                .execute(&mut *tx)
+                .await?;
+            }
+            "user" => {
+                sqlx::query(
+                    "DELETE FROM moderables WHERE user_id = $1 \
+                     AND moderable_type = 'App\\Models\\Room'",
+                )
+                .bind(user_id)
+                .execute(&mut *tx)
+                .await?;
+            }
+            _ => {}
+        }
+        tx.commit().await?;
+        Ok(true)
+    }
+
     pub async fn delete_user(&self, user_id: i64) -> Result<bool, sqlx::Error> {
         sqlx::query("UPDATE users SET deleted_at = $1 WHERE id = $2")
             .bind(chrono::Utc::now())
