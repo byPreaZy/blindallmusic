@@ -303,6 +303,8 @@ fn ChatMessage(
         .or_else(|| message["user"]["photo_path"].as_str())
         .map(str::to_string);
     let team_name = message["user"]["team"]["name"].as_str().map(str::to_string);
+    let role = StoredValue::new(message["user"]["role"].as_str().unwrap_or("").to_string());
+    let custom_tag = StoredValue::new(message["user"]["custom_tag"].as_str().unwrap_or("").to_string());
     let reports = RwSignal::new(message["reports"].as_i64().unwrap_or(0).abs());
     let reactions = RwSignal::new(message["reactions"].as_array().cloned().unwrap_or_default());
     let reactions_hydrated = message["reactions"].is_array();
@@ -496,6 +498,9 @@ fn ChatMessage(
                                     {tn}
                                 </span>
                             })}
+                            <crate::components::tag::UserTags
+                                role=role.get_value()
+                                custom_tag=custom_tag.get_value()/>
                         </div>
                         <div class="flex items-center gap-1">
                             {move || (reports.get() >= 1).then(|| view! {

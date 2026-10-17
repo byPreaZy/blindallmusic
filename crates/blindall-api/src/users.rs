@@ -64,6 +64,8 @@ pub async fn index(
 pub struct UpdateProfileBody {
     name: String,
     email: String,
+    #[serde(default)]
+    custom_tag: Option<String>,
 }
 
 pub async fn update(
@@ -100,6 +102,24 @@ pub async fn update(
         Ok(true) => return err("email", "The email has already been taken."),
         Ok(false) => {}
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+    let tag: Option<String> = body
+        .custom_tag
+        .as_deref()
+        .map(|t| {
+            t.chars()
+                .filter(|c| !c.is_control() && *c != '<' && *c != '>')
+                .collect::<String>()
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .chars()
+                .take(24)
+                .collect::<String>()
+        })
+        .filter(|t| !t.is_empty());
+    if let Err(_) = state.auth.update_custom_tag(id, tag.as_deref()).await {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
     match state.auth.update_profile(id, name, &email).await {
         Ok(()) => Json(json!({"ok": true})).into_response(),
@@ -316,6 +336,13 @@ pub async fn me(State(state): State<AppState>, CurrentUser(user): CurrentUser) -
                 .unwrap_or(true),
             "donor_perks": perks,
             "is_supporter": is_supporter,
+            "is_administrator": user.is_administrator,
+            "custom_tag": state
+                .auth
+                .custom_tag_of(user.id)
+                .await
+                .ok()
+                .flatten(),
         }
     }))
     .into_response()

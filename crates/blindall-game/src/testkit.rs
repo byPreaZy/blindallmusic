@@ -152,6 +152,9 @@ impl GameStore for FakeGameStore {
                         rooms_created_count: 0,
                         playlists_created_count: 0,
                         tracks_liked_count: 0,
+                        is_administrator: false,
+                        is_moderator: false,
+                        custom_tag: None,
                     },
                 )
             })

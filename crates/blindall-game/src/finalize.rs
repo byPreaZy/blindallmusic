@@ -292,6 +292,8 @@ fn podium_user_json(
             "name": p.name,
             "photo": events::resolve_photo_url(photo_prefix, p.photo.as_deref(), &p.name),
             "elo": p.elo,
+            "role": if p.is_administrator { "admin" } else if p.is_moderator { "moderator" } else { "" },
+            "custom_tag": p.custom_tag.as_deref().unwrap_or(""),
         }),
         None => json!({ "id": uid }),
     }

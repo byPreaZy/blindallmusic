@@ -258,6 +258,11 @@ fn ProfileHeader(profile: RwSignal<Value>, on_level: impl Fn(leptos::ev::MouseEv
                                         </span>
                                     })}
                                 </h1>
+                                <div class="mt-1 flex items-center gap-1.5">
+                                    <crate::components::tag::UserTags
+                                        role=p["role"].as_str().unwrap_or("").to_string()
+                                        custom_tag=p["custom_tag"].as_str().unwrap_or("").to_string()/>
+                                </div>
                                 <p class="mt-1 text-sm text-white/50">{t("Member since")} " " {created}</p>
                             </div>
                             {p["team"].as_object().map(|tm| {

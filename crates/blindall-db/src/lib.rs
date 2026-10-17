@@ -166,6 +166,13 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0017_seasons_unique.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            18,
+            "user_custom_tag".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0018_user_custom_tag.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {

@@ -724,6 +724,11 @@ impl RoomRepo {
 
         let users: std::collections::HashMap<i64, serde_json::Value> = sqlx::query(
             "SELECT u.id, u.name, u.photo_path, u.elo, u.is_guest, \
+             u.is_administrator, u.custom_tag, \
+             EXISTS(SELECT 1 FROM moderables m \
+              JOIN rooms rm ON rm.id = m.moderable_id \
+              WHERE m.user_id = u.id AND m.moderable_type = 'App\\Models\\Room' \
+              AND rm.is_public = true) AS is_moderator, \
              l.level, l.total_xp, l.current_xp, l.xp_for_next_level \
              FROM users u LEFT JOIN user_levels l ON l.user_id = u.id \
              WHERE u.id = ANY($1)",
@@ -743,6 +748,9 @@ impl RoomRepo {
                         "photo": photo_path,
                         "elo": r.try_get::<i64, _>("elo").unwrap_or(1500),
                         "is_guest": r.get::<bool, _>("is_guest"),
+                        "role": if r.get::<bool, _>("is_administrator") { "admin" }
+                            else if r.get::<bool, _>("is_moderator") { "moderator" } else { "" },
+                        "custom_tag": r.get::<Option<String>, _>("custom_tag").unwrap_or_default(),
                         "user_level": level.map(|lv| serde_json::json!({
                             "level": lv,
                             "total_xp": r.get::<i64, _>("total_xp"),

@@ -386,19 +386,24 @@ fn PlayersBoard(
                                                     }.into_any()
                                                 }}
                                                 <div class="min-w-0 flex-1">
-                                                    {if !is_guest {
-                                                        let nm = name.clone();
-                                                        view! {
-                                                            <A href=user_link(uid) attr:class="block truncate text-base font-bold text-white hover:text-yellow-400">
-                                                                {nm}
-                                                            </A>
-                                                        }.into_any()
-                                                    } else {
-                                                        let nm = if name.is_empty() { t("Deleted user").to_string() } else { name.clone() };
-                                                        view! {
-                                                            <span class="block truncate text-base font-bold text-neutral-400">{nm}</span>
-                                                        }.into_any()
-                                                    }}
+                                                    <div class="flex min-w-0 items-center gap-1.5">
+                                                        {if !is_guest {
+                                                            let nm = name.clone();
+                                                            view! {
+                                                                <A href=user_link(uid) attr:class="block truncate text-base font-bold text-white hover:text-yellow-400">
+                                                                    {nm}
+                                                                </A>
+                                                            }.into_any()
+                                                        } else {
+                                                            let nm = if name.is_empty() { t("Deleted user").to_string() } else { name.clone() };
+                                                            view! {
+                                                                <span class="block truncate text-base font-bold text-neutral-400">{nm}</span>
+                                                            }.into_any()
+                                                        }}
+                                                        <crate::components::tag::UserTags
+                                                            role=u["role"].as_str().unwrap_or("").to_string()
+                                                            custom_tag=u["custom_tag"].as_str().unwrap_or("").to_string()/>
+                                                    </div>
                                                     <div class="mt-2 flex flex-wrap gap-2">
                                                         <div class=chip("level")>
                                                             <MetricTip label=t("Level") tip=t("Your experience level based on XP earned while playing.")/>
@@ -622,9 +627,14 @@ fn MinigamesBoard(payload: RwSignal<Value>, loading: RwSignal<bool>, page: RwSig
                                                 })}
                                             </A>
                                             <div class="min-w-0 flex-1">
-                                                <A href=user_link(uid) attr:class="block truncate text-base font-bold text-white transition-colors hover:text-yellow-400 sm:text-lg">
-                                                    {nm}
-                                                </A>
+                                                <div class="flex min-w-0 items-center gap-1.5">
+                                                    <A href=user_link(uid) attr:class="block truncate text-base font-bold text-white transition-colors hover:text-yellow-400 sm:text-lg">
+                                                        {nm}
+                                                    </A>
+                                                    <crate::components::tag::UserTags
+                                                        role=u["role"].as_str().unwrap_or("").to_string()
+                                                        custom_tag=u["custom_tag"].as_str().unwrap_or("").to_string()/>
+                                                </div>
                                                 <div class="mt-1.5 flex items-center gap-1.5 sm:mt-2">
                                                     {lvl["level"].as_i64().map(|l| view! {
                                                         <crate::components::level::LevelBadge
@@ -891,19 +901,24 @@ fn SeasonBoard(payload: RwSignal<Value>, loading: RwSignal<bool>, page: RwSignal
                                                         }.into_any()
                                                     }}
                                                     <div class="min-w-0 flex-1">
-                                                        {if !is_guest {
-                                                            let nm = name.clone();
-                                                            view! {
-                                                                <A href=user_link(uid) attr:class="block truncate text-base font-bold text-white hover:text-yellow-400">
-                                                                    {nm}
-                                                                </A>
-                                                            }.into_any()
-                                                        } else {
-                                                            let nm = if name.is_empty() { t("Deleted user").to_string() } else { name.clone() };
-                                                            view! {
-                                                                <span class="block truncate text-base font-bold text-neutral-400">{nm}</span>
-                                                            }.into_any()
-                                                        }}
+                                                        <div class="flex min-w-0 items-center gap-1.5">
+                                                            {if !is_guest {
+                                                                let nm = name.clone();
+                                                                view! {
+                                                                    <A href=user_link(uid) attr:class="block truncate text-base font-bold text-white hover:text-yellow-400">
+                                                                        {nm}
+                                                                    </A>
+                                                                }.into_any()
+                                                            } else {
+                                                                let nm = if name.is_empty() { t("Deleted user").to_string() } else { name.clone() };
+                                                                view! {
+                                                                    <span class="block truncate text-base font-bold text-neutral-400">{nm}</span>
+                                                                }.into_any()
+                                                            }}
+                                                            <crate::components::tag::UserTags
+                                                                role=u["role"].as_str().unwrap_or("").to_string()
+                                                                custom_tag=u["custom_tag"].as_str().unwrap_or("").to_string()/>
+                                                        </div>
                                                         <div class="mt-1.5 flex flex-wrap gap-1.5 text-[11px] text-neutral-400">
                                                             <span class="rounded-md border border-neutral-700/60 bg-neutral-800/50 px-1.5 py-0.5">{t("Level")} " " {level_v}</span>
                                                             <span class="rounded-md border border-neutral-700/60 bg-neutral-800/50 px-1.5 py-0.5">"ELO " {elo_v}</span>

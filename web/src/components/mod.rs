@@ -13,3 +13,4 @@ pub mod ranking;
 pub mod upload_track;
 pub mod install_prompt;
 pub mod finished_round;
+pub mod tag;

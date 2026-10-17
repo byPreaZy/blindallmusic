@@ -68,6 +68,9 @@ pub struct PlayerInfo {
     pub rooms_created_count: i64,
     pub playlists_created_count: i64,
     pub tracks_liked_count: i64,
+    pub is_administrator: bool,
+    pub is_moderator: bool,
+    pub custom_tag: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]

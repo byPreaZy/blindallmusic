@@ -21,6 +21,11 @@ impl ProfileRepo {
         let Some(user) = sqlx::query(
             "SELECT u.id, u.name, u.photo_path, u.elo, u.is_guest, u.team_id, \
              u.created_at, u.show_donation_history_on_profile, \
+             u.is_administrator, u.custom_tag, \
+             EXISTS(SELECT 1 FROM moderables m \
+              JOIN rooms rm ON rm.id = m.moderable_id \
+              WHERE m.user_id = u.id AND m.moderable_type = 'App\\Models\\Room' \
+              AND rm.is_public = true) AS is_moderator, \
              t.name AS team_name, t.photo_path AS team_photo \
              FROM users u LEFT JOIN teams t ON t.id = u.team_id \
              WHERE u.id = $1 AND u.deleted_at IS NULL",
@@ -105,6 +110,9 @@ impl ProfileRepo {
             })),
             "created_at": user.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
             "elo": user.get::<i64, _>("elo"),
+            "role": if user.get::<bool, _>("is_administrator") { "admin" }
+                else if user.get::<bool, _>("is_moderator") { "moderator" } else { "" },
+            "custom_tag": user.get::<Option<String>, _>("custom_tag").unwrap_or_default(),
             "total_score": totals.get::<f64, _>("total_score"),
             "total_public_score": totals.get::<f64, _>("total_public_score"),
             "total_private_score": totals.get::<f64, _>("total_private_score"),

@@ -89,7 +89,9 @@ impl ChannelAuthorizer for RoomChannelAuthorizer {
                                 "name": p.team_name.clone().unwrap_or_default(),
                             }))
                         }),
-                        "photo": info.and_then(|p| p.photo),
+                        "photo": info.as_ref().and_then(|p| p.photo.clone()),
+                        "role": info.as_ref().map(|p| if p.is_administrator { "admin" } else if p.is_moderator { "moderator" } else { "" }).unwrap_or(""),
+                        "custom_tag": info.as_ref().and_then(|p| p.custom_tag.as_deref()).unwrap_or(""),
                     })))
                 }
                 _ => deny("room_not_found"),

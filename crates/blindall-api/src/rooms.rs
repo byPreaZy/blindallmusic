@@ -327,6 +327,8 @@ pub(crate) fn player_info_json(
         },
         "donor_perks": perks,
         "is_supporter": !perks.is_empty(),
+        "role": if p.is_administrator { "admin" } else if p.is_moderator { "moderator" } else { "" },
+        "custom_tag": p.custom_tag.as_deref().unwrap_or(""),
     })
 }
 

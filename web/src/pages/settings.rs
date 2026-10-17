@@ -16,6 +16,7 @@ pub fn SettingsPage() -> impl IntoView {
     let loading = RwSignal::new(true);
     let name = RwSignal::new(String::new());
     let email = RwSignal::new(String::new());
+    let tag = RwSignal::new(String::new());
     let cur_pw = RwSignal::new(String::new());
     let new_pw = RwSignal::new(String::new());
     let new_pw2 = RwSignal::new(String::new());
@@ -31,6 +32,7 @@ pub fn SettingsPage() -> impl IntoView {
                     let a = &v["account"];
                     name.set(a["name"].as_str().unwrap_or("").to_string());
                     email.set(a["email"].as_str().unwrap_or("").to_string());
+                    tag.set(a["custom_tag"].as_str().unwrap_or("").to_string());
                     show_donations.set(a["show_donation_history_on_profile"].as_bool().unwrap_or(true));
                     account.set(v);
                 }
@@ -52,9 +54,21 @@ pub fn SettingsPage() -> impl IntoView {
         err.set(None);
         msg.set(None);
         leptos::task::spawn_local(async move {
-            let body = json!({"name": name.get_untracked(), "email": email.get_untracked()});
+            let body = json!({
+                "name": name.get_untracked(),
+                "email": email.get_untracked(),
+                "custom_tag": tag.get_untracked(),
+            });
             match api::post::<Value, _>(&format!("/api/v1/users/{}", user_id()), &body).await {
-                Ok(_) => msg.set(Some(t("Profile updated").to_string())),
+                Ok(_) => {
+                    msg.set(Some(t("Profile updated").to_string()));
+                    auth.user.update(|u| {
+                        if let Some(u) = u.as_mut() {
+                            u.name = name.get_untracked();
+                            u.custom_tag = tag.get_untracked();
+                        }
+                    });
+                }
                 Err(e) => err.set(Some(
                     e.first("name").or(e.first("email")).unwrap_or(e.message),
                 )),
@@ -220,6 +234,14 @@ pub fn SettingsPage() -> impl IntoView {
                                 class="w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white outline-none focus:border-brand-accent/50"
                                 prop:value=email
                                 on:input=move |ev| email.set(event_target_value(&ev))/>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm text-white/60">{t("Custom tag")}</label>
+                            <input type="text" maxlength="24"
+                                class="w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white outline-none focus:border-brand-accent/50"
+                                prop:value=tag
+                                on:input=move |ev| tag.set(event_target_value(&ev))/>
+                            <p class="mt-1 text-xs text-white/40">{t("Custom tag help")}</p>
                         </div>
                         <button type="submit" class="btn-primary">{t("Save")}</button>
                     </form>

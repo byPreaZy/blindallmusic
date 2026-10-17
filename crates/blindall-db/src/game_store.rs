@@ -466,7 +466,12 @@ impl GameStore for DbGameStore {
             return Ok(HashMap::new());
         }
         let rows = sqlx::query(
-            "SELECT u.id, u.name, u.photo_path, u.elo, u.is_guest, u.team_id, \
+            "SELECT u.id, u.name, u.photo_path, u.elo, u.is_guest, u.is_administrator, \
+             u.custom_tag, u.team_id, \
+             EXISTS(SELECT 1 FROM moderables m \
+              JOIN rooms rm ON rm.id = m.moderable_id \
+              WHERE m.user_id = u.id AND m.moderable_type = 'App\\Models\\Room' \
+              AND rm.is_public = true) AS is_moderator, \
              t.name AS team_name, t.photo_path AS team_photo, \
              COALESCE(ul.level, 1) AS level, \
              COALESCE(ul.total_xp, 0) AS total_xp, \
@@ -516,6 +521,9 @@ impl GameStore for DbGameStore {
                         rooms_created_count: r.get("rooms_created_count"),
                         playlists_created_count: r.get("playlists_created_count"),
                         tracks_liked_count: r.get("tracks_liked_count"),
+                        is_administrator: r.get("is_administrator"),
+                        is_moderator: r.get("is_moderator"),
+                        custom_tag: r.get("custom_tag"),
                     },
                 )
             })

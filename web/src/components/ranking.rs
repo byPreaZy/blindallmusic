@@ -197,6 +197,9 @@ pub fn RankingPanel(
                                                                 {tm.name}
                                                             </A>
                                                         })}
+                                                        <crate::components::tag::UserTags
+                                                            role=u.role.clone()
+                                                            custom_tag=u.custom_tag.clone()/>
                                                     </div>
                                                     <Show when=move || has_found>
                                                         <div class="flex flex-wrap items-center gap-1">
@@ -398,6 +401,9 @@ pub fn RankingPanel(
                                                                                 attr:class="truncate text-white/85 hover:text-brand-secondary">
                                                                                 {name}
                                                                             </A>
+                                                                            <crate::components::tag::UserTags
+                                                                                role=r["user"]["role"].as_str().unwrap_or("").to_string()
+                                                                                custom_tag=r["user"]["custom_tag"].as_str().unwrap_or("").to_string()/>
                                                                         </span>
                                                                         <span class="ml-2 shrink-0 font-semibold text-brand-accent-light">{format!("{score:.0}")}</span>
                                                                     </div>

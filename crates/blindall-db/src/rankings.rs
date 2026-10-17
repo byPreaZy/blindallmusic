@@ -291,6 +291,11 @@ impl RankingsRepo {
         }
         let user_rows = sqlx::query(
             "SELECT u.id, u.name, u.photo_path, u.elo, u.is_guest, \
+             u.is_administrator, u.custom_tag, \
+             EXISTS(SELECT 1 FROM moderables m \
+              JOIN rooms rm ON rm.id = m.moderable_id \
+              WHERE m.user_id = u.id AND m.moderable_type = 'App\\Models\\Room' \
+              AND rm.is_public = true) AS is_moderator, \
              ul.level, ul.total_xp, ul.current_xp, ul.xp_for_next_level, \
              ul.score_public_rooms, ul.best_round_score AS lvl_best, ul.rounds_played_count \
              FROM users u LEFT JOIN user_levels ul ON ul.user_id = u.id \
@@ -374,6 +379,9 @@ impl RankingsRepo {
                     "photo_path": u.get::<Option<String>, _>("photo_path"),
                     "elo": elo,
                     "is_guest": u.get::<bool, _>("is_guest"),
+                    "role": if u.get::<bool, _>("is_administrator") { "admin" }
+                        else if u.get::<bool, _>("is_moderator") { "moderator" } else { "" },
+                    "custom_tag": u.get::<Option<String>, _>("custom_tag").unwrap_or_default(),
                     "userLevel": level.map(|l| json!({
                         "level": l,
                         "total_xp": u.get::<Option<i64>, _>("total_xp").unwrap_or(0),

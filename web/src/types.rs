@@ -47,6 +47,8 @@ pub struct User {
     pub donor_perks: Vec<String>,
     #[serde(default)]
     pub is_supporter: bool,
+    #[serde(default)]
+    pub custom_tag: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -91,6 +93,10 @@ pub struct RoomUser {
     pub donor_perks: Vec<String>,
     #[serde(default)]
     pub is_supporter: bool,
+    #[serde(default)]
+    pub role: String,
+    #[serde(default)]
+    pub custom_tag: String,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]

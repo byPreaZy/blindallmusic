@@ -79,6 +79,11 @@ fn podium_spot(entry: &Value, rank: usize) -> impl IntoView {
                 >
                     {podium_name(entry)}
                 </p>
+                <div class="flex justify-center">
+                    <crate::components::tag::UserTags
+                        role=entry["user"]["role"].as_str().unwrap_or("").to_string()
+                        custom_tag=entry["user"]["custom_tag"].as_str().unwrap_or("").to_string()/>
+                </div>
                 <div class="hidden min-h-[1.25rem] items-center justify-center sm:flex">
                     {entry["user"]["elo"].as_i64().map(elo_badge)}
                 </div>
@@ -120,8 +125,11 @@ fn podium_extra(offset: usize, entry: &Value) -> impl IntoView {
                 </div>
             </div>
             <div class="min-w-0 text-sm sm:text-xs">
-                <div class="truncate font-medium text-white/90">
-                    {podium_name(entry)}
+                <div class="flex min-w-0 items-center gap-1 font-medium text-white/90">
+                    <span class="truncate">{podium_name(entry)}</span>
+                    <crate::components::tag::UserTags
+                        role=entry["user"]["role"].as_str().unwrap_or("").to_string()
+                        custom_tag=entry["user"]["custom_tag"].as_str().unwrap_or("").to_string()/>
                 </div>
                 <div class="hidden sm:block">
                     {entry["user"]["elo"].as_i64().map(elo_badge)}
@@ -291,6 +299,9 @@ pub fn FinishedRoundModal(
                                                     <span class="shrink-0 text-lg font-bold sm:text-xl">{pos}</span>
                                                     <span class="flex min-w-0 flex-grow items-center gap-2">
                                                         <span class="truncate font-medium">{podium_name(&u)}</span>
+                                                        <crate::components::tag::UserTags
+                                                            role=u["user"]["role"].as_str().unwrap_or("").to_string()
+                                                            custom_tag=u["user"]["custom_tag"].as_str().unwrap_or("").to_string()/>
                                                         {u["user"]["elo"].as_i64().filter(|e| *e > 0).map(elo_badge)}
                                                     </span>
                                                     <span class="shrink-0 whitespace-nowrap font-semibold">

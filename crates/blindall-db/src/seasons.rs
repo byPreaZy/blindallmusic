@@ -274,7 +274,12 @@ impl SeasonRepo {
             Default::default()
         } else {
             sqlx::query(
-                "SELECT u.id, u.name, u.photo_path, u.elo, u.is_guest, l.level \
+                "SELECT u.id, u.name, u.photo_path, u.elo, u.is_guest, l.level, \
+                 u.is_administrator, u.custom_tag, \
+                 EXISTS(SELECT 1 FROM moderables m \
+                  JOIN rooms rm ON rm.id = m.moderable_id \
+                  WHERE m.user_id = u.id AND m.moderable_type = 'App\\Models\\Room' \
+                  AND rm.is_public = true) AS is_moderator \
                  FROM users u LEFT JOIN user_levels l ON l.user_id = u.id \
                  WHERE u.id = ANY($1)",
             )
@@ -292,6 +297,9 @@ impl SeasonRepo {
                         "elo": r.try_get::<i64, _>("elo").unwrap_or(1500),
                         "is_guest": r.get::<bool, _>("is_guest"),
                         "level": r.try_get::<i64, _>("level").unwrap_or(1),
+                        "role": if r.get::<bool, _>("is_administrator") { "admin" }
+                            else if r.get::<bool, _>("is_moderator") { "moderator" } else { "" },
+                        "custom_tag": r.get::<Option<String>, _>("custom_tag").unwrap_or_default(),
                     }),
                 )
             })

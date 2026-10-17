@@ -226,6 +226,31 @@ impl AuthRepo {
         Ok(())
     }
 
+    pub async fn custom_tag_of(
+        &self,
+        user_id: i64,
+    ) -> Result<Option<String>, sqlx::Error> {
+        sqlx::query_scalar("SELECT custom_tag FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map(|o| o.flatten())
+    }
+
+    pub async fn update_custom_tag(
+        &self,
+        user_id: i64,
+        tag: Option<&str>,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query("UPDATE users SET custom_tag = $1, updated_at = $2 WHERE id = $3")
+            .bind(tag)
+            .bind(chrono::Utc::now())
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     pub async fn password_hash(&self, user_id: i64) -> Result<Option<String>, sqlx::Error> {
         sqlx::query_scalar("SELECT password FROM users WHERE id = $1")
             .bind(user_id)

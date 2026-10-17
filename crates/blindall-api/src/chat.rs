@@ -241,6 +241,8 @@ async fn message_json(state: &AppState, msg_id: i64, room_id: i64) -> Value {
                     ),
                     "team_id": info.as_ref().and_then(|p| p.team_id),
                     "team": team,
+                    "role": info.as_ref().map(|p| if p.is_administrator { "admin" } else if p.is_moderator { "moderator" } else { "" }).unwrap_or(""),
+                    "custom_tag": info.as_ref().and_then(|p| p.custom_tag.as_deref()).unwrap_or(""),
                 }),
                 m.body.clone(),
                 m.created_at,
