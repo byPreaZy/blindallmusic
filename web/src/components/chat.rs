@@ -450,7 +450,7 @@ fn ChatMessage(
                 <div class="relative">
                     {match photo.clone() {
                         Some(p) => view! {
-                            <img src=if p.starts_with("http") { p.clone() } else { format!("/storage/{p}") } alt=name.get_value()
+                            <img src=if p.starts_with("http") || p.starts_with('/') { p.clone() } else { format!("/storage/{p}") } alt=name.get_value()
                                 class=format!(
                                     "h-10 w-10 rounded-full border-2 object-cover {}",
                                     if from_mod { "border-brand-accent" } else { "border-white/20" }

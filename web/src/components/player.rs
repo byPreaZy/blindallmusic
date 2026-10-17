@@ -478,7 +478,7 @@ pub fn Player(
                         view! {
                             <li class="room-player__marker" style=format!("left:{pct}%") title=title_n>
                                 {photo.map(|p| view! {
-                                    <img src=if p.starts_with("http") { p.clone() } else { format!("/storage/{p}") }
+                                    <img src=if p.starts_with("http") || p.starts_with('/') { p.clone() } else { format!("/storage/{p}") }
                                         class="room-player__marker-avatar" alt=alt_n/>
                                 })}
                                 <span class="room-player__marker-name">{name}</span>
