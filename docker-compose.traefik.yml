@@ -43,6 +43,27 @@ services:
 
   # caddy absent : Traefik termine TLS à sa place.
 
+  # Vérification AdSense du domaine racine (${ROOT_DOMAIN}, ex: clerely.fr) :
+  # AdSense n'accepte pas un sous-domaine comme site séparé dans certaines
+  # consoles — Google exige le code/meta + ads.txt sur le domaine parent.
+  # Mini-site statique ; peut être retiré une fois le domaine parent validé.
+  rootverify:
+    image: nginx:1-alpine
+    restart: always
+    profiles: [rootverify]
+    volumes:
+      - ./rootverify:/usr/share/nginx/html:ro
+    networks:
+      - traefik
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
+      - traefik.http.routers.blindall-rootverify.rule=Host(`${ROOT_DOMAIN:-clerely.fr}`)
+      - traefik.http.routers.blindall-rootverify.entrypoints=websecure
+      - traefik.http.routers.blindall-rootverify.tls=true
+      - traefik.http.routers.blindall-rootverify.tls.certresolver=customresolver
+      - traefik.http.services.blindall-rootverify.loadbalancer.server.port=80
+
 networks:
   traefik:
     external: true
