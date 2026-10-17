@@ -495,10 +495,14 @@ pub fn TeamShowPage() -> impl IntoView {
                                                         let form = web_sys::FormData::new().unwrap();
                                                         let _ = form.append_with_blob("photo", &f);
                                                         let token = api::stored_token().unwrap_or_default();
-                                                        let _ = gloo_net::http::Request::post(&format!("/api/v1/teams/{tid}/photo"))
+                                                        if let Ok(req) = gloo_net::http::Request::post(&format!("/api/v1/teams/{tid}/photo"))
                                                             .header("Authorization", &format!("Bearer {token}"))
-                                                            .body(form).unwrap()
-                                                            .send().await;
+                                                            .body(form)
+                                                        {
+                                                            if let Err(e) = api::finish(req.send().await).await {
+                                                                error.set(Some(e.first("photo").unwrap_or(e.message)));
+                                                            }
+                                                        }
                                                     }
                                                     photo_file.set(None);
                                                     load();

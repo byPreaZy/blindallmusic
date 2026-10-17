@@ -51,7 +51,7 @@ fn authed(req: RequestBuilder) -> RequestBuilder {
     }
 }
 
-async fn finish(
+pub(crate) async fn finish(
     resp: Result<gloo_net::http::Response, gloo_net::Error>,
 ) -> Result<gloo_net::http::Response, ApiError> {
     let resp = resp.map_err(|e| ApiError {

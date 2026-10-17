@@ -43,12 +43,12 @@ pub async fn store(
     while let Ok(Some(field)) = multipart.next_field().await {
         match field.name() {
             Some("audio") => match field.bytes().await {
-                Ok(b) if b.len() <= 1024 * 1024 => audio = Some(b.to_vec()),
-                _ => return err("audio", "validation"),
+                Ok(b) if b.len() <= 4 * 1024 * 1024 => audio = Some(b.to_vec()),
+                _ => return err("audio", "Le fichier audio ne doit pas dépasser 4 Mo."),
             },
             Some("artwork") => match field.bytes().await {
-                Ok(b) if b.len() <= 2048 * 1024 => artwork = Some(b.to_vec()),
-                _ => return err("artwork", "validation"),
+                Ok(b) if b.len() <= 8 * 1024 * 1024 => artwork = Some(b.to_vec()),
+                _ => return err("artwork", "La pochette ne doit pas dépasser 8 Mo."),
             },
             Some("artist_name") => {
                 artist_name = field.text().await.unwrap_or_default();

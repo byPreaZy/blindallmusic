@@ -32,12 +32,16 @@ pub mod ws;
 
 pub use state::AppState;
 
+use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::Json;
 use axum::Router;
 use tower_http::services::{ServeDir, ServeFile};
+
+const PHOTO_UPLOAD_LIMIT: usize = 12 * 1024 * 1024;
+const TRACK_UPLOAD_LIMIT: usize = 16 * 1024 * 1024;
 
 async fn api_not_found() -> impl IntoResponse {
     (StatusCode::NOT_FOUND, Json(serde_json::json!({"message": "Not Found"})))
@@ -126,7 +130,10 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/rooms/{id}/bookmark",
             post(rooms::bookmark).delete(rooms::unbookmark),
         )
-        .route("/api/v1/rooms/{id}/photo", post(rooms::update_photo))
+        .route(
+            "/api/v1/rooms/{id}/photo",
+            post(rooms::update_photo).layer(DefaultBodyLimit::max(PHOTO_UPLOAD_LIMIT)),
+        )
         .route(
             "/api/v1/rooms/{id}/picture",
             axum::routing::delete(rooms::delete_picture),
@@ -305,7 +312,10 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/admin/pages/{id}",
             axum::routing::put(admin::update_page).delete(admin::delete_page),
         )
-        .route("/api/v1/local-tracks", post(local_tracks::store))
+        .route(
+            "/api/v1/local-tracks",
+            post(local_tracks::store).layer(DefaultBodyLimit::max(TRACK_UPLOAD_LIMIT)),
+        )
         .route("/api/v1/local-tracks/{id}/audio", get(local_tracks::audio))
         .route(
             "/api/v1/providers/local/search/track",
@@ -365,7 +375,10 @@ pub fn router(state: AppState) -> Router {
             get(teams::show).put(teams::update).delete(teams::destroy),
         )
         .route("/api/v1/teams/{id}/leave", post(teams::leave))
-        .route("/api/v1/teams/{id}/photo", post(teams::update_photo))
+        .route(
+            "/api/v1/teams/{id}/photo",
+            post(teams::update_photo).layer(DefaultBodyLimit::max(PHOTO_UPLOAD_LIMIT)),
+        )
         .route("/api/v1/teams/{id}/request", post(teams::request_join))
         .route("/api/v1/teams/{id}/request/cancel", post(teams::cancel_request))
         .route(
@@ -420,7 +433,9 @@ pub fn router(state: AppState) -> Router {
         )
         .route(
             "/api/v1/users/{id}/photo",
-            post(users::update_photo).delete(users::destroy_photo),
+            post(users::update_photo)
+                .layer(DefaultBodyLimit::max(PHOTO_UPLOAD_LIMIT))
+                .delete(users::destroy_photo),
         )
         .route("/api/v1/rooms/{id}/start", post(round::start))
         .route("/api/v1/rooms/{id}/pause", post(round::pause))

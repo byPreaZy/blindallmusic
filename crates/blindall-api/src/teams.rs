@@ -261,8 +261,8 @@ pub async fn update_photo(
     while let Ok(Some(field)) = multipart.next_field().await {
         if field.name() == Some("photo") {
             match field.bytes().await {
-                Ok(b) if b.len() <= 2048 * 1024 => bytes = Some(b),
-                _ => return validation("photo", "The photo must not exceed 2048 kilobytes."),
+                Ok(b) if b.len() <= 10 * 1024 * 1024 => bytes = Some(b),
+                _ => return validation("photo", "The photo may not be larger than 10 MB."),
             }
         }
     }

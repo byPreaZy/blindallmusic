@@ -221,13 +221,13 @@ pub async fn update_photo(
     while let Ok(Some(field)) = multipart.next_field().await {
         if field.name() == Some("photo") {
             match field.bytes().await {
-                Ok(b) if b.len() <= 1024 * 1024 => bytes = Some(b),
-                _ => return err("photo", "validation"),
+                Ok(b) if b.len() <= 10 * 1024 * 1024 => bytes = Some(b),
+                _ => return err("photo", "The photo may not be larger than 10 MB."),
             }
         }
     }
     let Some(bytes) = bytes else {
-        return err("photo", "validation");
+        return err("photo", "The photo field is required.");
     };
     let webp = match crate::storage::image_to_webp_contain(&bytes, 350, 350) {
         Ok(w) => w,

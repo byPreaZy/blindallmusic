@@ -466,20 +466,7 @@ async fn upload(user_id: i64, file: web_sys::File) -> Result<(), ApiError> {
         message: e.to_string(),
         errors: Default::default(),
         body: serde_json::Value::Null,
-    })?.send().await.map_err(|e| ApiError {
-        status: 0,
-        message: e.to_string(),
-        errors: Default::default(),
-        body: serde_json::Value::Null,
-    })?;
-    if resp.ok() {
-        Ok(())
-    } else {
-        Err(ApiError {
-            status: resp.status(),
-            message: "upload failed".into(),
-            errors: Default::default(),
-            body: serde_json::Value::Null,
-        })
-    }
+    })?.send().await;
+    api::finish(resp).await?;
+    Ok(())
 }

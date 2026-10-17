@@ -398,14 +398,14 @@ pub fn RoomEditPage() -> impl IntoView {
                                                 None => req,
                                             };
                                             if let Ok(req) = req.body(form) {
-                                                match req.send().await {
-                                                    Ok(resp) if resp.ok() => {
+                                                match api::finish(req.send().await).await {
+                                                    Ok(resp) => {
                                                         if let Ok(v) = resp.json::<Value>().await {
                                                             photo_path.set(v["photo_path"].as_str().map(str::to_string));
                                                         }
                                                         flash_for("Photo updated");
                                                     }
-                                                    _ => err.set(Some("Upload failed".into())),
+                                                    Err(e) => err.set(Some(e.first("photo").unwrap_or(e.message))),
                                                 }
                                             }
                                         });
