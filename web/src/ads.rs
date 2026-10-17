@@ -97,6 +97,20 @@ fn ensure_adsense_script(client: &str) {
         return;
     }
     let Some(doc) = w.document() else { return };
+    // The loader may already be in <head> (AdSense site-verification snippet).
+    if doc
+        .query_selector("script[src*='adsbygoogle.js']")
+        .ok()
+        .flatten()
+        .is_some()
+    {
+        let _ = js_sys::Reflect::set(
+            &w,
+            &wasm_bindgen::JsValue::from_str("__adsense_loaded"),
+            &wasm_bindgen::JsValue::TRUE,
+        );
+        return;
+    }
     let Ok(el) = doc.create_element("script") else { return };
     el.set_attribute("async", "").ok();
     el.set_attribute(
