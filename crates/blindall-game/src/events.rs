@@ -152,19 +152,10 @@ pub fn resolve_photo_url(storage_prefix: &str, photo_path: Option<&str>, name: &
         Some(p) if !p.is_empty() => {
             format!("{}/{}", storage_prefix.trim_end_matches('/'), p)
         }
-        _ => {
-            let initials = name
-                .split_whitespace()
-                .filter_map(|seg| seg.chars().next())
-                .map(|c| c.to_string())
-                .collect::<Vec<_>>()
-                .join(" ");
-            format!(
-                "https://ui-avatars.com/api/?name={}&color=7F9CF5&background=1f2937&size=300",
-                url::form_urlencoded::byte_serialize(initials.trim().as_bytes())
-                    .collect::<String>()
-            )
-        }
+        _ => format!(
+            "/api/v1/avatar?name={}",
+            url::form_urlencoded::byte_serialize(name.as_bytes()).collect::<String>()
+        ),
     }
 }
 

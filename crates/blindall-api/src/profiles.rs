@@ -11,19 +11,7 @@ pub fn photo_url(state: &AppState, photo_path: &str, name: &str) -> String {
     if !photo_path.is_empty() {
         return state.storage.url(photo_path);
     }
-    let initials = name
-        .split_whitespace()
-        .filter_map(|seg| seg.chars().next())
-        .collect::<Vec<char>>()
-        .into_iter()
-        .map(|c| c.to_string())
-        .collect::<Vec<_>>()
-        .join(" ");
-    let initials = initials.trim();
-    format!(
-        "https://ui-avatars.com/api/?name={}&color=7F9CF5&background=1f2937&size=300",
-        url::form_urlencoded::byte_serialize(initials.as_bytes()).collect::<String>()
-    )
+    crate::avatar::fallback_url(name)
 }
 
 pub async fn show(State(state): State<AppState>, Path(user_id): Path<i64>) -> Response {
@@ -252,10 +240,7 @@ fn room_photo_url(state: &AppState, path: &str, name: &str) -> String {
         }
         return state.storage.url(path);
     }
-    format!(
-        "https://ui-avatars.com/api/?name={}&background=random&color=fff&size=300&format=svg&length=5&font-size=0.15",
-        url::form_urlencoded::byte_serialize(name.as_bytes()).collect::<String>()
-    )
+    crate::avatar::fallback_url(name)
 }
 
 fn badge(id: &str, icon: &str, earned: bool, current: i64, target: i64, url: &str) -> Value {

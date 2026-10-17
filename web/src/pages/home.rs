@@ -632,10 +632,7 @@ fn TopPlayers(list: Vec<Value>) -> impl IntoView {
     let avatar = |u: &Value| {
         let name = u["name"].as_str().unwrap_or("?").to_string();
         let src = u["photo"].as_str().map(str::to_string).unwrap_or_else(|| {
-            format!(
-                "https://ui-avatars.com/api/?name={}&color=7F9CF5&background=EBF4FF",
-                urlencoding(&name)
-            )
+            format!("/api/v1/avatar?name={}", urlencoding(&name))
         });
         (src, name)
     };

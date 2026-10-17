@@ -204,7 +204,7 @@ fn UserDropdown() -> impl IntoView {
         let u = auth.user.get().unwrap_or_default();
         let src = u.photo.clone().unwrap_or_else(|| {
             format!(
-                "https://ui-avatars.com/api/?name={}&background=random&format=svg",
+                "/api/v1/avatar?name={}",
                 js_sys::encode_uri_component(&u.name)
             )
         });

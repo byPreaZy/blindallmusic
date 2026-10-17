@@ -1,5 +1,6 @@
 pub mod admin;
 pub mod auth;
+pub mod avatar;
 pub mod auth_reset;
 pub mod auth_session;
 pub mod authz;
@@ -337,6 +338,7 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/messages/{id}/reactions",
             get(chat::reactions).post(chat::toggle_reaction),
         )
+        .route("/api/v1/avatar", get(avatar::avatar))
         .route("/api/v1/pages/{slug}", get(content::page))
         .route("/api/v1/user/banned", get(content::banned_user))
         .route("/api/v1/contact", post(content::contact))
