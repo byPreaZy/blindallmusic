@@ -70,7 +70,65 @@ pub fn AnswerInput(
             .collect::<HashSet<i64>>()
     });
 
-    let disabled = Memo::new(move |_| round.get().is_none() || track.get().is_none());
+    let blurred = RwSignal::new(false);
+
+    let disabled = Memo::new(move |_| {
+        round.get().is_none() || track.get().is_none() || blurred.get()
+    });
+
+    // Anti-triche : quitter l'onglet/la fenêtre pendant une piste bloque la
+    // saisie jusqu'à la piste suivante. Les réponses déjà soumises restent
+    // valides (elles ont été tapées avant le blur).
+    {
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen::JsCast;
+        if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+            let cb = Closure::wrap(Box::new({
+                let doc = doc.clone();
+                move || {
+                    if doc.hidden()
+                        && round.get_untracked().is_some()
+                        && track.get_untracked().is_some()
+                        && !blurred.get_untracked()
+                    {
+                        blurred.set(true);
+                        text.set(String::new());
+                    }
+                }
+            }) as Box<dyn FnMut()>);
+            let _ = doc
+                .add_event_listener_with_callback("visibilitychange", cb.as_ref().unchecked_ref());
+            let cb = send_wrapper::SendWrapper::new(cb);
+            on_cleanup(move || {
+                let _ = doc.remove_event_listener_with_callback(
+                    "visibilitychange",
+                    cb.as_ref().unchecked_ref(),
+                );
+            });
+        }
+        let blur_handle = leptos::leptos_dom::helpers::window_event_listener(
+            leptos::ev::blur,
+            move |_| {
+                if round.get_untracked().is_none() || track.get_untracked().is_none() {
+                    return;
+                }
+                // debounce : les popups (1Password, notifications OS) volent le
+                // focus une fraction de seconde — on bloque seulement si le
+                // focus n'est pas revenu rapidement.
+                gloo_timers::callback::Timeout::new(700, move || {
+                    let Some(w) = web_sys::window() else { return };
+                    let Some(doc) = w.document() else { return };
+                    let gone = doc.hidden() || !doc.has_focus().unwrap_or(true);
+                    if gone && !blurred.get_untracked() {
+                        blurred.set(true);
+                        text.set(String::new());
+                    }
+                })
+                .forget();
+            },
+        );
+        on_cleanup(move || blur_handle.remove());
+    }
 
     let last_track_id = RwSignal::new(Option::<i64>::None);
     let queue_reset = queue.clone();
@@ -86,6 +144,7 @@ pub fn AnswerInput(
             text.set(String::new());
             flash.set(None);
             hint.set(None);
+            blurred.set(false);
             if id.is_some() && auto_focus.get_untracked() {
                 if let Some(el) = input_ref.get() {
                     let _ = el.focus();
@@ -401,6 +460,11 @@ pub fn AnswerInput(
                             </button>
                         </div>
                     </div>
+                    {move || blurred.get().then(|| view! {
+                        <p class="room-input-hint mt-1 flex items-center gap-1 text-xs text-red-400">
+                            {t("Answer locked — you left the tab. Next track will unlock it.")}
+                        </p>
+                    })}
                     {move || hint.get().map(|h| view! {
                         <p class="room-input-hint mt-1 flex items-center gap-1 text-xs text-brand-secondary">
                             <span>{h}</span>
