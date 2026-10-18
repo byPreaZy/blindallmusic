@@ -173,6 +173,20 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0018_user_custom_tag.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            19,
+            "rooms_active_default".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0019_rooms_active_default.sql").into(),
+            false,
+        ),
+        sqlx::migrate::Migration::new(
+            20,
+            "data_quality_audit".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0020_data_quality_audit.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {

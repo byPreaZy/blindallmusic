@@ -1004,4 +1004,321 @@ impl AdminRepo {
         .await
         .map(|v| v == 1)
     }
+
+    // ---- data quality --------------------------------------------------------
+
+    /// Coverage of "screen" answer types (Movie/Show/Anime/Cartoon/Video
+    /// game/Musical) per room. A type is reported as the room's expected type
+    /// when at least half of its tracks carry it — no manual mapping needed.
+    pub async fn data_quality_rooms(&self) -> Result<Vec<Value>, sqlx::Error> {
+        let rows = sqlx::query(
+            "WITH per_type AS (
+               SELECT r.id AS room_id, r.name AS room_name, ta.answer_type_id,
+                      COUNT(DISTINCT t.id) AS typed
+               FROM rooms r
+               JOIN playlist_room pr ON pr.room_id = r.id
+               JOIN tracks t ON t.playlist_id = pr.playlist_id
+               JOIN track_answers ta ON ta.track_id = t.id
+               WHERE r.deleted_at IS NULL AND ta.answer_type_id IN (6,7,8,9,12,13)
+               GROUP BY r.id, r.name, ta.answer_type_id
+             ), totals AS (
+               SELECT r.id, COUNT(DISTINCT t.id) AS total
+               FROM rooms r
+               JOIN playlist_room pr ON pr.room_id = r.id
+               JOIN tracks t ON t.playlist_id = pr.playlist_id
+               WHERE r.deleted_at IS NULL
+               GROUP BY r.id
+             )
+             SELECT pt.room_id, pt.room_name, pt.answer_type_id,
+                    at.name AS type_name, pt.typed, tt.total
+             FROM per_type pt
+             JOIN totals tt ON tt.id = pt.room_id
+             JOIN answer_types at ON at.id = pt.answer_type_id
+             WHERE pt.typed >= tt.total / 2.0
+             ORDER BY pt.room_id",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|r| {
+                let total: i64 = r.get("total");
+                let typed: i64 = r.get("typed");
+                json!({
+                    "room_id": r.get::<i64, _>("room_id"),
+                    "room_name": r.get::<String, _>("room_name"),
+                    "answer_type_id": r.get::<i64, _>("answer_type_id"),
+                    "type_name": r.get::<String, _>("type_name"),
+                    "total": total,
+                    "typed": typed,
+                    "missing": total - typed,
+                })
+            })
+            .collect())
+    }
+
+    /// Dominant screen type for a room, when a single type covers >=50% of
+    /// its tracks.
+    pub async fn room_expected_answer_type(
+        &self,
+        room_id: i64,
+    ) -> Result<Option<(i64, String)>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT ta.answer_type_id, at.name, COUNT(DISTINCT t.id) AS typed,
+                    (SELECT COUNT(DISTINCT x.id) FROM playlist_room pr2
+                      JOIN tracks x ON x.playlist_id = pr2.playlist_id
+                      WHERE pr2.room_id = $1) AS total
+             FROM playlist_room pr
+             JOIN tracks t ON t.playlist_id = pr.playlist_id
+             JOIN track_answers ta ON ta.track_id = t.id
+             JOIN answer_types at ON at.id = ta.answer_type_id
+             WHERE pr.room_id = $1 AND ta.answer_type_id IN (6,7,8,9,12,13)
+             GROUP BY ta.answer_type_id, at.name
+             HAVING COUNT(DISTINCT t.id) >=
+                    (SELECT COUNT(DISTINCT x.id) FROM playlist_room pr2
+                      JOIN tracks x ON x.playlist_id = pr2.playlist_id
+                      WHERE pr2.room_id = $1) / 2.0
+             ORDER BY typed DESC
+             LIMIT 1",
+        )
+        .bind(room_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|r| {
+            (
+                r.get::<i64, _>("answer_type_id"),
+                r.get::<String, _>("name"),
+            )
+        }))
+    }
+
+    /// Tracks of a room missing a given answer type, paginated.
+    /// Returns (rows, total).
+    pub async fn tracks_missing_answer_type(
+        &self,
+        room_id: i64,
+        type_id: i64,
+        q: &str,
+        page: i64,
+        per_page: i64,
+    ) -> Result<(Vec<Value>, i64), sqlx::Error> {
+        let like = format!("%{}%", q);
+        let total: i64 = sqlx::query_scalar(
+            "SELECT COUNT(DISTINCT t.id)
+             FROM playlist_room pr
+             JOIN tracks t ON t.playlist_id = pr.playlist_id
+             WHERE pr.room_id = $1
+               AND NOT EXISTS (SELECT 1 FROM track_answers ta
+                               WHERE ta.track_id = t.id AND ta.answer_type_id = $2)
+               AND NOT EXISTS (SELECT 1 FROM data_quality_actions dqa
+                               WHERE dqa.track_id = t.id AND dqa.room_id = $1
+                                 AND dqa.answer_type_id = $2 AND dqa.action = 'dismiss')
+               AND ($5 = '' OR EXISTS (
+                     SELECT 1 FROM track_answers a
+                     WHERE a.track_id = t.id AND a.answer_type_id IN (1,2)
+                       AND a.value ILIKE $5))",
+        )
+        .bind(room_id)
+        .bind(type_id)
+        .bind(page)
+        .bind(per_page)
+        .bind(if q.is_empty() { "" } else { &like })
+        .fetch_one(&self.pool)
+        .await?;
+        let rows = sqlx::query(
+            "SELECT DISTINCT t.id, t.playlist_id, t.preview_url, t.provider_url,
+                    a1.value AS artist, a2.value AS title
+             FROM playlist_room pr
+             JOIN tracks t ON t.playlist_id = pr.playlist_id
+             LEFT JOIN track_answers a1 ON a1.track_id = t.id AND a1.answer_type_id = 1
+             LEFT JOIN track_answers a2 ON a2.track_id = t.id AND a2.answer_type_id = 2
+             WHERE pr.room_id = $1
+               AND NOT EXISTS (SELECT 1 FROM track_answers ta
+                               WHERE ta.track_id = t.id AND ta.answer_type_id = $2)
+               AND NOT EXISTS (SELECT 1 FROM data_quality_actions dqa
+                               WHERE dqa.track_id = t.id AND dqa.room_id = $1
+                                 AND dqa.answer_type_id = $2 AND dqa.action = 'dismiss')
+               AND ($5 = '' OR a1.value ILIKE $5 OR a2.value ILIKE $5)
+             ORDER BY t.id
+             LIMIT $4 OFFSET $3",
+        )
+        .bind(room_id)
+        .bind(type_id)
+        .bind((page - 1).max(0) * per_page)
+        .bind(per_page)
+        .bind(if q.is_empty() { "" } else { &like })
+        .fetch_all(&self.pool)
+        .await?;
+        Ok((
+            rows.iter()
+                .map(|r| {
+                    json!({
+                        "id": r.get::<i64, _>("id"),
+                        "playlist_id": r.get::<i64, _>("playlist_id"),
+                        "preview_url": r.get::<String, _>("preview_url"),
+                        "provider_url": r.get::<Option<String>, _>("provider_url"),
+                        "artist": r.get::<Option<String>, _>("artist"),
+                        "title": r.get::<Option<String>, _>("title"),
+                    })
+                })
+                .collect(),
+            total,
+        ))
+    }
+
+    /// Dismiss a (track, room, type) candidate. Idempotent via the partial
+    /// unique index on data_quality_actions.
+    pub async fn dismiss_candidate(
+        &self,
+        track_id: i64,
+        playlist_id: i64,
+        room_id: i64,
+        answer_type_id: i64,
+        reviewer_id: i64,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO data_quality_actions
+               (track_id, playlist_id, room_id, answer_type_id, action, reviewer_id)
+             VALUES ($1, $2, $3, $4, 'dismiss', $5)
+             ON CONFLICT (track_id, room_id, answer_type_id)
+             WHERE action = 'dismiss' DO NOTHING",
+        )
+        .bind(track_id)
+        .bind(playlist_id)
+        .bind(room_id)
+        .bind(answer_type_id)
+        .bind(reviewer_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Undo a dismissal — the candidate re-enters the queue.
+    pub async fn restore_candidate(&self, action_id: i64) -> Result<bool, sqlx::Error> {
+        sqlx::query("DELETE FROM data_quality_actions WHERE id = $1 AND action = 'dismiss'")
+            .bind(action_id)
+            .execute(&self.pool)
+            .await
+            .map(|r| r.rows_affected() > 0)
+    }
+
+    /// Insert a track answer and audit it atomically. Idempotent: skips the
+    /// insert when an identical (type, value) answer already exists.
+    pub async fn apply_answer(
+        &self,
+        track_id: i64,
+        playlist_id: i64,
+        room_id: i64,
+        answer_type_id: i64,
+        value: &str,
+        reviewer_id: i64,
+    ) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let now = chrono::Utc::now();
+        sqlx::query(
+            "INSERT INTO track_answers (track_id, answer_type_id, value, score, created_at, updated_at)
+             SELECT $1, $2, $3, 0.5, $4, $4
+             WHERE NOT EXISTS (
+               SELECT 1 FROM track_answers
+               WHERE track_id = $1 AND answer_type_id = $2 AND value = $3)",
+        )
+        .bind(track_id)
+        .bind(answer_type_id)
+        .bind(value)
+        .bind(now)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            "INSERT INTO data_quality_actions
+               (track_id, playlist_id, room_id, answer_type_id, action, value, reviewer_id)
+             VALUES ($1, $2, $3, $4, 'add_answer', $5, $6)",
+        )
+        .bind(track_id)
+        .bind(playlist_id)
+        .bind(room_id)
+        .bind(answer_type_id)
+        .bind(value)
+        .bind(reviewer_id)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await
+    }
+
+    /// Delete a track from its playlist, snapshotting row + answers into the
+    /// audit payload first (reversible record).
+    pub async fn purge_track(
+        &self,
+        track_id: i64,
+        playlist_id: i64,
+        room_id: i64,
+        answer_type_id: i64,
+        reviewer_id: i64,
+    ) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let payload: Value = sqlx::query_scalar(
+            "SELECT jsonb_build_object(
+               'track', to_jsonb(t),
+               'answers', COALESCE((SELECT jsonb_agg(to_jsonb(a))
+                                    FROM track_answers a WHERE a.track_id = t.id), '[]'::jsonb)
+             ) FROM tracks t WHERE t.id = $1",
+        )
+        .bind(track_id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .unwrap_or(Value::Null);
+        sqlx::query("DELETE FROM track_answers WHERE track_id = $1")
+            .bind(track_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM tracks WHERE id = $1")
+            .bind(track_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query(
+            "INSERT INTO data_quality_actions
+               (track_id, playlist_id, room_id, answer_type_id, action, payload, reviewer_id)
+             VALUES ($1, $2, $3, $4, 'remove_track', $5, $6)",
+        )
+        .bind(track_id)
+        .bind(playlist_id)
+        .bind(room_id)
+        .bind(answer_type_id)
+        .bind(payload)
+        .bind(reviewer_id)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await
+    }
+
+    /// Recent audit entries for the data-quality review log.
+    pub async fn data_quality_actions(&self, limit: i64) -> Result<Vec<Value>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT a.id, a.action, a.value, a.track_id, a.room_id, a.created_at,
+                    u.name AS reviewer, r.name AS room_name, t.name AS type_name
+             FROM data_quality_actions a
+             JOIN users u ON u.id = a.reviewer_id
+             LEFT JOIN rooms r ON r.id = a.room_id
+             LEFT JOIN answer_types t ON t.id = a.answer_type_id
+             ORDER BY a.id DESC
+             LIMIT $1",
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|r| {
+                json!({
+                    "id": r.get::<i64, _>("id"),
+                    "action": r.get::<String, _>("action"),
+                    "value": r.get::<Option<String>, _>("value"),
+                    "track_id": r.get::<Option<i64>, _>("track_id"),
+                    "room_name": r.get::<Option<String>, _>("room_name"),
+                    "type_name": r.get::<Option<String>, _>("type_name"),
+                    "reviewer": r.get::<String, _>("reviewer"),
+                    "created_at": r.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
+                })
+            })
+            .collect())
+    }
 }

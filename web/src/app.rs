@@ -2,8 +2,8 @@ use crate::auth::Auth;
 use crate::components::footer::Footer;
 use crate::components::navbar::Navbar;
 use crate::pages::admin::{
-    AdminAnswerTypes, AdminCategories, AdminDashboard, AdminFaqs, AdminPages, AdminPlaylists,
-    AdminRooms, AdminTeams, AdminUsers,
+    AdminAnswerTypes, AdminCategories, AdminDashboard, AdminDataQuality, AdminFaqs, AdminPages,
+    AdminPlaylists, AdminRooms, AdminTeams, AdminUsers,
 };
 use crate::pages::docs::{
     BannedPage, CategoryLandingPage, ContactPage, DocsCreateContentPage, DocsEloPage,
@@ -202,6 +202,7 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/admin/answer-types") view=AdminAnswerTypes/>
                         <Route path=path!("/admin/pages") view=AdminPages/>
                         <Route path=path!("/admin/faqs") view=AdminFaqs/>
+                        <Route path=path!("/admin/data-quality") view=AdminDataQuality/>
                         <Route path=path!("/moderation") view=ModDashboard/>
                         <Route path=path!("/moderation/users") view=ModUsers/>
                         <Route path=path!("/moderation/users/:id") view=|| view! { <ParamRemount><ModUserShow/></ParamRemount> }/>

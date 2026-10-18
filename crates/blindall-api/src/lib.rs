@@ -385,6 +385,34 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/admin/faqs/{id}",
             axum::routing::put(admin::update_faq).delete(admin::delete_faq),
         )
+        .route(
+            "/api/v1/admin/data-quality/rooms",
+            get(admin::data_quality_rooms),
+        )
+        .route(
+            "/api/v1/admin/data-quality/rooms/{room}/missing",
+            get(admin::data_quality_missing),
+        )
+        .route(
+            "/api/v1/admin/data-quality/tracks/{track}/answer",
+            post(admin::data_quality_apply_answer),
+        )
+        .route(
+            "/api/v1/admin/data-quality/tracks/{track}/dismiss",
+            post(admin::data_quality_dismiss),
+        )
+        .route(
+            "/api/v1/admin/data-quality/tracks/{track}/remove",
+            post(admin::data_quality_remove_track),
+        )
+        .route(
+            "/api/v1/admin/data-quality/actions",
+            get(admin::data_quality_actions),
+        )
+        .route(
+            "/api/v1/admin/data-quality/actions/{action}/restore",
+            post(admin::data_quality_restore),
+        )
         .route("/api/v1/rankings", get(rankings::players))
         .route("/api/v1/rankings/teams", get(rankings::teams))
         .route("/api/v1/rankings/minigames", get(rankings::minigames))

@@ -17,6 +17,7 @@ const SECTIONS: &[(&str, &str)] = &[
     ("/admin/answer-types", "Answer Types"),
     ("/admin/pages", "Pages"),
     ("/admin/faqs", "FAQ"),
+    ("/admin/data-quality", "Data Quality"),
 ];
 
 #[component]
@@ -1249,6 +1250,337 @@ pub fn AdminFaqs() -> impl IntoView {
                     }
                 }).collect::<Vec<_>>()}
             </div>
+        </AdminShell>
+    }
+}
+
+// ---- data quality ------------------------------------------------------------
+
+/// Tracks present in a room but missing the room's expected screen answer type
+/// (Movie/Anime/Cartoon/Video game/... inferred from the majority). Admins can
+/// preview the audio, apply a suggested value, edit it, or remove the track
+/// from its playlist entirely.
+#[component]
+pub fn AdminDataQuality() -> impl IntoView {
+    let rooms = RwSignal::new(Vec::<Value>::new());
+    let selected = RwSignal::new(Option::<(i64, String)>::None); // (room_id, room_name)
+    let type_id = RwSignal::new(0i64);
+    let type_name = RwSignal::new(String::new());
+    let tracks = RwSignal::new(Vec::<Value>::new());
+    let page = RwSignal::new(1i64);
+    let last_page = RwSignal::new(1i64);
+    let search = RwSignal::new(String::new());
+    let error = RwSignal::new(Option::<String>::None);
+    let loading = RwSignal::new(false);
+    let drafts = RwSignal::new(std::collections::HashMap::<i64, String>::new());
+    let busy = RwSignal::new(std::collections::HashSet::<i64>::new());
+    let show_history = RwSignal::new(false);
+    let actions = RwSignal::new(Vec::<Value>::new());
+
+    let load_history = move || {
+        leptos::task::spawn_local(async move {
+            if let Ok(v) = api::get::<Value>("/api/v1/admin/data-quality/actions").await {
+                actions.set(v["actions"].as_array().cloned().unwrap_or_default());
+            }
+        });
+    };
+
+    leptos::task::spawn_local(async move {
+        if let Ok(v) = api::get::<Value>("/api/v1/admin/data-quality/rooms").await {
+            rooms.set(v["rooms"].as_array().cloned().unwrap_or_default());
+        }
+    });
+
+    let load = move || {
+        let Some((room_id, _)) = selected.get_untracked() else { return };
+        let p = page.get_untracked();
+        let s = search.get_untracked();
+        loading.set(true);
+        leptos::task::spawn_local(async move {
+            match api::get::<Value>(&format!(
+                "/api/v1/admin/data-quality/rooms/{room_id}/missing?page={p}&q={}",
+                urlencoding(&s)
+            ))
+            .await
+            {
+                Ok(v) => {
+                    last_page.set(v["last_page"].as_i64().unwrap_or(1).max(1));
+                    type_id.set(v["answer_type_id"].as_i64().unwrap_or(0));
+                    type_name.set(v["type_name"].as_str().unwrap_or("").to_string());
+                    let rows = v["data"].as_array().cloned().unwrap_or_default();
+                    let mut dm = drafts.get_untracked();
+                    for r in &rows {
+                        let tid = r["id"].as_i64().unwrap_or(0);
+                        if let Some(sug) = r["suggestion"].as_str() {
+                            dm.entry(tid).or_insert_with(|| sug.to_string());
+                        }
+                    }
+                    drafts.set(dm);
+                    tracks.set(rows);
+                }
+                Err(e) => error.set(Some(e.message)),
+            }
+            loading.set(false);
+        });
+    };
+
+    let pick_room = move |room: Value| {
+        let rid = room["room_id"].as_i64().unwrap_or(0);
+        let name = room["room_name"].as_str().unwrap_or("").to_string();
+        selected.set(Some((rid, name)));
+        page.set(1);
+        search.set(String::new());
+        load();
+    };
+
+    let remove_row = move |tid: i64| {
+        tracks.update(|ts| ts.retain(|r| r["id"].as_i64().unwrap_or(0) != tid));
+        drafts.update(|d| {
+            d.remove(&tid);
+        });
+    };
+
+    view! {
+        <AdminShell active="/admin/data-quality">
+            <ErrorLine error=error/>
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <p class="max-w-2xl text-sm text-white/60">
+                    {t("Tracks present in a room but missing its expected answer type (inferred from the majority). Preview, type the answer, or remove the track.")}
+                </p>
+                <button type="button" class="rounded border border-white/10 px-3 py-1.5 text-sm text-white/70 hover:bg-white/10"
+                    on:click=move |_| {
+                        let on = !show_history.get_untracked();
+                        show_history.set(on);
+                        if on { load_history(); }
+                    }>
+                    {move || if show_history.get() { t("Back to queue") } else { t("History") }}
+                </button>
+            </div>
+
+            {move || show_history.get().then(|| view! {
+                <div class="overflow-hidden rounded-xl border border-white/10">
+                    <table class="w-full text-left text-sm">
+                        <thead class="border-b border-white/10 text-xs uppercase text-white/50">
+                            <tr>
+                                <th class="px-4 py-3">{t("Action")}</th>
+                                <th class="px-4 py-3">{t("Room")}</th>
+                                <th class="px-4 py-3">{t("Value")}</th>
+                                <th class="px-4 py-3">{t("By")}</th>
+                                <th class="px-4 py-3"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {actions.get().into_iter().map(|a| {
+                                let aid = a["id"].as_i64().unwrap_or(0);
+                                let act = a["action"].as_str().unwrap_or("").to_string();
+                                let is_dismiss = act == "dismiss";
+                                let badge_cls = match act.as_str() {
+                                    "add_answer" => "rounded bg-emerald-500/20 px-1.5 py-0.5 text-xs text-emerald-300",
+                                    "remove_track" => "rounded bg-red-500/20 px-1.5 py-0.5 text-xs text-red-300",
+                                    _ => "rounded bg-white/10 px-1.5 py-0.5 text-xs text-white/60",
+                                };
+                                view! {
+                                    <tr class="border-b border-white/5 last:border-0">
+                                        <td class="px-4 py-2.5"><span class=badge_cls>{act.clone()}</span></td>
+                                        <td class="px-4 py-2.5 text-white/70">{a["room_name"].as_str().unwrap_or("-").to_string()}</td>
+                                        <td class="px-4 py-2.5 text-white">
+                                            {a["value"].as_str().map(|v| v.to_string())
+                                                .unwrap_or_else(|| format!("track #{}", a["track_id"].as_i64().unwrap_or(0)))}
+                                        </td>
+                                        <td class="px-4 py-2.5 text-white/50">{a["reviewer"].as_str().unwrap_or("").to_string()}</td>
+                                        <td class="px-4 py-2.5 text-right">
+                                            {is_dismiss.then(|| view! {
+                                                <button type="button" class="rounded bg-white/10 px-2.5 py-1 text-xs text-white/70 hover:bg-white/20"
+                                                    on:click=move |_| leptos::task::spawn_local(async move {
+                                                        let _ = api::post_no_content(
+                                                            &format!("/api/v1/admin/data-quality/actions/{aid}/restore"),
+                                                            &json!({}),
+                                                        ).await;
+                                                        actions.update(|xs| xs.retain(|x| x["id"].as_i64().unwrap_or(0) != aid));
+                                                    })>
+                                                    {t("Undismiss")}
+                                                </button>
+                                            })}
+                                        </td>
+                                    </tr>
+                                }
+                            }).collect::<Vec<_>>()}
+                        </tbody>
+                    </table>
+                </div>
+            })}
+
+            {move || {
+                if show_history.get() { return None; }
+                selected.get().map(|(rid, rname)| {
+                view! {
+                    <div class="mb-3 flex flex-wrap items-center gap-3">
+                        <button type="button" class="rounded border border-white/10 px-3 py-1.5 text-sm text-white/70 hover:bg-white/10"
+                            on:click=move |_| { selected.set(None); tracks.set(vec![]); }>
+                            "← " {t("All rooms")}
+                        </button>
+                        <h2 class="text-lg font-semibold text-white">{rname.clone()}</h2>
+                        <span class="rounded bg-brand-accent/20 px-2 py-0.5 text-xs font-medium text-brand-accent">
+                            {t("Expected type")} ": " {type_name.get()}
+                        </span>
+                    </div>
+                    {filter_bar(search, None, load)}
+                    <Show when=move || loading.get()>
+                        <div class="py-8 text-center text-white/50">{t("Loading")}"…"</div>
+                    </Show>
+                    <div class="overflow-hidden rounded-xl border border-white/10">
+                        {move || tracks.get().into_iter().map(|tr| {
+                            let tid = tr["id"].as_i64().unwrap_or(0);
+                            let pid = tr["playlist_id"].as_i64().unwrap_or(0);
+                            let artist = tr["artist"].as_str().unwrap_or("?").to_string();
+                            let title = tr["title"].as_str().unwrap_or("?").to_string();
+                            let preview = tr["preview_url"].as_str().unwrap_or("").to_string();
+                            let purl = tr["provider_url"].as_str().map(|s| s.to_string());
+                            let rid2 = rid;
+                            view! {
+                                <div class="flex flex-wrap items-center gap-2 border-b border-white/5 px-4 py-2.5 last:border-0">
+                                    {(!preview.is_empty()).then(|| view! {
+                                        <audio src=preview.clone() controls preload="none"
+                                            class="h-8 w-40 rounded"></audio>
+                                    })}
+                                    <div class="min-w-48 flex-1">
+                                        <div class="truncate text-sm text-white">{title.clone()}</div>
+                                        <div class="truncate text-xs text-white/50">{artist.clone()}</div>
+                                    </div>
+                                    {purl.map(|u| view! {
+                                        <a href=u target="_blank" class="text-xs text-brand-accent hover:underline">"deezer ↗"</a>
+                                    })}
+                                    <input type="text"
+                                        class="w-52 rounded-lg border border-white/10 bg-surface-base px-2.5 py-1.5 text-sm text-white outline-none"
+                                        prop:value=move || drafts.get().get(&tid).cloned().unwrap_or_default()
+                                        on:input=move |ev| {
+                                            drafts.update(|d| { d.insert(tid, event_target_value(&ev)); });
+                                        }/>
+                                    <button type="button"
+                                        class="rounded-lg bg-brand-accent px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-40"
+                                        disabled=move || busy.get().contains(&tid)
+                                            || drafts.get().get(&tid).map(|v| v.trim().is_empty()).unwrap_or(true)
+                                        on:click=move |_| {
+                                            busy.update(|b| { b.insert(tid); });
+                                            let value = drafts.get_untracked().get(&tid).cloned().unwrap_or_default();
+                                            leptos::task::spawn_local(async move {
+                                                let res = api::post::<Value, Value>(
+                                                    &format!("/api/v1/admin/data-quality/tracks/{tid}/answer"),
+                                                    &json!({"room_id": rid2, "playlist_id": pid, "value": value.trim()}),
+                                                ).await;
+                                                if let Err(e) = res { error.set(Some(e.message)); }
+                                                else { remove_row(tid); }
+                                                busy.update(|b| { b.remove(&tid); });
+                                            });
+                                        }>
+                                        {t("Add")}
+                                    </button>
+                                    <button type="button"
+                                        class="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-white/60 hover:bg-white/10 disabled:opacity-40"
+                                        title=t("Keep the track but stop flagging it")
+                                        disabled=move || busy.get().contains(&tid)
+                                        on:click=move |_| {
+                                            busy.update(|b| { b.insert(tid); });
+                                            leptos::task::spawn_local(async move {
+                                                let res = api::post::<Value, Value>(
+                                                    &format!("/api/v1/admin/data-quality/tracks/{tid}/dismiss"),
+                                                    &json!({"room_id": rid2, "playlist_id": pid}),
+                                                ).await;
+                                                if let Err(e) = res { error.set(Some(e.message)); }
+                                                else { remove_row(tid); }
+                                                busy.update(|b| { b.remove(&tid); });
+                                            });
+                                        }>
+                                        {t("Dismiss")}
+                                    </button>
+                                    <button type="button"
+                                        class="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-40"
+                                        disabled=move || busy.get().contains(&tid)
+                                        on:click=move |_| {
+                                            let label = format!("{} - {} ?", artist, title);
+                                            let ok = web_sys::window()
+                                                .and_then(|w| w.confirm_with_message(&label).ok())
+                                                .unwrap_or(false);
+                                            if !ok { return; }
+                                            busy.update(|b| { b.insert(tid); });
+                                            leptos::task::spawn_local(async move {
+                                                let res = api::post::<Value, Value>(
+                                                    &format!("/api/v1/admin/data-quality/tracks/{tid}/remove"),
+                                                    &json!({"room_id": rid2, "playlist_id": pid}),
+                                                ).await;
+                                                if let Err(e) = res { error.set(Some(e.message)); }
+                                                else { remove_row(tid); }
+                                                busy.update(|b| { b.remove(&tid); });
+                                            });
+                                        }>
+                                        {t("Remove")}
+                                    </button>
+                                </div>
+                            }
+                        }).collect::<Vec<_>>()}
+                    </div>
+                    {move || (!loading.get() && tracks.get().is_empty()).then(|| view! {
+                        <div class="py-8 text-center text-white/50">{t("Nothing left to review in this room.")}</div>
+                    })}
+                    {pager(page, last_page, load)}
+                }
+                })
+            }}
+
+            {move || (selected.get().is_none() && !show_history.get()).then(|| view! {
+                <div class="overflow-hidden rounded-xl border border-white/10">
+                    <table class="w-full text-left text-sm">
+                        <thead class="border-b border-white/10 text-xs uppercase text-white/50">
+                            <tr>
+                                <th class="px-4 py-3">{t("Room")}</th>
+                                <th class="px-4 py-3">{t("Expected type")}</th>
+                                <th class="px-4 py-3">{t("Coverage")}</th>
+                                <th class="px-4 py-3 text-right">{t("Missing")}</th>
+                                <th class="px-4 py-3"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rooms.get().into_iter().map(|r| {
+                                let total = r["total"].as_i64().unwrap_or(0).max(1);
+                                let typed = r["typed"].as_i64().unwrap_or(0);
+                                let missing = r["missing"].as_i64().unwrap_or(0);
+                                let pct = typed * 100 / total;
+                                let missing_cls =
+                                    if missing > 0 { "text-amber-300" } else { "text-white/40" };
+                                view! {
+                                    <tr class="border-b border-white/5 last:border-0">
+                                        <td class="px-4 py-2.5 text-white">{r["room_name"].as_str().unwrap_or("").to_string()}</td>
+                                        <td class="px-4 py-2.5"><span class="rounded bg-white/10 px-1.5 py-0.5 text-xs text-white/70">{r["type_name"].as_str().unwrap_or("").to_string()}</span></td>
+                                        <td class="px-4 py-2.5">
+                                            <div class="flex items-center gap-2">
+                                                <div class="h-1.5 w-28 overflow-hidden rounded bg-white/10">
+                                                    <div class="h-full bg-brand-accent" style=format!("width:{pct}%")></div>
+                                                </div>
+                                                <span class="text-xs text-white/50">{format!("{typed}/{total}")}</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-2.5 text-right">
+                                            <span class=missing_cls>{missing}</span>
+                                        </td>
+                                        <td class="px-4 py-2.5 text-right">
+                                            <Show when=move || { missing > 0 }>
+                                                <button type="button" class="rounded bg-white/10 px-3 py-1 text-xs text-white hover:bg-white/20"
+                                                    on:click={
+                                                        let r = r.clone();
+                                                        move |_| pick_room(r.clone())
+                                                    }>{t("Review")}</button>
+                                            </Show>
+                                        </td>
+                                    </tr>
+                                }
+                            }).collect::<Vec<_>>()}
+                        </tbody>
+                    </table>
+                </div>
+                {move || rooms.get().is_empty().then(|| view! {
+                    <div class="py-8 text-center text-white/50">{t("No room with a dominant screen answer type.")}</div>
+                })}
+            })}
         </AdminShell>
     }
 }

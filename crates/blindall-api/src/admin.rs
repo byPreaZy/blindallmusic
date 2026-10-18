@@ -3,7 +3,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::auth::CurrentUser;
 use crate::state::AppState;
@@ -993,6 +993,275 @@ pub async fn answer_types(
     }
     match state.admin.admin_answer_types().await {
         Ok(v) => Json(json!({"answer_types": v})).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+// ---- data quality ------------------------------------------------------------
+
+/// Suggest a work name for a track: parenthetical "(from X)"/"(de X)" first,
+/// else the title minus boilerplate tokens.
+fn suggest_work_name(title: &str) -> Option<String> {
+    static PAREN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    static BOILER: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let paren = PAREN.get_or_init(|| regex::Regex::new(r"[\(\[]([^\)\]]{2,80})[\)\]]").unwrap());
+    let boiler = BOILER.get_or_init(|| {
+        regex::Regex::new(concat!(
+            r"(?i)\b(main\s+theme|menu\s+theme|end\s+theme|title\s+theme|theme|ost|",
+            r"original\s+soundtrack|soundtrack|score|trailer|medley|cover|version|",
+            r"instrumental|piano|violin|orchestral|orchestra|music|song|opening|ending|",
+            r"credits|suite|remix|reprise|intro|menu|title|from|the\s+motion\s+picture|",
+            r"tv\s+size|episode|ep\.?|op\.?|ed\.?|movie|film|de|du|des|the|a|an)\b"
+        ))
+        .unwrap()
+    });
+    for cap in paren.captures_iter(title) {
+        let inner = cap[1].trim();
+        let inner = regex::Regex::new(r"(?i)^(from|de|du|de\s+la|le|la|the)\s+")
+            .unwrap()
+            .replace(inner, "")
+            .trim()
+            .trim_matches('"')
+            .to_string();
+        if inner.chars().count() >= 3
+            && !regex::Regex::new(
+                r"(?i)^(theme|version|cover|ost|soundtrack|edit|size|radio|extended|remix|live)",
+            )
+            .unwrap()
+            .is_match(&inner)
+        {
+            return Some(inner);
+        }
+    }
+    let core = paren.replace_all(title, " ");
+    let core = boiler.replace_all(&core, " ");
+    let core = core
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim_matches(|c: char| c == '-' || c == ':' || c == '–' || c == '|')
+        .to_string();
+    if core.chars().count() >= 3 {
+        Some(core)
+    } else {
+        None
+    }
+}
+
+pub async fn data_quality_rooms(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
+    if !user.is_administrator {
+        return forbidden();
+    }
+    match state.admin.data_quality_rooms().await {
+        Ok(v) => Json(json!({ "rooms": v })).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct DataQualityQuery {
+    page: Option<i64>,
+    per_page: Option<i64>,
+    q: Option<String>,
+}
+
+pub async fn data_quality_missing(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path(room_id): Path<i64>,
+    Query(q): Query<DataQualityQuery>,
+) -> Response {
+    if !user.is_administrator {
+        return forbidden();
+    }
+    let Some((type_id, type_name)) = (match state.admin.room_expected_answer_type(room_id).await {
+        Ok(v) => v,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }) else {
+        return Json(json!({ "data": [], "total": 0, "last_page": 1 })).into_response();
+    };
+    let page = q.page.unwrap_or(1).max(1);
+    let per_page = q.per_page.unwrap_or(50).clamp(1, 100);
+    let search = q.q.unwrap_or_default();
+    match state
+        .admin
+        .tracks_missing_answer_type(room_id, type_id, &search, page, per_page)
+        .await
+    {
+        Ok((rows, total)) => {
+            let data: Vec<Value> = rows
+                .into_iter()
+                .map(|mut r| {
+                    let title = r["title"].as_str().unwrap_or_default().to_string();
+                    r.as_object_mut().unwrap().insert(
+                        "suggestion".into(),
+                        match suggest_work_name(&title) {
+                            Some(s) => json!(s),
+                            None => Value::Null,
+                        },
+                    );
+                    r
+                })
+                .collect();
+            Json(json!({
+                "data": data,
+                "total": total,
+                "last_page": (total + per_page - 1) / per_page,
+                "answer_type_id": type_id,
+                "type_name": type_name,
+            }))
+            .into_response()
+        }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct DqTrackBody {
+    room_id: i64,
+    playlist_id: Option<i64>,
+    value: Option<String>,
+}
+
+/// Apply a reviewed answer: insert + audit in one transaction. Idempotent.
+pub async fn data_quality_apply_answer(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path(track_id): Path<i64>,
+    Json(b): Json<DqTrackBody>,
+) -> Response {
+    if !user.is_administrator {
+        return forbidden();
+    }
+    let Some(value) = b.value.as_deref().map(str::trim).filter(|v| !v.is_empty()) else {
+        return err("value", "required");
+    };
+    if value.chars().count() > 200 {
+        return err("value", "too long");
+    }
+    let expected = match state.admin.room_expected_answer_type(b.room_id).await {
+        Ok(v) => v,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+    let Some((type_id, _)) = expected else {
+        return err("room", "no_expected_type");
+    };
+    match state
+        .admin
+        .apply_answer(
+            track_id,
+            b.playlist_id.unwrap_or(0),
+            b.room_id,
+            type_id,
+            value,
+            user.id,
+        )
+        .await
+    {
+        Ok(()) => Json(json!({ "ok": true })).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// Dismiss a candidate from a room's review queue (idempotent).
+pub async fn data_quality_dismiss(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path(track_id): Path<i64>,
+    Json(b): Json<DqTrackBody>,
+) -> Response {
+    if !user.is_administrator {
+        return forbidden();
+    }
+    let expected = match state.admin.room_expected_answer_type(b.room_id).await {
+        Ok(v) => v,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+    let Some((type_id, _)) = expected else {
+        return err("room", "no_expected_type");
+    };
+    match state
+        .admin
+        .dismiss_candidate(
+            track_id,
+            b.playlist_id.unwrap_or(0),
+            b.room_id,
+            type_id,
+            user.id,
+        )
+        .await
+    {
+        Ok(()) => Json(json!({ "ok": true })).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// Remove a track from its playlist — snapshot kept in the audit payload.
+pub async fn data_quality_remove_track(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path(track_id): Path<i64>,
+    Json(b): Json<DqTrackBody>,
+) -> Response {
+    if !user.is_administrator {
+        return forbidden();
+    }
+    let expected = match state.admin.room_expected_answer_type(b.room_id).await {
+        Ok(v) => v,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+    let Some((type_id, _)) = expected else {
+        return err("room", "no_expected_type");
+    };
+    let Some(playlist_id) = b.playlist_id else {
+        return err("playlist_id", "required");
+    };
+    // The track must actually belong to that playlist.
+    if !state
+        .playlists
+        .track_belongs_to(playlist_id, track_id)
+        .await
+    {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    match state
+        .admin
+        .purge_track(track_id, playlist_id, b.room_id, type_id, user.id)
+        .await
+    {
+        Ok(()) => Json(json!({ "ok": true })).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+pub async fn data_quality_actions(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
+    if !user.is_administrator {
+        return forbidden();
+    }
+    match state.admin.data_quality_actions(200).await {
+        Ok(v) => Json(json!({ "actions": v })).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// Undo a dismissal (restore the candidate into the queue).
+pub async fn data_quality_restore(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path(action_id): Path<i64>,
+) -> Response {
+    if !user.is_administrator {
+        return forbidden();
+    }
+    match state.admin.restore_candidate(action_id).await {
+        Ok(true) => Json(json!({ "ok": true })).into_response(),
+        Ok(false) => StatusCode::NOT_FOUND.into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
