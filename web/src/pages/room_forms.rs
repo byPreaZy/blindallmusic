@@ -134,6 +134,7 @@ pub fn RoomEditPage() -> impl IntoView {
     let chat_active = RwSignal::new(true);
     let autostart = RwSignal::new(true);
     let random = RwSignal::new(false);
+    let active = RwSignal::new(true);
     let color = RwSignal::new(String::new());
     let has_password = RwSignal::new(false);
     let password = RwSignal::new(String::new());
@@ -166,6 +167,7 @@ pub fn RoomEditPage() -> impl IntoView {
                 chat_active.set(r["is_chat_active"].as_bool().unwrap_or(true));
                 autostart.set(r["is_autostart"].as_bool().unwrap_or(true));
                 random.set(r["is_random"].as_bool().unwrap_or(false));
+                active.set(r["is_active"].as_bool().unwrap_or(true));
                 color.set(r["color"].as_str().unwrap_or_default().to_string());
                 has_password.set(r["has_password"].as_bool().unwrap_or(false));
                 photo_path.set(r["photo_path"].as_str().map(str::to_string));
@@ -239,6 +241,7 @@ pub fn RoomEditPage() -> impl IntoView {
                     "is_chat_active": chat_active.get_untracked(),
                     "is_autostart": autostart.get_untracked(),
                     "is_random": random.get_untracked(),
+                    "is_active": active.get_untracked(),
                     "color": color.get_untracked(),
                 }),
             )
@@ -468,6 +471,10 @@ pub fn RoomEditPage() -> impl IntoView {
                             <label class="flex items-center gap-2">
                                 <input type="checkbox" prop:checked=has_password on:change=move |ev| has_password.set(event_target_checked(&ev))/>
                                 {t("Password")}
+                            </label>
+                            <label class="flex items-center gap-2" title=t("Uncheck to hide this room from public lists (seasonal rooms)")>
+                                <input type="checkbox" prop:checked=active on:change=move |ev| active.set(event_target_checked(&ev))/>
+                                {t("Active")}
                             </label>
                             <Show when=move || has_password.get()>
                                 <input type="text" placeholder="…" class="rounded-lg border border-white/10 bg-surface-base px-3 py-1.5 text-white"

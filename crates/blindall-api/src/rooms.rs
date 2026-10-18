@@ -635,6 +635,7 @@ fn room_json(r: &blindall_db::RoomRow) -> Value {
         "is_chat_active": r.is_chat_active,
         "is_playing": r.is_playing,
         "is_autostart": r.is_autostart,
+        "is_active": r.is_active,
         "is_featured": r.is_featured,
         "color": r.color,
         "has_password": r.has_password,
@@ -799,6 +800,7 @@ pub struct UpdateOptions {
     is_chat_active: bool,
     is_autostart: bool,
     is_random: bool,
+    is_active: Option<bool>,
     color: Option<String>,
     is_featured: Option<bool>,
 }
@@ -841,6 +843,7 @@ pub async fn update_options(
         is_chat_active: body.is_chat_active,
         is_autostart: body.is_autostart,
         is_random: body.is_random,
+        is_active: body.is_active,
         color: body.color,
         is_featured: user.is_administrator.then_some(body.is_featured).flatten(),
     };

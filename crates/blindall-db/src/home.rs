@@ -77,6 +77,7 @@ impl HomeRepo {
     ) -> Result<Vec<CatalogRoom>, sqlx::Error> {
         sqlx::query(&format!(
             "SELECT {} FROM rooms r {} WHERE r.is_public = $1 \
+             AND r.is_active = true \
              AND r.password IS NULL AND r.deleted_at IS NULL \
              ORDER BY r.is_playing DESC, r.id",
             Self::COLS,
@@ -130,7 +131,8 @@ impl HomeRepo {
         let like = format!("%{search}%");
         sqlx::query(&format!(
             "SELECT {} FROM rooms r {} \
-             WHERE r.password IS NULL AND r.deleted_at IS NULL \
+             WHERE r.is_active = true \
+             AND r.password IS NULL AND r.deleted_at IS NULL \
              AND EXISTS (SELECT 1 FROM playlist_room pr WHERE pr.room_id = r.id) \
              AND (r.name LIKE $1 OR u.name LIKE $2) \
              ORDER BY r.is_playing DESC, r.is_public DESC, rounds_count DESC \
@@ -148,7 +150,8 @@ impl HomeRepo {
     pub async fn featured_rooms(&self) -> Result<Vec<CatalogRoom>, sqlx::Error> {
         sqlx::query(&format!(
             "SELECT {} FROM rooms r {} \
-             WHERE r.is_featured = true AND r.password IS NULL AND r.deleted_at IS NULL \
+             WHERE r.is_featured = true AND r.is_active = true \
+             AND r.password IS NULL AND r.deleted_at IS NULL \
              ORDER BY r.id",
             Self::COLS,
             Self::JOINS
@@ -165,7 +168,8 @@ impl HomeRepo {
         sqlx::query(
             "SELECT c.id, c.name, COUNT(r.id) AS rooms_count \
              FROM categories c JOIN rooms r ON r.category_id = c.id \
-             WHERE r.is_public = $1 AND r.password IS NULL AND r.deleted_at IS NULL \
+             WHERE r.is_public = $1 AND r.is_active = true \
+             AND r.password IS NULL AND r.deleted_at IS NULL \
              GROUP BY c.id, c.name ORDER BY c.id",
         )
         .bind(is_public)

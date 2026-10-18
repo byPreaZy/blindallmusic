@@ -237,3 +237,74 @@ async fn public_state_returns_game_snapshot() {
     let r = c.get("/api/v1/rooms/6/public-state").await.expect_ok("public-state");
     assert!(r.body.is_object());
 }
+
+// ---- seasonal visibility (is_active) ---------------------------------------
+
+#[tokio::test]
+async fn room_is_active_toggles_search_visibility() {
+    let (owner, _) = Client::register("vis").await;
+    let (id, name, _slug) = searchable_room(&owner).await;
+    let c = Client::anon();
+
+    let found = |body: &serde_json::Value| {
+        body["search_result"]
+            .as_array()
+            .is_some_and(|a| a.iter().any(|r| r["name"] == name))
+    };
+    let search = format!("/api/v1/home?search={name}");
+
+    let before = c.get(&search).await.expect_ok("search before");
+    assert!(found(&before.body), "new room searchable: {}", before.text);
+
+    let edit = owner
+        .get(&format!("/api/v1/rooms/{id}/edit"))
+        .await
+        .expect_ok("edit payload");
+    assert_eq!(edit.body["room"]["is_active"], true, "new room is_active");
+
+    let opts = |active: bool| {
+        json!({
+            "tracks_by_round": 10, "track_duration": 20,
+            "pause_between_tracks": 3, "pause_between_rounds": 10,
+            "is_chat_active": true, "is_autostart": true, "is_random": true,
+            "is_active": active,
+        })
+    };
+    let off = owner
+        .put(&format!("/api/v1/rooms/{id}/options"), opts(false))
+        .await;
+    assert!(off.ok(), "hide room: {}", off.text);
+
+    let hidden = c.get(&search).await.expect_ok("search hidden");
+    assert!(!found(&hidden.body), "inactive room hidden from search");
+
+    let on = owner
+        .put(&format!("/api/v1/rooms/{id}/options"), opts(true))
+        .await;
+    assert!(on.ok(), "show room: {}", on.text);
+    let back = c.get(&search).await.expect_ok("search restored");
+    assert!(found(&back.body), "reactivated room back in search");
+}
+
+#[tokio::test]
+async fn room_is_active_toggle_forbidden_for_outsider() {
+    let (owner, _) = Client::register("vo").await;
+    let (other, _) = Client::register("vo2").await;
+    let r = owner
+        .post("/api/v1/rooms", json!({"name": uniq_name("visf"), "category_id": 4}))
+        .await
+        .expect_ok("create");
+    let id = r.json("/room/id").as_i64().unwrap();
+    let denied = other
+        .put(
+            &format!("/api/v1/rooms/{id}/options"),
+            json!({
+                "tracks_by_round": 10, "track_duration": 20,
+                "pause_between_tracks": 3, "pause_between_rounds": 10,
+                "is_chat_active": true, "is_autostart": true, "is_random": true,
+                "is_active": false,
+            }),
+        )
+        .await;
+    assert_eq!(denied.status, StatusCode::FORBIDDEN);
+}

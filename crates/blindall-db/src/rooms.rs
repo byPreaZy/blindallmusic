@@ -45,6 +45,7 @@ pub struct RoomOptions {
     pub is_chat_active: bool,
     pub is_autostart: bool,
     pub is_random: bool,
+    pub is_active: Option<bool>,
     pub color: Option<String>,
     pub is_featured: Option<bool>,
 }
@@ -154,8 +155,8 @@ impl RoomRepo {
         let now = chrono::Utc::now();
         let res = sqlx::query_scalar::<_, i64>(
             "INSERT INTO rooms (user_id, name, slug, category_id, is_random, \
-             is_chat_active, is_featured, created_at, updated_at) \
-             VALUES ($1, $2, $3, $4, true, true, false, $5, $6) RETURNING id",
+             is_chat_active, is_featured, is_active, created_at, updated_at) \
+             VALUES ($1, $2, $3, $4, true, true, false, true, $5, $6) RETURNING id",
         )
         .bind(user_id)
         .bind(name)
@@ -208,6 +209,13 @@ impl RoomRepo {
         if let Some(featured) = o.is_featured {
             sqlx::query("UPDATE rooms SET is_featured = $1 WHERE id = $2")
                 .bind(featured)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
+        if let Some(active) = o.is_active {
+            sqlx::query("UPDATE rooms SET is_active = $1 WHERE id = $2")
+                .bind(active)
                 .bind(id)
                 .execute(&self.pool)
                 .await?;
@@ -422,7 +430,8 @@ impl RoomRepo {
     ) -> Result<Vec<(Option<String>, String, Option<String>)>, sqlx::Error> {
         sqlx::query(
             "SELECT slug, name, photo_path FROM rooms \
-             WHERE is_public = true AND password IS NULL AND deleted_at IS NULL \
+             WHERE is_public = true AND is_active = true \
+             AND password IS NULL AND deleted_at IS NULL \
              ORDER BY name",
         )
         .fetch_all(&self.pool)
@@ -476,7 +485,8 @@ impl RoomRepo {
     ) -> Result<Vec<(Option<String>, String, Option<String>)>, sqlx::Error> {
         sqlx::query_as::<_, (Option<String>, String, Option<String>)>(
             "SELECT slug, name, photo_path FROM rooms \
-             WHERE is_public = TRUE AND password IS NULL AND deleted_at IS NULL \
+             WHERE is_public = TRUE AND is_active = TRUE \
+               AND password IS NULL AND deleted_at IS NULL \
                AND category_id = $1 AND id <> $2 AND slug = ANY($3) \
              ORDER BY name LIMIT $4",
         )
@@ -656,6 +666,7 @@ impl RoomRepo {
     ) -> Result<Vec<RoomRow>, sqlx::Error> {
         sqlx::query(&format!(
             "SELECT {} FROM rooms WHERE category_id = $1 AND is_public = true \
+             AND is_active = true \
              AND password IS NULL AND deleted_at IS NULL ORDER BY is_playing DESC",
             Self::COLS
         ))

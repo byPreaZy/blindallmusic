@@ -29,7 +29,8 @@ impl SeoRepo {
     pub async fn public_rooms(&self) -> Result<Vec<SitemapRoom>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT r.slug, r.updated_at FROM rooms r \
-             WHERE r.is_public = true AND r.password IS NULL AND r.deleted_at IS NULL \
+             WHERE r.is_public = true AND r.is_active = true \
+             AND r.password IS NULL AND r.deleted_at IS NULL \
              ORDER BY (SELECT COUNT(*) FROM rounds ro WHERE ro.room_id = r.id) DESC",
         )
         .fetch_all(&self.pool)
