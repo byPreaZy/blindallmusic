@@ -1,9 +1,7 @@
-# Override Traefik : TLS terminé par l'instance Traefik de l'hôte (prod).
-# Calé sur la conf VPS existante (my-vps) : réseau externe `traefik`,
-# entrypoints web/websecure (redirect 80->443 déjà global dans traefik.yml),
-# resolver ACME `customresolver`, exposedByDefault=false -> labels requis.
+# Prod override: TLS terminated by the host's Traefik instance.
+# Requires the external `traefik` network and ACME resolver `customresolver`
+# configured on the host (exposedByDefault=false → labels are mandatory).
 #
-# Usage (env-file requis pour résoudre ${DOMAIN} / ${TRAEFIK_NETWORK}) :
 #   docker compose --env-file .env.production \
 #       -f docker-compose.yml -f docker-compose.prod.yml \
 #       -f docker-compose.traefik.yml up -d
@@ -11,11 +9,11 @@ name: blindall
 
 services:
   server:
-    image: blindall:latest   # chargé par le CI (docker load) ; sans lui, compose rebuilderait
+    image: blindall:latest   # pre-built image loaded by CI (docker load)
     restart: always
     networks:
-      - default   # interne : accès db + redis
-      - traefik   # externe : joint Traefik
+      - default
+      - traefik
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
@@ -26,7 +24,6 @@ services:
       - traefik.http.routers.blindall.priority=1
       - traefik.http.routers.blindall.middlewares=blindall-secure-headers@docker
       - traefik.http.services.blindall.loadbalancer.server.port=8080
-      # secure-headers : même convention que la stack maria du VPS
       - traefik.http.middlewares.blindall-secure-headers.headers.contentTypeNosniff=true
       - traefik.http.middlewares.blindall-secure-headers.headers.frameDeny=true
       - traefik.http.middlewares.blindall-secure-headers.headers.referrerPolicy=strict-origin-when-cross-origin
@@ -41,12 +38,9 @@ services:
   redis:
     restart: always
 
-  # caddy absent : Traefik termine TLS à sa place.
-
-  # Vérification AdSense du domaine racine (${ROOT_DOMAIN}, ex: clerely.fr) :
-  # AdSense n'accepte pas un sous-domaine comme site séparé dans certaines
-  # consoles — Google exige le code/meta + ads.txt sur le domaine parent.
-  # Mini-site statique ; peut être retiré une fois le domaine parent validé.
+  # Static site for the root domain (${ROOT_DOMAIN}) — AdSense/Search Console
+  # verification requires the parent domain to serve the site markers.
+  # `docker compose --env-file .env.production -f docker-compose.traefik.yml --profile rootverify up -d`
   rootverify:
     image: nginx:1-alpine
     restart: always
@@ -67,5 +61,4 @@ services:
 networks:
   traefik:
     external: true
-    # Nom réel du réseau Traefik sur le VPS (`docker network ls`) — "traefik" sur my-vps
     name: ${TRAEFIK_NETWORK:-traefik}
