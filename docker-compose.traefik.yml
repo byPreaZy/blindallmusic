@@ -38,6 +38,29 @@ services:
   redis:
     restart: always
 
+  # pg_dump @daily + rotation daily(14)/weekly(8)/monthly(6) into ./backups.
+  # Free, zero external deps. Restore: zcat backup.sql.gz | psql
+  backup:
+    image: prodrigestivill/postgres-backup-local:17
+    restart: always
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SCHEDULE: "@daily"
+      BACKUP_ON_START: "TRUE"
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_KEEP_WEEKS: ${BACKUP_KEEP_WEEKS:-8}
+      BACKUP_KEEP_MONTHS: ${BACKUP_KEEP_MONTHS:-6}
+      HEALTHCHECK_PORT: 8081
+
   # Static site for the root domain (${ROOT_DOMAIN}) — AdSense/Search Console
   # verification requires the parent domain to serve the site markers.
   # `docker compose --env-file .env.production -f docker-compose.traefik.yml --profile rootverify up -d`
