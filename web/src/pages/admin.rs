@@ -1296,6 +1296,7 @@ pub fn DataQualityBody() -> impl IntoView {
     let playlist_options = RwSignal::new(Vec::<Value>::new());
     let show_history = RwSignal::new(false);
     let actions = RwSignal::new(Vec::<Value>::new());
+    let dq_tab = RwSignal::new("missing");
 
     let load_options = move || {
         if !playlist_options.get_untracked().is_empty() {
@@ -1379,6 +1380,29 @@ pub fn DataQualityBody() -> impl IntoView {
 
     view! {
             <ErrorLine error=error/>
+            <div class="mb-4 flex flex-wrap gap-2">
+                {[("missing", "Missing answers"), ("artists", "Compilation artists"),
+                  ("featuring", "Featuring"), ("dupes", "Provider duplicates")]
+                    .into_iter().map(|(k, label)| {
+                        view! {
+                            <button type="button"
+                                class=move || if dq_tab.get() == k {
+                                    "rounded-lg bg-brand-accent px-3 py-1.5 text-sm font-semibold text-black"
+                                } else {
+                                    "rounded-lg border border-white/15 px-3 py-1.5 text-sm text-white/60 hover:bg-white/10"
+                                }
+                                on:click=move |_| dq_tab.set(k)>
+                                {t(label)}
+                            </button>
+                        }
+                    }).collect::<Vec<_>>()}
+            </div>
+
+            <Show when=move || dq_tab.get() != "missing">
+                <DqExtra kind=dq_tab/>
+            </Show>
+
+            <div class=move || if dq_tab.get() == "missing" { "" } else { "hidden" }>
             <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <p class="max-w-2xl text-sm text-white/60">
                     {t("Tracks present in a room but missing its expected answer type (inferred from the majority). Preview, type the answer, or remove the track.")}
@@ -1749,5 +1773,371 @@ pub fn DataQualityBody() -> impl IntoView {
                     <div class="py-8 text-center text-white/50">{t("No room with a dominant screen answer type.")}</div>
                 })}
             })}
+            </div>
+    }
+}
+
+// ---- extra data-quality queues (artists / featuring / duplicates) --------------
+
+/// Wraps the three secondary queues behind the tab bar of DataQualityBody.
+#[component]
+fn DqExtra(kind: RwSignal<&'static str>) -> impl IntoView {
+    view! {
+        <div>
+            {move || match kind.get() {
+                "artists" => view! { <ArtistQueue/> }.into_any(),
+                "featuring" => view! { <FeaturingQueue/> }.into_any(),
+                _ => view! { <DuplicatesReport/> }.into_any(),
+            }}
+        </div>
+    }
+}
+
+/// Shared queue row: preview audio + title/artist + actions slot.
+fn queue_row_media(tr: &Value) -> impl IntoView {
+    let artist = tr["artist"].as_str().unwrap_or("?").to_string();
+    let title = tr["title"].as_str().unwrap_or("?").to_string();
+    let playlist = tr["playlist_name"].as_str().unwrap_or("").to_string();
+    let preview = tr["preview_url"].as_str().unwrap_or("").to_string();
+    let purl = tr["provider_url"].as_str().map(|s| s.to_string());
+    view! {
+        {(!preview.is_empty()).then(|| view! {
+            <audio src=preview.clone() controls preload="none" class="h-8 w-40 rounded"></audio>
+        })}
+        <div class="min-w-48 flex-1">
+            <div class="truncate text-sm text-white">{title}</div>
+            <div class="truncate text-xs text-white/50">{artist}</div>
+            <div class="truncate text-[10px] text-white/30">{playlist}</div>
+        </div>
+        {purl.map(|u| view! {
+            <a href=u target="_blank" class="text-xs text-brand-accent hover:underline">"deezer ↗"</a>
+        })}
+    }
+}
+
+/// Queue: artist value looks like a compilation/album name → re-artist.
+#[component]
+fn ArtistQueue() -> impl IntoView {
+    let items = RwSignal::new(Vec::<Value>::new());
+    let page = RwSignal::new(1i64);
+    let last_page = RwSignal::new(1i64);
+    let search = RwSignal::new(String::new());
+    let loading = RwSignal::new(false);
+    let error = RwSignal::new(Option::<String>::None);
+    let drafts = RwSignal::new(std::collections::HashMap::<i64, String>::new());
+    let busy = RwSignal::new(std::collections::HashSet::<i64>::new());
+
+    let load = move || {
+        let p = page.get_untracked();
+        let s = search.get_untracked();
+        loading.set(true);
+        leptos::task::spawn_local(async move {
+            match api::get::<Value>(&format!(
+                "/api/v1/admin/data-quality/queue/artists?page={p}&q={}",
+                urlencoding(&s)
+            ))
+            .await
+            {
+                Ok(v) => {
+                    let total = v["total"].as_i64().unwrap_or(0);
+                    let per = v["per_page"].as_i64().unwrap_or(50).max(1);
+                    last_page.set(((total + per - 1) / per).max(1));
+                    items.set(v["items"].as_array().cloned().unwrap_or_default());
+                }
+                Err(e) => error.set(Some(e.message)),
+            }
+            loading.set(false);
+        });
+    };
+    load();
+
+    let remove_row = move |tid: i64| {
+        items.update(|ts| ts.retain(|r| r["id"].as_i64().unwrap_or(0) != tid));
+        drafts.update(|d| { d.remove(&tid); });
+    };
+
+    view! {
+        <ErrorLine error=error/>
+        <p class="mb-4 max-w-2xl text-sm text-white/60">
+            {t("Tracks whose artist is a compilation/album label — unguessable in game. Type the real artist, or dismiss.")}
+        </p>
+        {filter_bar(search, None, load)}
+        <Show when=move || loading.get()>
+            <div class="py-8 text-center text-white/50">{t("Loading")}"…"</div>
+        </Show>
+        <div class="overflow-hidden rounded-xl border border-white/10">
+            {move || items.get().into_iter().map(|tr| {
+                let tid = tr["id"].as_i64().unwrap_or(0);
+                let pid = tr["playlist_id"].as_i64().unwrap_or(0);
+                let rid = tr["room_id"].as_i64().unwrap_or(0);
+                view! {
+                    <div class="flex flex-wrap items-center gap-2 border-b border-white/5 px-4 py-2.5 last:border-0">
+                        {queue_row_media(&tr)}
+                        <input type="text"
+                            class="w-52 rounded-lg border border-white/10 bg-surface-base px-2.5 py-1.5 text-sm text-white outline-none"
+                            placeholder=t("Real artist…")
+                            prop:value=move || drafts.get().get(&tid).cloned().unwrap_or_default()
+                            on:input=move |ev| {
+                                drafts.update(|d| { d.insert(tid, event_target_value(&ev)); });
+                            }/>
+                        <button type="button"
+                            class="rounded-lg bg-brand-accent px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-40"
+                            disabled=move || busy.get().contains(&tid)
+                                || drafts.get().get(&tid).map(|v| v.trim().is_empty()).unwrap_or(true)
+                            on:click=move |_| {
+                                busy.update(|b| { b.insert(tid); });
+                                let value = drafts.get_untracked().get(&tid).cloned().unwrap_or_default();
+                                leptos::task::spawn_local(async move {
+                                    let res = api::post::<Value, Value>(
+                                        &format!("/api/v1/admin/data-quality/tracks/{tid}/re-artist"),
+                                        &json!({"room_id": rid, "playlist_id": pid, "value": value.trim()}),
+                                    ).await;
+                                    if let Err(e) = res { error.set(Some(e.message)); }
+                                    else { remove_row(tid); }
+                                    busy.update(|b| { b.remove(&tid); });
+                                });
+                            }>
+                            {t("Set artist")}
+                        </button>
+                        <button type="button"
+                            class="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-white/60 hover:bg-white/10 disabled:opacity-40"
+                            disabled=move || busy.get().contains(&tid)
+                            on:click=move |_| {
+                                busy.update(|b| { b.insert(tid); });
+                                leptos::task::spawn_local(async move {
+                                    let res = api::post::<Value, Value>(
+                                        &format!("/api/v1/admin/data-quality/tracks/{tid}/dismiss-typed"),
+                                        &json!({"room_id": rid, "playlist_id": pid, "answer_type_id": 1}),
+                                    ).await;
+                                    if let Err(e) = res { error.set(Some(e.message)); }
+                                    else { remove_row(tid); }
+                                    busy.update(|b| { b.remove(&tid); });
+                                });
+                            }>
+                            {t("Dismiss")}
+                        </button>
+                    </div>
+                }
+            }).collect::<Vec<_>>()}
+        </div>
+        {move || (!loading.get() && items.get().is_empty()).then(|| view! {
+            <div class="py-8 text-center text-white/50">{t("Queue is empty.")}</div>
+        })}
+        {pager(page, last_page, load)}
+    }
+}
+
+/// Queue: feat./ft. markers in artist or title but no Featuring answer.
+#[component]
+fn FeaturingQueue() -> impl IntoView {
+    let items = RwSignal::new(Vec::<Value>::new());
+    let page = RwSignal::new(1i64);
+    let last_page = RwSignal::new(1i64);
+    let search = RwSignal::new(String::new());
+    let loading = RwSignal::new(false);
+    let error = RwSignal::new(Option::<String>::None);
+    let drafts = RwSignal::new(std::collections::HashMap::<i64, String>::new());
+    let busy = RwSignal::new(std::collections::HashSet::<i64>::new());
+
+    let load = move || {
+        let p = page.get_untracked();
+        let s = search.get_untracked();
+        loading.set(true);
+        leptos::task::spawn_local(async move {
+            match api::get::<Value>(&format!(
+                "/api/v1/admin/data-quality/queue/featuring?page={p}&q={}",
+                urlencoding(&s)
+            ))
+            .await
+            {
+                Ok(v) => {
+                    let total = v["total"].as_i64().unwrap_or(0);
+                    let per = v["per_page"].as_i64().unwrap_or(50).max(1);
+                    last_page.set(((total + per - 1) / per).max(1));
+                    let rows = v["items"].as_array().cloned().unwrap_or_default();
+                    let mut dm = drafts.get_untracked();
+                    for r in &rows {
+                        let tid = r["id"].as_i64().unwrap_or(0);
+                        if let Some(sug) = r["suggestion"].as_str() {
+                            dm.entry(tid).or_insert_with(|| sug.to_string());
+                        }
+                    }
+                    drafts.set(dm);
+                    items.set(rows);
+                }
+                Err(e) => error.set(Some(e.message)),
+            }
+            loading.set(false);
+        });
+    };
+    load();
+
+    let remove_row = move |tid: i64| {
+        items.update(|ts| ts.retain(|r| r["id"].as_i64().unwrap_or(0) != tid));
+        drafts.update(|d| { d.remove(&tid); });
+    };
+
+    view! {
+        <ErrorLine error=error/>
+        <p class="mb-4 max-w-2xl text-sm text-white/60">
+            {t("Tracks with feat./ft. markers but no Featuring answer. Check the suggestion, add it, or dismiss.")}
+        </p>
+        {filter_bar(search, None, load)}
+        <Show when=move || loading.get()>
+            <div class="py-8 text-center text-white/50">{t("Loading")}"…"</div>
+        </Show>
+        <div class="overflow-hidden rounded-xl border border-white/10">
+            {move || items.get().into_iter().map(|tr| {
+                let tid = tr["id"].as_i64().unwrap_or(0);
+                let pid = tr["playlist_id"].as_i64().unwrap_or(0);
+                let rid = tr["room_id"].as_i64().unwrap_or(0);
+                view! {
+                    <div class="flex flex-wrap items-center gap-2 border-b border-white/5 px-4 py-2.5 last:border-0">
+                        {queue_row_media(&tr)}
+                        <input type="text"
+                            class="w-52 rounded-lg border border-white/10 bg-surface-base px-2.5 py-1.5 text-sm text-white outline-none"
+                            placeholder=t("Featured artist…")
+                            prop:value=move || drafts.get().get(&tid).cloned().unwrap_or_default()
+                            on:input=move |ev| {
+                                drafts.update(|d| { d.insert(tid, event_target_value(&ev)); });
+                            }/>
+                        <button type="button"
+                            class="rounded-lg bg-brand-accent px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-40"
+                            disabled=move || busy.get().contains(&tid)
+                                || drafts.get().get(&tid).map(|v| v.trim().is_empty()).unwrap_or(true)
+                            on:click=move |_| {
+                                busy.update(|b| { b.insert(tid); });
+                                let value = drafts.get_untracked().get(&tid).cloned().unwrap_or_default();
+                                leptos::task::spawn_local(async move {
+                                    let res = api::post::<Value, Value>(
+                                        &format!("/api/v1/admin/data-quality/tracks/{tid}/answer-typed"),
+                                        &json!({"room_id": rid, "playlist_id": pid,
+                                                "answer_type_id": 5, "value": value.trim()}),
+                                    ).await;
+                                    if let Err(e) = res { error.set(Some(e.message)); }
+                                    else { remove_row(tid); }
+                                    busy.update(|b| { b.remove(&tid); });
+                                });
+                            }>
+                            {t("Add featuring")}
+                        </button>
+                        <button type="button"
+                            class="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-white/60 hover:bg-white/10 disabled:opacity-40"
+                            disabled=move || busy.get().contains(&tid)
+                            on:click=move |_| {
+                                busy.update(|b| { b.insert(tid); });
+                                leptos::task::spawn_local(async move {
+                                    let res = api::post::<Value, Value>(
+                                        &format!("/api/v1/admin/data-quality/tracks/{tid}/dismiss-typed"),
+                                        &json!({"room_id": rid, "playlist_id": pid, "answer_type_id": 5}),
+                                    ).await;
+                                    if let Err(e) = res { error.set(Some(e.message)); }
+                                    else { remove_row(tid); }
+                                    busy.update(|b| { b.remove(&tid); });
+                                });
+                            }>
+                            {t("Dismiss")}
+                        </button>
+                    </div>
+                }
+            }).collect::<Vec<_>>()}
+        </div>
+        {move || (!loading.get() && items.get().is_empty()).then(|| view! {
+            <div class="py-8 text-center text-white/50">{t("Queue is empty.")}</div>
+        })}
+        {pager(page, last_page, load)}
+    }
+}
+
+/// Read-only report: provider ids present on several tracks.
+#[component]
+fn DuplicatesReport() -> impl IntoView {
+    let items = RwSignal::new(Vec::<Value>::new());
+    let page = RwSignal::new(1i64);
+    let last_page = RwSignal::new(1i64);
+    let loading = RwSignal::new(false);
+    let error = RwSignal::new(Option::<String>::None);
+    let search = RwSignal::new(String::new());
+
+    let load = move || {
+        let p = page.get_untracked();
+        let q = search.get_untracked();
+        loading.set(true);
+        leptos::task::spawn_local(async move {
+            match api::get::<Value>(&format!(
+                "/api/v1/admin/data-quality/duplicates?page={p}&q={}",
+                js_sys::encode_uri_component(&q)
+            ))
+            .await
+            {
+                Ok(v) => {
+                    let total = v["total"].as_i64().unwrap_or(0);
+                    let per = v["per_page"].as_i64().unwrap_or(50).max(1);
+                    last_page.set(((total + per - 1) / per).max(1));
+                    items.set(v["items"].as_array().cloned().unwrap_or_default());
+                }
+                Err(e) => error.set(Some(e.message)),
+            }
+            loading.set(false);
+        });
+    };
+    load();
+
+    view! {
+        <ErrorLine error=error/>
+        <p class="mb-4 max-w-2xl text-sm text-white/60">
+            {t("Provider ids present on more than one track — stats and votes are split across copies. Read-only report.")}
+        </p>
+        <div class="mb-4 flex gap-2">
+            <input
+                class="flex-1 rounded-lg border border-white/10 bg-neutral-900/70 px-3 py-2 text-sm text-white placeholder-white/30 focus:border-brand/50 focus:outline-none"
+                placeholder=t("Search a provider id…")
+                prop:value=search
+                on:input=move |ev| { search.set(event_target_value(&ev)); page.set(1); load(); }
+            />
+        </div>
+        <Show when=move || loading.get()>
+            <div class="py-8 text-center text-white/50">{t("Loading")}"…"</div>
+        </Show>
+        <div class="space-y-3">
+            {move || items.get().into_iter().map(|g| {
+                let pid = g["provider_id"].as_str().unwrap_or("").to_string();
+                let provider = g["provider"].as_str().unwrap_or("").to_string();
+                let copies = g["copies"].as_i64().unwrap_or(0);
+                let tracks = g["tracks"].as_array().cloned().unwrap_or_default();
+                view! {
+                    <details class="overflow-hidden rounded-xl border border-white/10 bg-neutral-900/50">
+                        <summary class="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-white/5">
+                            <span class="rounded bg-white/10 px-2 py-0.5 font-mono text-xs text-white/70">{provider}</span>
+                            <span class="font-mono text-xs text-white/50">{pid}</span>
+                            <span class="ml-auto rounded bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-300">
+                                {copies}" "{t("copies")}
+                            </span>
+                        </summary>
+                        <div class="border-t border-white/5">
+                            {tracks.into_iter().map(|tr| {
+                                let tid = tr["id"].as_i64().unwrap_or(0);
+                                let artist = tr["artist"].as_str().unwrap_or("?").to_string();
+                                let title = tr["title"].as_str().unwrap_or("?").to_string();
+                                let playlist = tr["playlist_name"].as_str().unwrap_or("").to_string();
+                                let scores = tr["score_rows"].as_i64().unwrap_or(0);
+                                view! {
+                                    <div class="flex items-center gap-3 border-b border-white/5 px-4 py-2 text-sm last:border-0">
+                                        <span class="font-mono text-xs text-white/30">#{tid}</span>
+                                        <span class="min-w-0 flex-1 truncate text-white">{title}" — "<span class="text-white/50">{artist}</span></span>
+                                        <span class="text-xs text-white/40">{playlist}</span>
+                                        <span class="text-xs text-white/40">{scores}" "{t("scores")}</span>
+                                    </div>
+                                }
+                            }).collect::<Vec<_>>()}
+                        </div>
+                    </details>
+                }
+            }).collect::<Vec<_>>()}
+        </div>
+        {move || (!loading.get() && items.get().is_empty()).then(|| view! {
+            <div class="py-8 text-center text-white/50">{t("No duplicates found.")}</div>
+        })}
+        {pager(page, last_page, load)}
     }
 }

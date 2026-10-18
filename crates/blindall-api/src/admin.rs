@@ -1367,3 +1367,203 @@ pub async fn data_quality_restore(
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
+
+// ---- data-quality: extra queues ---------------------------------------------
+
+fn dq_page(q: &DqListQuery) -> (i64, i64) {
+    (
+        q.page.unwrap_or(1).max(1),
+        q.per_page.unwrap_or(50).clamp(1, 200),
+    )
+}
+
+#[derive(Deserialize)]
+pub struct DqListQuery {
+    q: Option<String>,
+    page: Option<i64>,
+    per_page: Option<i64>,
+}
+
+/// Compilation-artist review queue (re-artist candidates).
+pub async fn data_quality_artist_queue(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    axum::extract::Query(q): axum::extract::Query<DqListQuery>,
+) -> Response {
+    if !can_review(&state, &user).await {
+        return forbidden();
+    }
+    let (page, per) = dq_page(&q);
+    match state
+        .admin
+        .compilation_artist_candidates(&q.q.unwrap_or_default(), page, per)
+        .await
+    {
+        Ok((items, total)) => Json(json!({
+            "items": items, "total": total, "page": page, "per_page": per,
+        }))
+        .into_response(),
+        Err(e) => {
+            tracing::warn!(error = %e, "artist queue failed");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+/// Featuring-candidate queue (feat./ft. markers without Featuring answer).
+pub async fn data_quality_featuring_queue(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    axum::extract::Query(q): axum::extract::Query<DqListQuery>,
+) -> Response {
+    if !can_review(&state, &user).await {
+        return forbidden();
+    }
+    let (page, per) = dq_page(&q);
+    match state
+        .admin
+        .featuring_candidates(&q.q.unwrap_or_default(), page, per)
+        .await
+    {
+        Ok((items, total)) => Json(json!({
+            "items": items, "total": total, "page": page, "per_page": per,
+        }))
+        .into_response(),
+        Err(e) => {
+            tracing::warn!(error = %e, "featuring queue failed");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+/// Read-only report of duplicated provider ids.
+pub async fn data_quality_duplicates(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    axum::extract::Query(q): axum::extract::Query<DqListQuery>,
+) -> Response {
+    if !can_review(&state, &user).await {
+        return forbidden();
+    }
+    let (page, per) = dq_page(&q);
+    match state
+        .admin
+        .provider_duplicates(&q.q.unwrap_or_default(), page, per)
+        .await
+    {
+        Ok((items, total)) => Json(json!({
+            "items": items, "total": total, "page": page, "per_page": per,
+        }))
+        .into_response(),
+        Err(e) => {
+            tracing::warn!(error = %e, "duplicates report failed");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+/// Fix the Artist value of a track (audited old → new).
+pub async fn data_quality_re_artist(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path(track_id): Path<i64>,
+    Json(b): Json<DqTrackBody>,
+) -> Response {
+    if !can_review(&state, &user).await {
+        return forbidden();
+    }
+    let Some(value) = b.value.as_deref().map(str::trim).filter(|v| !v.is_empty()) else {
+        return err("value", "required");
+    };
+    if value.chars().count() > 200 {
+        return err("value", "too long");
+    }
+    match state
+        .admin
+        .re_artist(
+            track_id,
+            b.playlist_id.unwrap_or(0),
+            b.room_id,
+            value,
+            user.id,
+        )
+        .await
+    {
+        Ok(Some(_)) => Json(json!({ "ok": true })).into_response(),
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct DqTypedBody {
+    room_id: Option<i64>,
+    playlist_id: Option<i64>,
+    answer_type_id: i64,
+    value: Option<String>,
+}
+
+/// Apply an answer of an explicit type (featuring queue etc.). Idempotent.
+pub async fn data_quality_apply_typed(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path(track_id): Path<i64>,
+    Json(b): Json<DqTypedBody>,
+) -> Response {
+    if !can_review(&state, &user).await {
+        return forbidden();
+    }
+    if !(1..=14).contains(&b.answer_type_id) {
+        return err("answer_type_id", "invalid");
+    }
+    let Some(value) = b.value.as_deref().map(str::trim).filter(|v| !v.is_empty()) else {
+        return err("value", "required");
+    };
+    if value.chars().count() > 200 {
+        return err("value", "too long");
+    }
+    match state
+        .admin
+        .apply_answer(
+            track_id,
+            b.playlist_id.unwrap_or(0),
+            b.room_id.unwrap_or(0),
+            b.answer_type_id,
+            value,
+            user.id,
+        )
+        .await
+    {
+        Ok(()) => Json(json!({ "ok": true })).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// Dismiss a candidate of an explicit type (artist/featuring queues).
+pub async fn data_quality_dismiss_typed(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path(track_id): Path<i64>,
+    Json(b): Json<DqTypedBody>,
+) -> Response {
+    if !can_review(&state, &user).await {
+        return forbidden();
+    }
+    if !(1..=14).contains(&b.answer_type_id) {
+        return err("answer_type_id", "invalid");
+    }
+    match state
+        .admin
+        .dismiss_candidate(
+            track_id,
+            b.playlist_id.unwrap_or(0),
+            b.room_id.unwrap_or(0),
+            b.answer_type_id,
+            user.id,
+        )
+        .await
+    {
+        Ok(()) => Json(json!({ "ok": true })).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}

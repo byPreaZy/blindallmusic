@@ -1517,3 +1517,282 @@ impl AdminRepo {
             .collect())
     }
 }
+
+// ---- data-quality: extra queues (compilation artists, duplicates, featuring) ----
+
+/// Regex matching artist names that are really compilation/album labels:
+/// "X Soundtrack Ensemble", "The TV Theme Players", "Countdown Singers"…
+const COMPILATION_ARTIST_RE: &str = r"\m(soundtrack|ensemble|tribute|karaoke|various artists|allstars|hit crew|cover band|theme players|studio group|countdown|chartbusters|players|singers|orchestra)\M";
+
+/// Featuring markers allowed in artist/title values. `avec` is deliberately
+/// excluded: too many French false positives ("New-York avec toi").
+const FEATURING_RE: &str = r"\m(feat\.?|ft\.?|featuring)\M";
+
+impl AdminRepo {
+    /// Tracks whose Artist answer looks like a compilation/album name —
+    /// unguessable in game, needs a re-artist review.
+    pub async fn compilation_artist_candidates(
+        &self,
+        q: &str,
+        page: i64,
+        per_page: i64,
+    ) -> Result<(Vec<Value>, i64), sqlx::Error> {
+        let like = format!("%{}%", q);
+        let total: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*)
+             FROM tracks t
+             JOIN track_answers a1 ON a1.track_id = t.id AND a1.answer_type_id = 1
+             WHERE a1.value ~* $1
+               AND NOT EXISTS (SELECT 1 FROM data_quality_actions dqa
+                               WHERE dqa.track_id = t.id AND dqa.answer_type_id = 1
+                                 AND dqa.action = 'dismiss')
+               AND ($2 = '' OR EXISTS (
+                     SELECT 1 FROM track_answers a
+                     WHERE a.track_id = t.id AND a.answer_type_id IN (1,2)
+                       AND a.value ILIKE $2))",
+        )
+        .bind(COMPILATION_ARTIST_RE)
+        .bind(if q.is_empty() { "" } else { &like })
+        .fetch_one(&self.pool)
+        .await?;
+        let rows = sqlx::query(
+            "SELECT t.id, t.playlist_id, t.preview_url, t.provider_url,
+                    a1.value AS artist, a2.value AS title, p.name AS playlist_name,
+                    (SELECT pr.room_id FROM playlist_room pr
+                      WHERE pr.playlist_id = t.playlist_id LIMIT 1) AS room_id
+             FROM tracks t
+             JOIN track_answers a1 ON a1.track_id = t.id AND a1.answer_type_id = 1
+             LEFT JOIN track_answers a2 ON a2.track_id = t.id AND a2.answer_type_id = 2
+             JOIN playlists p ON p.id = t.playlist_id
+             WHERE a1.value ~* $1
+               AND NOT EXISTS (SELECT 1 FROM data_quality_actions dqa
+                               WHERE dqa.track_id = t.id AND dqa.answer_type_id = 1
+                                 AND dqa.action = 'dismiss')
+               AND ($2 = '' OR EXISTS (
+                     SELECT 1 FROM track_answers a
+                     WHERE a.track_id = t.id AND a.answer_type_id IN (1,2)
+                       AND a.value ILIKE $2))
+             ORDER BY a1.value
+             LIMIT $3 OFFSET $4",
+        )
+        .bind(COMPILATION_ARTIST_RE)
+        .bind(if q.is_empty() { "" } else { &like })
+        .bind(per_page)
+        .bind((page - 1).max(0) * per_page)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok((
+            rows.iter()
+                .map(|r| {
+                    json!({
+                        "id": r.get::<i64, _>("id"),
+                        "playlist_id": r.get::<i64, _>("playlist_id"),
+                        "playlist_name": r.get::<String, _>("playlist_name"),
+                        "room_id": r.get::<Option<i64>, _>("room_id"),
+                        "artist": r.get::<String, _>("artist"),
+                        "title": r.get::<Option<String>, _>("title"),
+                        "preview_url": r.get::<Option<String>, _>("preview_url"),
+                        "provider_url": r.get::<Option<String>, _>("provider_url"),
+                    })
+                })
+                .collect(),
+            total,
+        ))
+    }
+
+    /// Replace the Artist answer value of a track, auditing old → new.
+    pub async fn re_artist(
+        &self,
+        track_id: i64,
+        playlist_id: i64,
+        room_id: i64,
+        new_value: &str,
+        reviewer_id: i64,
+    ) -> Result<Option<String>, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let old: Option<String> = sqlx::query_scalar(
+            "SELECT value FROM track_answers
+             WHERE track_id = $1 AND answer_type_id = 1 LIMIT 1",
+        )
+        .bind(track_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        sqlx::query(
+            "UPDATE track_answers SET value = $3, updated_at = NOW()
+             WHERE track_id = $1 AND answer_type_id = 1",
+        )
+        .bind(track_id)
+        .bind(playlist_id)
+        .bind(new_value)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            "INSERT INTO data_quality_actions
+               (track_id, playlist_id, room_id, answer_type_id, action, value, payload, reviewer_id)
+             VALUES ($1, $2, $3, 1, 're_artist', $4, $5::jsonb, $6)",
+        )
+        .bind(track_id)
+        .bind(playlist_id)
+        .bind(room_id)
+        .bind(new_value)
+        .bind(serde_json::json!({"old": old}).to_string())
+        .bind(reviewer_id)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(old)
+    }
+
+    /// Tracks with feat./ft./featuring markers in artist or title but no
+    /// Featuring answer. The suggestion extracts the featured artist part.
+    pub async fn featuring_candidates(
+        &self,
+        q: &str,
+        page: i64,
+        per_page: i64,
+    ) -> Result<(Vec<Value>, i64), sqlx::Error> {
+        let like = format!("%{}%", q);
+        let total: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*)
+             FROM tracks t
+             LEFT JOIN track_answers a1 ON a1.track_id = t.id AND a1.answer_type_id = 1
+             LEFT JOIN track_answers a2 ON a2.track_id = t.id AND a2.answer_type_id = 2
+             WHERE (a1.value ~* $1 OR a2.value ~* $1)
+               AND NOT EXISTS (SELECT 1 FROM track_answers fa
+                               WHERE fa.track_id = t.id AND fa.answer_type_id = 5)
+               AND NOT EXISTS (SELECT 1 FROM data_quality_actions dqa
+                               WHERE dqa.track_id = t.id AND dqa.answer_type_id = 5
+                                 AND dqa.action = 'dismiss')
+               AND ($2 = '' OR a1.value ILIKE $2 OR a2.value ILIKE $2)",
+        )
+        .bind(FEATURING_RE)
+        .bind(if q.is_empty() { "" } else { &like })
+        .fetch_one(&self.pool)
+        .await?;
+        let rows = sqlx::query(
+            "SELECT t.id, t.playlist_id, t.preview_url, t.provider_url,
+                    a1.value AS artist, a2.value AS title, p.name AS playlist_name,
+                    (SELECT pr.room_id FROM playlist_room pr
+                      WHERE pr.playlist_id = t.playlist_id LIMIT 1) AS room_id
+             FROM tracks t
+             LEFT JOIN track_answers a1 ON a1.track_id = t.id AND a1.answer_type_id = 1
+             LEFT JOIN track_answers a2 ON a2.track_id = t.id AND a2.answer_type_id = 2
+             JOIN playlists p ON p.id = t.playlist_id
+             WHERE (a1.value ~* $1 OR a2.value ~* $1)
+               AND NOT EXISTS (SELECT 1 FROM track_answers fa
+                               WHERE fa.track_id = t.id AND fa.answer_type_id = 5)
+               AND NOT EXISTS (SELECT 1 FROM data_quality_actions dqa
+                               WHERE dqa.track_id = t.id AND dqa.answer_type_id = 5
+                                 AND dqa.action = 'dismiss')
+               AND ($2 = '' OR a1.value ILIKE $2 OR a2.value ILIKE $2)
+             ORDER BY t.id
+             LIMIT $3 OFFSET $4",
+        )
+        .bind(FEATURING_RE)
+        .bind(if q.is_empty() { "" } else { &like })
+        .bind(per_page)
+        .bind((page - 1).max(0) * per_page)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok((
+            rows.iter()
+                .map(|r| {
+                    let artist = r.get::<Option<String>, _>("artist").unwrap_or_default();
+                    let title = r.get::<Option<String>, _>("title").unwrap_or_default();
+                    json!({
+                        "id": r.get::<i64, _>("id"),
+                        "playlist_id": r.get::<i64, _>("playlist_id"),
+                        "playlist_name": r.get::<String, _>("playlist_name"),
+                        "room_id": r.get::<Option<i64>, _>("room_id"),
+                        "artist": artist,
+                        "title": title,
+                        "suggestion": featuring_suggestion(&artist, &title),
+                        "preview_url": r.get::<Option<String>, _>("preview_url"),
+                        "provider_url": r.get::<Option<String>, _>("provider_url"),
+                    })
+                })
+                .collect(),
+            total,
+        ))
+    }
+
+    /// Read-only report: provider ids present on more than one track.
+    pub async fn provider_duplicates(
+        &self,
+        q: &str,
+        page: i64,
+        per_page: i64,
+    ) -> Result<(Vec<Value>, i64), sqlx::Error> {
+        let like = format!("%{}%", q);
+        let total: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM (
+               SELECT provider_id FROM tracks
+               WHERE provider_id <> ''
+                 AND ($1 = '' OR provider_id ILIKE $1)
+               GROUP BY provider, provider_id HAVING COUNT(*) > 1) x",
+        )
+        .bind(if q.is_empty() { "" } else { &like })
+        .fetch_one(&self.pool)
+        .await?;
+        let rows = sqlx::query(
+            "SELECT t.provider::text AS provider, t.provider_id::text AS provider_id,
+                    COUNT(*) AS copies,
+                    json_agg(json_build_object(
+                        'id', t.id,
+                        'playlist_id', t.playlist_id,
+                        'playlist_name', p.name,
+                        'artist', (SELECT a.value FROM track_answers a
+                                   WHERE a.track_id = t.id AND a.answer_type_id = 1 LIMIT 1),
+                        'title', (SELECT a.value FROM track_answers a
+                                  WHERE a.track_id = t.id AND a.answer_type_id = 2 LIMIT 1),
+                        'score_rows', (SELECT COUNT(*) FROM scores s WHERE s.track_id = t.id)
+                    ) ORDER BY t.id) AS tracks
+             FROM tracks t
+             JOIN playlists p ON p.id = t.playlist_id
+             WHERE t.provider_id <> ''
+               AND ($3 = '' OR t.provider_id ILIKE $3)
+             GROUP BY t.provider, t.provider_id
+             HAVING COUNT(*) > 1
+             ORDER BY copies DESC, t.provider_id
+             LIMIT $1 OFFSET $2",
+        )
+        .bind(per_page)
+        .bind((page - 1).max(0) * per_page)
+        .bind(if q.is_empty() { "" } else { &like })
+        .fetch_all(&self.pool)
+        .await?;
+        Ok((
+            rows.iter()
+                .map(|r| {
+                    json!({
+                        "provider": r.get::<String, _>("provider"),
+                        "provider_id": r.get::<String, _>("provider_id"),
+                        "copies": r.get::<i64, _>("copies"),
+                        "tracks": r.get::<Value, _>("tracks"),
+                    })
+                })
+                .collect(),
+            total,
+        ))
+    }
+}
+
+/// Extract the featured-artist part: "A feat. B" → "B" (artist first,
+/// then title — the marker can sit in either).
+fn featuring_suggestion(artist: &str, title: &str) -> Option<String> {
+    for source in [artist, title] {
+        let lower = source.to_lowercase();
+        for marker in ["featuring", "feat.", "feat ", "ft.", "ft "] {
+            if let Some(pos) = lower.find(marker) {
+                let rest = source[pos + marker.len()..]
+                    .trim_start_matches([' ', '(', '[', '-', '&'])
+                    .trim_end_matches([')', ']'])
+                    .trim();
+                if !rest.is_empty() {
+                    return Some(rest.to_string());
+                }
+            }
+        }
+    }
+    None
+}

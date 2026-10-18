@@ -14,7 +14,7 @@ use leptos_router::components::A;
 use leptos_router::hooks::{use_navigate, use_params};
 use leptos_router::params::Params;
 use send_wrapper::SendWrapper;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -427,6 +427,8 @@ pub fn RoomPage() -> impl IntoView {
     let round_finished = RwSignal::new(false);
     let finalizing = RwSignal::new(false);
     let joined = RwSignal::new(false);
+    let party = RwSignal::new(Option::<Value>::None);
+    let party_feedback = RwSignal::new(Option::<Value>::None);
     let current_time = RwSignal::new(0.0_f64);
     let next_track_at = RwSignal::new(Option::<String>::None);
     let next_audio_url = RwSignal::new(Option::<(i64, String)>::None);
@@ -490,6 +492,9 @@ pub fn RoomPage() -> impl IntoView {
                 }
             }
             joined.set(true);
+            if let Ok(p) = api::get::<Value>(&format!("/api/v1/rooms/{room_id}/party")).await {
+                party.set(Some(p));
+            }
             if let (Some(rid), Some(tid)) = (round_id.get(), track.get().map(|t| t.id)) {
                 let _ = api::post_empty::<Value>(&format!(
                     "/api/v1/rounds/{rid}/tracks/{tid}/listened"
@@ -728,6 +733,27 @@ pub fn RoomPage() -> impl IntoView {
             });
         });
         on!("UserLevelUpdated", move |_| {});
+        on!("PartyStarted", move |_| {});
+        on!("PartyQuestion", move |e| {
+            party_feedback.set(None);
+            party.set(Some(e.clone()));
+        });
+        on!("PartyReveal", move |e| party.set(Some(e.clone())));
+        on!("PartyFinished", move |e| party.set(Some(e.clone())));
+        on!("PartyStopped", move |_| party.set(None));
+        on!("PartyScore", move |e| {
+            party.update(|p| {
+                let Some(p) = p.as_mut() else { return };
+                let Some(arr) = p["scores"].as_array_mut() else { return };
+                let uid = e["user_id"].as_i64().unwrap_or(0);
+                let sc = e["score"].as_i64().unwrap_or(0);
+                if let Some(row) = arr.iter_mut().find(|r| r["user_id"].as_i64() == Some(uid)) {
+                    row["score"] = json!(sc);
+                } else {
+                    arr.push(json!({"user_id": uid, "name": e["name"], "score": sc}));
+                }
+            });
+        });
 
         realtime.join(&channel);
         let pub_channel = format!("room.public:{rid}");
@@ -826,6 +852,12 @@ pub fn RoomPage() -> impl IntoView {
             .moderators
             .iter()
             .any(|m| m["id"].as_i64() == Some(me))
+    });
+    let can_host_party = Signal::derive(move || {
+        let r = room.get();
+        r.can_edit
+            || is_moderator.get()
+            || auth.user.get().map(|u| u.is_administrator).unwrap_or(false)
     });
     let can_vote = Signal::derive(move || auth.user.get().is_some());
     let me_sig = Signal::derive(move || auth.user.get().map(|u| u.id));
@@ -960,6 +992,8 @@ pub fn RoomPage() -> impl IntoView {
                                 </div>
                             </div>
                         </Show>
+
+                        <PartyPanel room_id=room_id.get_untracked() party=party can_host=can_host_party feedback=party_feedback/>
 
                         <div class="room-show-player mb-2 min-w-0 md:mb-8">
                             <Player
@@ -1548,5 +1582,161 @@ fn RoomOptionsModal(
                 </div>
             </div>
         </Show>
+    }
+}
+
+// ---- realtime party quiz -------------------------------------------------------
+
+/// Server-driven quiz inside the room: questions advance for everyone at
+/// the same time via room-channel events (PartyQuestion/Reveal/Finished).
+/// The host (owner/moderator/admin) starts and stops it.
+#[component]
+fn PartyPanel(
+    room_id: i64,
+    party: RwSignal<Option<Value>>,
+    can_host: Signal<bool>,
+    feedback: RwSignal<Option<Value>>,
+) -> impl IntoView {
+    let answering = RwSignal::new(false);
+
+    let start_party = move |_| {
+        leptos::task::spawn_local(async move {
+            let _ = api::post::<Value, _>(
+                &format!("/api/v1/rooms/{room_id}/party/start"),
+                &json!({"game_type": "quiz", "count": 10}),
+            )
+            .await;
+        });
+    };
+    let stop_party = move |_| {
+        leptos::task::spawn_local(async move {
+            let _ = api::post::<Value, _>(
+                &format!("/api/v1/rooms/{room_id}/party/stop"),
+                &json!({}),
+            )
+            .await;
+        });
+    };
+    let submit = Callback::new(move |value: String| {
+        let Some(p) = party.get_untracked() else { return };
+        let idx = p["idx"].as_i64().unwrap_or(-1);
+        answering.set(true);
+        leptos::task::spawn_local(async move {
+            match api::post::<Value, _>(
+                &format!("/api/v1/rooms/{room_id}/party/answer"),
+                &json!({"idx": idx, "value": value}),
+            )
+            .await
+            {
+                Ok(v) => feedback.set(Some(v)),
+                Err(e) => feedback.set(Some(json!({"correct": false, "error": e.message}))),
+            }
+            answering.set(false);
+        });
+    });
+
+    view! {
+        {move || {
+            let Some(p) = party.get() else {
+                // no party running — hosts see a start button
+                return can_host.get().then(|| view! {
+                    <div class="mb-4 flex items-center justify-between rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-3">
+                        <div>
+                            <p class="font-bold text-purple-200">{t("Party quiz")}</p>
+                            <p class="text-xs text-white/50">{t("10 questions for everyone in the room, same time.")}</p>
+                        </div>
+                        <button type="button" class="btn-primary text-sm" on:click=start_party>
+                            {t("Start party")}
+                        </button>
+                    </div>
+                }.into_any());
+            };
+            let phase = p["phase"].as_str().unwrap_or("").to_string();
+            let idx = p["idx"].as_i64().unwrap_or(0);
+            let total = p["total"].as_i64().unwrap_or(0);
+            let ends = p["ends_at"].as_i64().unwrap_or(0);
+            let scores = p["scores"].as_array().cloned().unwrap_or_default();
+            let finished = phase == "finished";
+
+            let scores_table = view! {
+                <div class="mt-3 border-t border-white/10 pt-3">
+                    <p class="mb-1 text-[10px] font-bold uppercase tracking-wider text-white/40">{t("Party scores")}</p>
+                    <div class="flex flex-wrap gap-2">
+                        {scores.iter().map(|s| view! {
+                            <span class="rounded-full border border-white/15 px-2.5 py-1 text-xs text-white/80">
+                                {s["name"].as_str().map(|n| n.to_string())
+                                    .unwrap_or_else(|| format!("#{}", s["user_id"].as_i64().unwrap_or(0)))}
+                                ": "<span class="font-bold text-purple-300">{s["score"].as_i64().unwrap_or(0)}</span>
+                            </span>
+                        }).collect::<Vec<_>>()}
+                    </div>
+                </div>
+            };
+
+            Some(view! {
+                <div class="mb-4 rounded-xl border-2 border-purple-500/30 bg-neutral-900/80 p-4">
+                    <div class="mb-3 flex items-center justify-between">
+                        <p class="text-sm font-black uppercase tracking-wider text-purple-300">
+                            {t("Party quiz")}" · "{idx + 1}"/"{total}
+                        </p>
+                        <div class="flex items-center gap-2">
+                            <span class="font-mono text-xs text-white/40">
+                                {format!("t+{}s", (ends - js_sys::Date::now() as i64 / 1000).max(0))}
+                            </span>
+                            {can_host.get().then(|| view! {
+                                <button type="button"
+                                    class="rounded border border-red-500/40 px-2 py-1 text-[10px] font-bold uppercase text-red-400 hover:bg-red-500/10"
+                                    on:click=stop_party>{t("Stop")}</button>
+                            })}
+                        </div>
+                    </div>
+
+                    {if finished {
+                        view! {
+                            <div class="py-4 text-center">
+                                <p class="text-xl font-black text-white">{t("Party over!")}</p>
+                                <p class="text-sm text-white/50">{t("Final scores below — thanks for playing.")}</p>
+                            </div>
+                        }.into_any()
+                    } else if phase == "reveal" {
+                        let cv = p["reveal_value"].as_str().unwrap_or("").to_string();
+                        view! {
+                            <div class="py-4 text-center">
+                                <p class="text-xs uppercase tracking-wider text-white/40">{t("Answer was")}</p>
+                                <p class="mt-1 text-xl font-black text-teal-400">{cv}</p>
+                            </div>
+                        }.into_any()
+                    } else {
+                        let q = p["question"]["question"].clone();
+                        if let Some(fb) = feedback.get() {
+                            let correct = fb["correct"].as_bool().unwrap_or(false);
+                            let cv = fb["correct_value"].as_str().unwrap_or("").to_string();
+                            view! {
+                                <div class="py-4 text-center">
+                                    <p class=move || if correct { "text-lg font-bold text-teal-400" } else { "text-lg font-bold text-amber-500" }>
+                                        {if correct { t("Correct!").to_string() } else { t("Not quite!").to_string() }}
+                                    </p>
+                                    {(!correct).then(|| view! {
+                                        <p class="text-sm text-white/50">
+                                            {t("Correct answer")}": "<span class="font-semibold text-white">{cv}</span>
+                                        </p>
+                                    })}
+                                    <p class="mt-2 text-xs text-white/40">{t("Waiting for the next question…")}</p>
+                                </div>
+                            }.into_any()
+                        } else {
+                            view! {
+                                <crate::pages::duels::QuestionView
+                                    q=q
+                                    disabled=answering.get()
+                                    on_answer=submit/>
+                            }.into_any()
+                        }
+                    }}
+
+                    {scores_table}
+                </div>
+            }.into_any())
+        }}
     }
 }

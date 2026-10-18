@@ -146,6 +146,7 @@ async fn main() -> anyhow::Result<()> {
         app_key,
         minigames: blindall_db::MinigameRepo::new(pool.clone(), resolver),
         anagram_questions: std::sync::Arc::new(blindall_api::minigames::AnagramQuestions::default()),
+        parties: std::sync::Arc::new(blindall_api::party::PartyStore::default()),
         moderation: blindall_db::ModerationRepo::new(pool.clone()),
         admin: blindall_db::AdminRepo::new(pool.clone()),
         faqs: blindall_db::FaqRepo::new(pool.clone()),

@@ -378,3 +378,396 @@ fn anagram_list() -> &'static [(&'static str, &'static str)] {
 }
 
 const ANAGRAM_JSON: &str = include_str!("../data/anagram_artists.json");
+
+// ---- duels & daily challenge ---------------------------------------------------
+
+impl MinigameRepo {
+    /// Serializable question (includes correct_value, kept server-side in
+    /// the duel/daily row and stripped before it reaches the client).
+    pub async fn gen_question(&self, game_type: &str) -> Option<serde_json::Value> {
+        match game_type {
+            "quiz" | "who_sang" | "album_cover" => {
+                let q = self.track_with_choices(game_type).await.ok()??;
+                Some(serde_json::json!({
+                    "track": q.track,
+                    "choices": q.choices,
+                    "correct_value": q.correct_value,
+                }))
+            }
+            "first_letter" => {
+                let q = self.track_with_title().await.ok()??;
+                Some(serde_json::json!({
+                    "track": q.track,
+                    "correct_value": q.correct_value,
+                }))
+            }
+            "anagram" => {
+                let (scrambled, artist) = self.random_anagram()?;
+                Some(serde_json::json!({
+                    "scrambled_artist": scrambled,
+                    "correct_value": artist,
+                }))
+            }
+            _ => None,
+        }
+    }
+
+    /// `n` questions with distinct track ids when the type is track-based.
+    pub async fn gen_question_set(&self, game_type: &str, n: usize) -> Vec<serde_json::Value> {
+        let mut out = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        let track_based = game_type != "anagram";
+        for _ in 0..n * 4 {
+            if out.len() >= n {
+                break;
+            }
+            let Some(q) = self.gen_question(game_type).await else {
+                break;
+            };
+            let key = q["track"]["id"].as_i64().unwrap_or_else(|| rand::random());
+            if !track_based || seen.insert(key) {
+                out.push(q);
+            }
+        }
+        out
+    }
+
+    pub async fn create_duel(
+        &self,
+        creator_id: i64,
+        opponent_id: Option<i64>,
+        game_type: &str,
+        questions: &serde_json::Value,
+    ) -> Result<i64, sqlx::Error> {
+        sqlx::query_scalar::<_, i64>(
+            "INSERT INTO minigame_duels (game_type, creator_id, opponent_id, questions)
+             VALUES ($1, $2, $3, $4::jsonb) RETURNING id",
+        )
+        .bind(game_type)
+        .bind(creator_id)
+        .bind(opponent_id)
+        .bind(serde_json::to_string(questions).unwrap_or_else(|_| "[]".into()))
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    pub async fn duel(&self, id: i64) -> Result<Option<serde_json::Value>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT d.*, c.name AS creator_name, o.name AS opponent_name
+             FROM minigame_duels d
+             JOIN users c ON c.id = d.creator_id
+             LEFT JOIN users o ON o.id = d.opponent_id
+             WHERE d.id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|r| {
+            serde_json::json!({
+                "id": r.get::<i64, _>("id"),
+                "game_type": r.get::<String, _>("game_type"),
+                "status": r.get::<String, _>("status"),
+                "creator_id": r.get::<i64, _>("creator_id"),
+                "opponent_id": r.get::<Option<i64>, _>("opponent_id"),
+                "creator_name": r.get::<String, _>("creator_name"),
+                "opponent_name": r.get::<Option<String>, _>("opponent_name"),
+                "creator_score": r.get::<i32, _>("creator_score"),
+                "opponent_score": r.get::<i32, _>("opponent_score"),
+                "creator_done": r.get::<bool, _>("creator_done"),
+                "opponent_done": r.get::<bool, _>("opponent_done"),
+                "creator_answers": r.get::<serde_json::Value, _>("creator_answers"),
+                "opponent_answers": r.get::<serde_json::Value, _>("opponent_answers"),
+                "questions": r.get::<serde_json::Value, _>("questions"),
+                "created_at": r.get::<chrono::DateTime<chrono::Utc>, _>("created_at")
+                    .format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+            })
+        }))
+    }
+
+    /// Duels visible to the user: own duels (recent first) + open challenges
+    /// from other players.
+    pub async fn duels_for(&self, user_id: i64) -> Result<Vec<serde_json::Value>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT d.id, d.game_type, d.status, d.creator_id, d.opponent_id,
+                    d.creator_score, d.opponent_score, d.creator_done, d.opponent_done,
+                    jsonb_array_length(d.questions)::bigint AS qcount,
+                    c.name AS creator_name, o.name AS opponent_name, d.created_at
+             FROM minigame_duels d
+             JOIN users c ON c.id = d.creator_id
+             LEFT JOIN users o ON o.id = d.opponent_id
+             WHERE d.creator_id = $1 OR d.opponent_id = $1
+                OR (d.status = 'open' AND d.creator_id <> $1)
+             ORDER BY d.created_at DESC
+             LIMIT 50",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows.iter().map(duel_listing).collect())
+    }
+
+    /// Accept an open duel (targeted or public). 0 rows = not acceptable.
+    pub async fn accept_duel(&self, id: i64, user_id: i64) -> Result<u64, sqlx::Error> {
+        sqlx::query(
+            "UPDATE minigame_duels SET opponent_id = $2, status = 'active', updated_at = NOW()
+             WHERE id = $1 AND status = 'open' AND creator_id <> $2
+               AND (opponent_id IS NULL OR opponent_id = $2)",
+        )
+        .bind(id)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await
+        .map(|r| r.rows_affected())
+    }
+
+    /// Record one answer on a side ('creator'|'opponent'). Replay-safe per
+    /// index; auto-completes the side and finishes the duel when both are
+    /// done. Returns the refreshed row or None on replay.
+    pub async fn duel_record(
+        &self,
+        id: i64,
+        side: &str,
+        user_id: i64,
+        idx: i64,
+        correct: bool,
+        given: &str,
+    ) -> Result<Option<serde_json::Value>, sqlx::Error> {
+        let (c, o) = if side == "creator" {
+            ("creator", "opponent")
+        } else {
+            ("opponent", "creator")
+        };
+        let answer = serde_json::json!([{"idx": idx, "correct": correct, "value": given}]);
+        let sql = format!(
+            "UPDATE minigame_duels SET
+               {c}_answers = {c}_answers || $3::jsonb,
+               {c}_score = {c}_score + $4,
+               {c}_done = (jsonb_array_length({c}_answers || $3::jsonb)
+                          >= jsonb_array_length(questions)),
+               status = CASE
+                 WHEN jsonb_array_length({c}_answers || $3::jsonb)
+                       >= jsonb_array_length(questions)
+                      AND {o}_done THEN 'finished' ELSE status END,
+               updated_at = NOW()
+             WHERE id = $1 AND {c}_id = $2
+               AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements({c}_answers) a
+                               WHERE (a->>'idx')::bigint = $5)
+             RETURNING id, creator_score, opponent_score, creator_done, opponent_done, status",
+            c = c,
+            o = o
+        );
+        let row = sqlx::query(&sql)
+            .bind(id)
+            .bind(user_id)
+            .bind(serde_json::to_string(&answer).unwrap_or_else(|_| "[]".into()))
+            .bind(if correct { 1i32 } else { 0i32 })
+            .bind(idx)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row.map(|r| {
+            serde_json::json!({
+                "id": r.get::<i64, _>("id"),
+                "creator_score": r.get::<i32, _>("creator_score"),
+                "opponent_score": r.get::<i32, _>("opponent_score"),
+                "creator_done": r.get::<bool, _>("creator_done"),
+                "opponent_done": r.get::<bool, _>("opponent_done"),
+                "status": r.get::<String, _>("status"),
+            })
+        }))
+    }
+
+    /// Wins leaderboard across finished duels (draws listed separately).
+    pub async fn duel_leaderboard(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<serde_json::Value>, sqlx::Error> {
+        let rows = sqlx::query(
+            "WITH per_user AS (
+               SELECT creator_id AS uid, opponent_score AS mine, creator_score AS theirs
+               FROM minigame_duels WHERE status = 'finished'
+               UNION ALL
+               SELECT opponent_id, creator_score, opponent_score
+               FROM minigame_duels WHERE status = 'finished'
+             )
+             SELECT u.id, u.name, u.elo,
+                    COUNT(*) FILTER (WHERE mine > theirs) AS wins,
+                    COUNT(*) FILTER (WHERE mine = theirs) AS draws,
+                    COUNT(*) AS total
+             FROM per_user p
+             JOIN users u ON u.id = p.uid
+             GROUP BY u.id, u.name, u.elo
+             ORDER BY wins DESC, draws DESC, u.elo DESC
+             LIMIT $1",
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "id": r.get::<i64, _>("id"),
+                    "name": r.get::<String, _>("name"),
+                    "elo": r.get::<i64, _>("elo"),
+                    "wins": r.get::<i64, _>("wins"),
+                    "draws": r.get::<i64, _>("draws"),
+                    "total": r.get::<i64, _>("total"),
+                })
+            })
+            .collect())
+    }
+
+    // ---- daily -----------------------------------------------------------------
+
+    /// Get-or-generate today's question set for a game type (fixed at first
+    /// request, shared by everyone).
+    pub async fn daily_questions(
+        &self,
+        day: chrono::NaiveDate,
+        game_type: &str,
+        n: usize,
+    ) -> Result<Vec<serde_json::Value>, sqlx::Error> {
+        if let Some(v) = sqlx::query_scalar::<_, serde_json::Value>(
+            "SELECT questions FROM minigame_daily WHERE day = $1 AND game_type = $2",
+        )
+        .bind(day)
+        .bind(game_type)
+        .fetch_optional(&self.pool)
+        .await?
+        {
+            return Ok(v.as_array().cloned().unwrap_or_default());
+        }
+        let qs = self.gen_question_set(game_type, n).await;
+        sqlx::query(
+            "INSERT INTO minigame_daily (day, game_type, questions)
+             VALUES ($1, $2, $3::jsonb) ON CONFLICT DO NOTHING",
+        )
+        .bind(day)
+        .bind(game_type)
+        .bind(serde_json::to_string(&qs).unwrap_or_else(|_| "[]".into()))
+        .execute(&self.pool)
+        .await?;
+        Ok(qs)
+    }
+
+    /// Record a daily answer. Replay-safe per index via WHERE NOT EXISTS.
+    /// Returns (score, answered_count) or None on replay.
+    pub async fn daily_record(
+        &self,
+        user_id: i64,
+        day: chrono::NaiveDate,
+        game_type: &str,
+        idx: i64,
+        correct: bool,
+        given: &str,
+    ) -> Result<Option<(i64, i64)>, sqlx::Error> {
+        let answer = serde_json::json!([{"idx": idx, "correct": correct, "value": given}]);
+        let res = sqlx::query(
+            "INSERT INTO minigame_daily_scores (user_id, day, game_type, score, answers)
+             VALUES ($1, $2, $3, $4, $5::jsonb)
+             ON CONFLICT (user_id, day, game_type) DO UPDATE SET
+               answers = minigame_daily_scores.answers || EXCLUDED.answers,
+               score = minigame_daily_scores.score + EXCLUDED.score,
+               updated_at = NOW()
+             WHERE NOT EXISTS (
+               SELECT 1 FROM jsonb_array_elements(minigame_daily_scores.answers) a
+               WHERE (a->>'idx')::bigint = $6
+             )
+             RETURNING score, jsonb_array_length(answers)::bigint",
+        )
+        .bind(user_id)
+        .bind(day)
+        .bind(game_type)
+        .bind(if correct { 1i32 } else { 0i32 })
+        .bind(serde_json::to_string(&answer).unwrap_or_else(|_| "[]".into()))
+        .bind(idx)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(res.map(|r| {
+            (
+                r.get::<i32, _>("score") as i64,
+                r.get::<i64, _>("jsonb_array_length"),
+            )
+        }))
+    }
+
+    pub async fn daily_progress(
+        &self,
+        user_id: i64,
+        day: chrono::NaiveDate,
+        game_type: &str,
+    ) -> Result<Option<(i64, i64)>, sqlx::Error> {
+        sqlx::query(
+            "SELECT score, jsonb_array_length(answers)::bigint FROM minigame_daily_scores
+             WHERE user_id = $1 AND day = $2 AND game_type = $3",
+        )
+        .bind(user_id)
+        .bind(day)
+        .bind(game_type)
+        .fetch_optional(&self.pool)
+        .await
+        .map(|o| {
+            o.map(|r| {
+                (
+                    r.get::<i32, _>("score") as i64,
+                    r.get::<i64, _>("jsonb_array_length"),
+                )
+            })
+        })
+    }
+
+    /// Today's leaderboard: higher score first, earlier finish wins ties.
+    pub async fn daily_leaderboard(
+        &self,
+        day: chrono::NaiveDate,
+        game_type: &str,
+        limit: i64,
+    ) -> Result<Vec<serde_json::Value>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT u.id, u.name, u.elo, s.score, s.answers
+             FROM minigame_daily_scores s
+             JOIN users u ON u.id = s.user_id
+             WHERE s.day = $1 AND s.game_type = $2
+             ORDER BY s.score DESC, s.updated_at ASC
+             LIMIT $3",
+        )
+        .bind(day)
+        .bind(game_type)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "id": r.get::<i64, _>("id"),
+                    "name": r.get::<String, _>("name"),
+                    "elo": r.get::<i64, _>("elo"),
+                    "score": r.get::<i32, _>("score"),
+                    "answered": r.get::<serde_json::Value, _>("answers")
+                        .as_array().map(|a| a.len()).unwrap_or(0),
+                })
+            })
+            .collect())
+    }
+}
+
+fn duel_listing(r: &sqlx::postgres::PgRow) -> serde_json::Value {
+    use sqlx::Row;
+    serde_json::json!({
+        "id": r.get::<i64, _>("id"),
+        "game_type": r.get::<String, _>("game_type"),
+        "status": r.get::<String, _>("status"),
+        "creator_id": r.get::<i64, _>("creator_id"),
+        "opponent_id": r.get::<Option<i64>, _>("opponent_id"),
+        "creator_score": r.get::<i32, _>("creator_score"),
+        "opponent_score": r.get::<i32, _>("opponent_score"),
+        "creator_done": r.get::<bool, _>("creator_done"),
+        "opponent_done": r.get::<bool, _>("opponent_done"),
+        "question_count": r.get::<i64, _>("qcount"),
+        "creator_name": r.get::<String, _>("creator_name"),
+        "opponent_name": r.get::<Option<String>, _>("opponent_name"),
+        "created_at": r.get::<chrono::DateTime<chrono::Utc>, _>("created_at")
+            .format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+    })
+}

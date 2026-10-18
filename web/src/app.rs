@@ -12,7 +12,8 @@ use crate::pages::docs::{
 };
 use crate::pages::donations::DonationsPage;
 use crate::pages::faq::FaqPage;
-use crate::pages::games::MinigamesDisabled;
+use crate::pages::duels::{DailyPage, DuelPlayPage, DuelsPage};
+use crate::pages::games::{GamePlayPage, GamesIndexPage};
 use crate::pages::home::HomePage;
 use crate::pages::login::{
     ForgotPasswordPage, LoginPage, OAuthCallbackPage, RegisterPage, ResetPasswordPage,
@@ -185,10 +186,13 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/me") view=SettingsPage/>
                         <Route path=path!("/teams") view=TeamsPage/>
                         <Route path=path!("/teams/:id") view=|| view! { <ParamRemount><TeamShowPage/></ParamRemount> }/>
-                        <Route path=path!("/minigames") view=MinigamesDisabled/>
-                        <Route path=path!("/minigames/:type") view=MinigamesDisabled/>
-                        <Route path=path!("/games") view=MinigamesDisabled/>
-                        <Route path=path!("/games/:type") view=MinigamesDisabled/>
+                        <Route path=path!("/minigames") view=GamesIndexPage/>
+                        <Route path=path!("/minigames/:type") view=GamePlayPage/>
+                        <Route path=path!("/duels") view=DuelsPage/>
+                        <Route path=path!("/duels/:id") view=DuelPlayPage/>
+                        <Route path=path!("/daily") view=DailyPage/>
+                        <Route path=path!("/games") view=DuelsPage/>
+                        <Route path=path!("/games/:type") view=DuelsPage/>
                         <Route path=path!("/donations") view=DonationsPage/>
                         <Route path=path!("/faq") view=FaqRedirect/>
                         <Route path=path!("/user/banned") view=BannedPage/>

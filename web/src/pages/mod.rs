@@ -1,6 +1,7 @@
 pub mod admin;
 pub mod docs;
 pub mod donations;
+pub mod duels;
 pub mod faq;
 pub mod games;
 pub mod home;

@@ -90,6 +90,14 @@ pub fn GamesIndexPage() -> impl IntoView {
                 </p>
             </header>
 
+            <A href="/duels" attr:class="group mb-6 flex items-center justify-between rounded-2xl border-2 border-purple-500/30 bg-gradient-to-r from-purple-600/20 to-neutral-800/80 p-5 shadow-xl transition hover:border-purple-400/60">
+                <div>
+                    <p class="text-lg font-black uppercase tracking-wider text-purple-300">{t("Multiplayer")}</p>
+                    <p class="text-sm text-neutral-400">{t("Duels against other players + the daily challenge.")}</p>
+                </div>
+                <span class="rounded-full bg-purple-500/20 px-4 py-2 text-sm font-bold text-purple-300 group-hover:bg-purple-500/30">"→"</span>
+            </A>
+
             <Show when=move || auth.user.get().is_none() && !loading.get()>
                 <div class="mb-6 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">
                     {t("Log in to save your scores.")}

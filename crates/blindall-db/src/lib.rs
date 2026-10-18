@@ -194,6 +194,13 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0021_track_enrichment.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            22,
+            "minigame_duels_daily".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0022_minigame_duels_daily.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {

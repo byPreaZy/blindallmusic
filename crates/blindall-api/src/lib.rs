@@ -17,6 +17,7 @@ pub mod minigames;
 pub mod moderation;
 pub mod oauth;
 pub mod official_seo;
+pub mod party;
 pub mod playlists;
 pub mod profiles;
 pub mod providers;
@@ -213,6 +214,26 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/v1/minigames/{game}/next", post(minigames::next))
         .route("/api/v1/minigames/{game}/check", post(minigames::check))
+        .route(
+            "/api/v1/duels",
+            get(minigames::duels_index).post(minigames::duel_create),
+        )
+        .route(
+            "/api/v1/duels/leaderboard",
+            get(minigames::duels_leaderboard),
+        )
+        .route("/api/v1/duels/{id}", get(minigames::duel_show))
+        .route("/api/v1/duels/{id}/accept", post(minigames::duel_accept))
+        .route("/api/v1/duels/{id}/answer", post(minigames::duel_answer))
+        .route("/api/v1/daily-challenge", get(minigames::daily_show))
+        .route("/api/v1/rooms/{id}/party", get(party::show))
+        .route("/api/v1/rooms/{id}/party/start", post(party::start))
+        .route("/api/v1/rooms/{id}/party/stop", post(party::stop))
+        .route("/api/v1/rooms/{id}/party/answer", post(party::answer))
+        .route(
+            "/api/v1/daily-challenge/answer",
+            post(minigames::daily_answer),
+        )
         .route("/api/v1/moderation", get(moderation::dashboard))
         .route(
             "/api/v1/moderation/suggestions",
@@ -428,6 +449,30 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/v1/admin/data-quality/actions/{action}/restore",
             post(admin::data_quality_restore),
+        )
+        .route(
+            "/api/v1/admin/data-quality/queue/artists",
+            get(admin::data_quality_artist_queue),
+        )
+        .route(
+            "/api/v1/admin/data-quality/queue/featuring",
+            get(admin::data_quality_featuring_queue),
+        )
+        .route(
+            "/api/v1/admin/data-quality/duplicates",
+            get(admin::data_quality_duplicates),
+        )
+        .route(
+            "/api/v1/admin/data-quality/tracks/{track}/re-artist",
+            post(admin::data_quality_re_artist),
+        )
+        .route(
+            "/api/v1/admin/data-quality/tracks/{track}/answer-typed",
+            post(admin::data_quality_apply_typed),
+        )
+        .route(
+            "/api/v1/admin/data-quality/tracks/{track}/dismiss-typed",
+            post(admin::data_quality_dismiss_typed),
         )
         .route("/api/v1/rankings", get(rankings::players))
         .route("/api/v1/rankings/teams", get(rankings::teams))

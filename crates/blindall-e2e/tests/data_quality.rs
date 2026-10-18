@@ -5,15 +5,36 @@ use reqwest::StatusCode;
 use serde_json::json;
 
 async fn track(owner: &Client, playlist_id: i64) -> i64 {
+    track_named(owner, playlist_id, "DQ Artist", "DQ Song (From Test Game)").await
+}
+
+async fn track_named(owner: &Client, playlist_id: i64, artist_name: &str, track_name: &str) -> i64 {
+    track_full(
+        owner,
+        playlist_id,
+        artist_name,
+        track_name,
+        &format!("dq-{}", uniq_name("t")),
+    )
+    .await
+}
+
+async fn track_full(
+    owner: &Client,
+    playlist_id: i64,
+    artist_name: &str,
+    track_name: &str,
+    provider_id: &str,
+) -> i64 {
     let r = owner
         .post(
             &format!("/api/v1/playlists/{playlist_id}/tracks"),
             json!({
                 "provider": "test",
-                "provider_id": format!("dq-{}", uniq_name("t")),
+                "provider_id": provider_id,
                 "provider_url": "https://example.com/track/0",
-                "artist_name": "DQ Artist",
-                "track_name": "DQ Song (From Test Game)",
+                "artist_name": artist_name,
+                "track_name": track_name,
                 "preview_url": "https://example.com/p.mp3",
                 "artwork_url": "https://example.com/c.jpg",
             }),
@@ -405,4 +426,188 @@ async fn data_quality_enrichment_move_undo() {
         "restored answers: {}",
         t3r["answers"]
     );
+}
+
+// ---- extra queues (artists / featuring / duplicates) ---------------------------
+
+async fn new_playlist(owner: &Client) -> i64 {
+    owner
+        .post("/api/v1/playlists", json!({"name": uniq_name("plx")}))
+        .await
+        .expect_ok("playlist")
+        .json("/id")
+        .as_i64()
+        .unwrap()
+}
+
+#[tokio::test]
+async fn extra_queues_require_reviewer() {
+    let (user, _) = Client::register("dqx").await;
+    for ep in [
+        "/api/v1/admin/data-quality/queue/artists",
+        "/api/v1/admin/data-quality/queue/featuring",
+        "/api/v1/admin/data-quality/duplicates",
+    ] {
+        let r = user.get(ep).await;
+        assert_eq!(r.status, StatusCode::FORBIDDEN, "{ep}");
+        let r = Client::anon().get(ep).await;
+        assert_eq!(r.status, StatusCode::UNAUTHORIZED, "{ep} anon");
+    }
+}
+
+#[tokio::test]
+async fn artist_queue_re_artist_flow() {
+    let admin = Client::admin().await;
+    let playlist_id = new_playlist(&admin).await;
+    let tid = track_named(
+        &admin,
+        playlist_id,
+        "E2E Zelda Soundtrack Ensemble",
+        "E2E Cover Song",
+    )
+    .await;
+
+    // The compilation-looking artist lands in the queue.
+    let q = admin
+        .get("/api/v1/admin/data-quality/queue/artists?q=E2E Zelda")
+        .await
+        .expect_ok("artist queue");
+    assert!(
+        q.json("/items")
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|i| i["id"].as_i64() == Some(tid)),
+        "candidate listed: {}",
+        q.text
+    );
+
+    // Re-artist fixes the value and ejects the track from the queue.
+    admin
+        .post(
+            &format!("/api/v1/admin/data-quality/tracks/{tid}/re-artist"),
+            json!({"room_id": 0, "playlist_id": playlist_id, "value": "Koji Kondo"}),
+        )
+        .await
+        .expect_ok("re-artist");
+
+    let q2 = admin
+        .get("/api/v1/admin/data-quality/queue/artists?q=E2E Zelda")
+        .await
+        .expect_ok("artist queue after");
+    assert!(
+        !q2.json("/items")
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|i| i["id"].as_i64() == Some(tid))
+    );
+
+    let tracks = admin
+        .get(&format!("/api/v1/playlists/{playlist_id}/tracks"))
+        .await
+        .expect_ok("tracks");
+    assert!(
+        tracks.text.contains("Koji Kondo"),
+        "artist updated: {}",
+        tracks.text
+    );
+}
+
+#[tokio::test]
+async fn featuring_queue_apply_and_dismiss() {
+    let admin = Client::admin().await;
+    let playlist_id = new_playlist(&admin).await;
+    let tid = track_named(&admin, playlist_id, "E2E Main feat. E2E Guest", "E2E Song").await;
+    let tid2 = track_named(
+        &admin,
+        playlist_id,
+        "E2E Other ft E2E Guest Two",
+        "E2E Song Two",
+    )
+    .await;
+
+    let q = admin
+        .get("/api/v1/admin/data-quality/queue/featuring?q=E2E")
+        .await
+        .expect_ok("featuring queue");
+    let items = q.json("/items").as_array().unwrap().clone();
+    let row = items
+        .iter()
+        .find(|i| i["id"].as_i64() == Some(tid))
+        .expect("candidate listed");
+    // Suggestion extracts the featured part.
+    assert_eq!(
+        row["suggestion"].as_str().unwrap_or(""),
+        "E2E Guest",
+        "{}",
+        q.text
+    );
+
+    // Apply the suggestion → Featuring answer added → leaves the queue.
+    admin
+        .post(
+            &format!("/api/v1/admin/data-quality/tracks/{tid}/answer-typed"),
+            json!({"room_id": 0, "playlist_id": playlist_id,
+                   "answer_type_id": 5, "value": "E2E Guest"}),
+        )
+        .await
+        .expect_ok("apply featuring");
+
+    let tracks = admin
+        .get(&format!("/api/v1/playlists/{playlist_id}/tracks"))
+        .await
+        .expect_ok("tracks");
+    assert!(
+        tracks.text.contains("\"5\"") && tracks.text.contains("E2E Guest"),
+        "featuring answer stored: {}",
+        tracks.text
+    );
+
+    // Dismiss the second candidate → out of queue too.
+    admin
+        .post(
+            &format!("/api/v1/admin/data-quality/tracks/{tid2}/dismiss-typed"),
+            json!({"room_id": 0, "playlist_id": playlist_id, "answer_type_id": 5}),
+        )
+        .await
+        .expect_ok("dismiss");
+
+    let q2 = admin
+        .get("/api/v1/admin/data-quality/queue/featuring?q=E2E")
+        .await
+        .expect_ok("featuring after");
+    assert!(
+        !q2.json("/items")
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|i| i["id"].as_i64() == Some(tid) || i["id"].as_i64() == Some(tid2))
+    );
+}
+
+#[tokio::test]
+async fn duplicates_report_groups_provider_ids() {
+    let admin = Client::admin().await;
+    // Same provider_id in two different playlists (per-playlist dedupe is
+    // by design, so a cross-playlist copy is required).
+    let playlist_id = new_playlist(&admin).await;
+    let playlist_id2 = new_playlist(&admin).await;
+    let dup = format!("e2e-dup-{}", uniq_name("x"));
+    track_full(&admin, playlist_id, "A1", "T1", &dup).await;
+    track_full(&admin, playlist_id2, "A2", "T2", &dup).await;
+
+    let r = admin
+        .get(&format!(
+            "/api/v1/admin/data-quality/duplicates?q={dup}&per_page=50"
+        ))
+        .await
+        .expect_ok("duplicates");
+    let items = r.json("/items").as_array().cloned().unwrap_or_default();
+    let group = items
+        .iter()
+        .find(|g| g["provider_id"].as_str() == Some(dup.as_str()))
+        .expect("dup group listed");
+    assert_eq!(group["copies"].as_i64(), Some(2));
+    assert_eq!(group["tracks"].as_array().unwrap().len(), 2, "{}", r.text);
 }
