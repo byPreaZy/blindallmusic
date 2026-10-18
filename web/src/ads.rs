@@ -36,7 +36,7 @@ pub fn should_serve_ads(path: &str, ads_disabled: bool) -> bool {
 }
 
 // (fetched_at_ms, ads_disabled, client, slot, goal) — refreshed every 60s so a
-// newly reached donation goal actually turns ads off without a full reload.
+// supporter flag granted mid-session actually turns ads off without a reload.
 fn ads_state_sig() -> ArcRwSignal<Option<(f64, bool, String, String, String)>> {
     thread_local! {
         static SIG: ArcRwSignal<Option<(f64, bool, String, String, String)>> = ArcRwSignal::new(None);
