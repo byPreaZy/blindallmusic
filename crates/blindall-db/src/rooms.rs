@@ -556,10 +556,14 @@ impl RoomRepo {
         )
     }
 
-    pub async fn attach_playlist(&self, room_id: i64, playlist_id: i64) -> Result<(), sqlx::Error> {
-        sqlx::query(
+    /// Returns true when the link was newly created (false if already attached).
+    pub async fn attach_playlist(&self, room_id: i64, playlist_id: i64) -> Result<bool, sqlx::Error> {
+        let res = sqlx::query(
             "INSERT INTO playlist_room (playlist_id, room_id, created_at, updated_at) \
-             VALUES ($1, $2, $3, $4)",
+             SELECT $1, $2, $3, $4 \
+             WHERE NOT EXISTS ( \
+               SELECT 1 FROM playlist_room \
+               WHERE playlist_id = $1 AND room_id = $2)",
         )
         .bind(playlist_id)
         .bind(room_id)
@@ -567,7 +571,7 @@ impl RoomRepo {
         .bind(chrono::Utc::now())
         .execute(&self.pool)
         .await?;
-        Ok(())
+        Ok(res.rows_affected() > 0)
     }
 
     pub async fn detach_playlist(&self, room_id: i64, playlist_id: i64) -> Result<(), sqlx::Error> {
@@ -606,10 +610,16 @@ impl RoomRepo {
 
     // ---- bookmarks ---------------------------------------------------------
 
-    pub async fn bookmark(&self, user_id: i64, room_id: i64) -> Result<(), sqlx::Error> {
-        sqlx::query(
+    /// Returns true when the bookmark was newly inserted (false if already present).
+    pub async fn bookmark(&self, user_id: i64, room_id: i64) -> Result<bool, sqlx::Error> {
+        let res = sqlx::query(
             "INSERT INTO bookmarks (user_id, bookmarkable_type, bookmarkable_id, \
-             created_at, updated_at) VALUES ($1, 'App\\Models\\Room', $2, $3, $4)",
+             created_at, updated_at) \
+             SELECT $1, 'App\\Models\\Room', $2, $3, $4 \
+             WHERE NOT EXISTS ( \
+               SELECT 1 FROM bookmarks \
+               WHERE user_id = $1 AND bookmarkable_type = 'App\\Models\\Room' \
+               AND bookmarkable_id = $2)",
         )
         .bind(user_id)
         .bind(room_id)
@@ -617,7 +627,7 @@ impl RoomRepo {
         .bind(chrono::Utc::now())
         .execute(&self.pool)
         .await?;
-        Ok(())
+        Ok(res.rows_affected() > 0)
     }
 
     pub async fn unbookmark(&self, user_id: i64, room_id: i64) -> Result<(), sqlx::Error> {

@@ -10,6 +10,7 @@ pub mod navbar;
 pub mod notifications;
 pub mod player;
 pub mod ranking;
+pub mod share;
 pub mod upload_track;
 pub mod install_prompt;
 pub mod finished_round;

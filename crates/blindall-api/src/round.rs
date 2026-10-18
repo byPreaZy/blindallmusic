@@ -220,6 +220,7 @@ pub async fn start(
     if user.0.is_guest {
         return Err((StatusCode::FORBIDDEN, Json(json!({"message": "guest_forbidden"}))));
     }
+    require_room_control(&state, id, &user.0).await?;
 
     state
         .manager

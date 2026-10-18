@@ -295,6 +295,7 @@ fn ChatMessage(
         .expect("ws ready");
     let msg_id = message["id"].as_i64().unwrap_or_default();
     let uid = message["user"]["id"].as_i64().unwrap_or_default();
+    let author_is_guest = message["user"]["is_guest"].as_bool().unwrap_or(false);
     let name = StoredValue::new(message["user"]["name"].as_str().unwrap_or("?").to_string());
     let body = StoredValue::new(message["body"].as_str().unwrap_or_default().to_string());
     let time = StoredValue::new(message["time"].as_str().unwrap_or_default().to_string());
@@ -448,22 +449,33 @@ fn ChatMessage(
 
             <div class="flex items-start gap-3">
                 <div class="relative">
-                    {match photo.clone() {
-                        Some(p) => view! {
-                            <img src=if p.starts_with("http") || p.starts_with('/') { p.clone() } else { format!("/storage/{p}") } alt=name.get_value()
-                                class=format!(
-                                    "h-10 w-10 rounded-full border-2 object-cover {}",
+                    {move || {
+                        let avatar = match photo.clone() {
+                            Some(p) => view! {
+                                <img src=if p.starts_with("http") || p.starts_with('/') { p.clone() } else { format!("/storage/{p}") } alt=name.get_value()
+                                    class=format!(
+                                        "h-10 w-10 rounded-full border-2 object-cover {}",
+                                        if from_mod { "border-brand-accent" } else { "border-white/20" }
+                                    )/>
+                            }.into_any(),
+                            None => view! {
+                                <div class=format!(
+                                    "flex h-10 w-10 items-center justify-center rounded-full border-2 bg-brand-deep text-sm font-bold text-white/60 {}",
                                     if from_mod { "border-brand-accent" } else { "border-white/20" }
-                                )/>
-                        }.into_any(),
-                        None => view! {
-                            <div class=format!(
-                                "flex h-10 w-10 items-center justify-center rounded-full border-2 bg-brand-deep text-sm font-bold text-white/60 {}",
-                                if from_mod { "border-brand-accent" } else { "border-white/20" }
-                            )>
-                                {name.get_value().chars().next().unwrap_or('?').to_uppercase().to_string()}
-                            </div>
-                        }.into_any(),
+                                )>
+                                    {name.get_value().chars().next().unwrap_or('?').to_uppercase().to_string()}
+                                </div>
+                            }.into_any(),
+                        };
+                        if author_is_guest {
+                            avatar
+                        } else {
+                            view! {
+                                <A href=format!("/profile/{uid}") attr:title=name.get_value()>
+                                    {avatar}
+                                </A>
+                            }.into_any()
+                        }
                     }}
                     {from_mod.then(|| view! {
                         <div class="absolute -bottom-1 -right-1 bg-brand-accent p-0.5" title="Room Moderator">
@@ -485,12 +497,20 @@ fn ChatMessage(
                                         {n}
                                     </button>
                                 }.into_any()
-                            } else {
+                            } else if author_is_guest {
                                 let n = name.get_value();
                                 view! {
                                     <span class=format!("truncate text-sm font-bold {}", if from_mod { "text-brand-accent" } else { "text-white" })>
                                         {n}
                                     </span>
+                                }.into_any()
+                            } else {
+                                let n = name.get_value();
+                                view! {
+                                    <A href=format!("/profile/{uid}")
+                                        attr:class=format!("truncate text-sm font-bold hover:underline {}", if from_mod { "text-brand-accent" } else { "text-white" })>
+                                        {n}
+                                    </A>
                                 }.into_any()
                             }}
                             {team_name.clone().map(|tn| view! {

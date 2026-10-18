@@ -239,6 +239,7 @@ async fn message_json(state: &AppState, msg_id: i64, room_id: i64) -> Value {
                         info.as_ref().and_then(|p| p.photo.as_deref()).unwrap_or(""),
                         info.as_ref().map(|p| p.name.as_str()).unwrap_or(""),
                     ),
+                    "is_guest": info.as_ref().map(|p| p.is_guest).unwrap_or(false),
                     "team_id": info.as_ref().and_then(|p| p.team_id),
                     "team": team,
                     "role": info.as_ref().map(|p| if p.is_administrator { "admin" } else if p.is_moderator { "moderator" } else { "" }).unwrap_or(""),

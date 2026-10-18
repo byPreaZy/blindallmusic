@@ -308,3 +308,48 @@ async fn room_is_active_toggle_forbidden_for_outsider() {
         .await;
     assert_eq!(denied.status, StatusCode::FORBIDDEN);
 }
+
+// ---- round control auth ----------------------------------------------------
+
+#[tokio::test]
+async fn room_start_requires_control() {
+    let (owner, _) = Client::register("so").await;
+    let (other, _) = Client::register("so2").await;
+    let (mod_u, _) = Client::register("so3").await;
+    let r = owner
+        .post("/api/v1/rooms", json!({"name": uniq_name("st"), "category_id": 4}))
+        .await
+        .expect_ok("create");
+    let id = r.json("/room/id").as_i64().unwrap();
+    let mod_id = mod_u.user_id;
+
+    // outsider → 403
+    let denied = other
+        .post_empty(&format!("/api/v1/rooms/{id}/start"))
+        .await;
+    assert_eq!(denied.status, StatusCode::FORBIDDEN, "outsider start → 403: {}", denied.text);
+
+    // guest → 403
+    let guest = Client::guest().await;
+    let g = guest.post_empty(&format!("/api/v1/rooms/{id}/start")).await;
+    assert_eq!(g.status, StatusCode::FORBIDDEN, "guest start → 403");
+
+    // attach moderator, then moderator can start
+    let attach = owner
+        .post(
+            &format!("/api/v1/rooms/{id}/moderators/attach"),
+            json!({"user_id": mod_id}),
+        )
+        .await;
+    assert!(attach.ok(), "attach moderator: {}", attach.text);
+    let ok = mod_u
+        .post_empty(&format!("/api/v1/rooms/{id}/start"))
+        .await;
+    assert!(ok.ok(), "moderator start: {}", ok.text);
+
+    // owner can also start (room not playing after empty round auto-finish)
+    let own = owner
+        .post_empty(&format!("/api/v1/rooms/{id}/start"))
+        .await;
+    assert!(own.ok(), "owner start: {}", own.text);
+}

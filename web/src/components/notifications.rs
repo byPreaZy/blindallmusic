@@ -192,6 +192,36 @@ pub fn Notifications() -> impl IntoView {
                                                     </button>
                                                 </div>
                                             }.into_any(),
+                                            "RoomBookmarked" | "PlaylistUsed" => {
+                                                let heading = if short_ty == "RoomBookmarked" {
+                                                    t("Room bookmarked")
+                                                } else {
+                                                    t("Playlist used")
+                                                };
+                                                view! {
+                                                    <div>
+                                                        <h4 class="mb-1 border-b border-white/10 pb-1 text-xs font-bold uppercase text-brand-accent">
+                                                            {heading}
+                                                        </h4>
+                                                        <p class="my-2 text-sm font-medium text-white/90">
+                                                            {if room_slug.is_empty() {
+                                                                view! { <span>{message.clone()}</span> }.into_any()
+                                                            } else {
+                                                                view! {
+                                                                    <A href=format!("/rooms/{room_slug}") attr:class="hover:text-brand-accent-light"
+                                                                        on:click=move |_| open.set(false)>
+                                                                        {message}
+                                                                    </A>
+                                                                }.into_any()
+                                                            }}
+                                                        </p>
+                                                        <button type="button" class="btn-primary !px-2 !py-1 !text-xs ml-auto mt-2 block"
+                                                            on:click=move |_| mark_done(id.clone())>
+                                                            "✓ " {t("Done")}
+                                                        </button>
+                                                    </div>
+                                                }.into_any()
+                                            }
                                             "TeamRequestApproved" | "TeamRequestRejected" => {
                                                 let text = if short_ty == "TeamRequestApproved" {
                                                     t("Your request has been accepted!").to_string()

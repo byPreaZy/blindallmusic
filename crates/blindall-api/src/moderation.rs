@@ -257,6 +257,19 @@ pub async fn ban(
         .await
     {
         Ok(()) => {
+            let _ = state
+                .notifications
+                .notify(
+                    user_id,
+                    "App\\Notifications\\UserBanned",
+                    json!({
+                        "reason": reason,
+                        "duration": body.duration,
+                        "type": "ban",
+                        "message": format!("Ton compte a été suspendu : {reason}"),
+                    }),
+                )
+                .await;
             crate::chat::cleanup_banned_user_messages(&state, user_id).await;
             Json(json!({"ok": true})).into_response()
         }

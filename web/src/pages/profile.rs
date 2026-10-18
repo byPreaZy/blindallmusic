@@ -25,6 +25,7 @@ pub fn ProfilePage() -> impl IntoView {
     let loading = RwSignal::new(true);
     let not_found = RwSignal::new(false);
     let level_modal = RwSignal::new(false);
+    let share_open = RwSignal::new(false);
 
     let user_id = move || params.get().get("id").unwrap_or_default();
 
@@ -104,7 +105,7 @@ pub fn ProfilePage() -> impl IntoView {
                 <div class="py-24 text-center text-white/60">{t("Player not found")}</div>
             </Show>
             <Show when=move || !loading.get() && !not_found.get()>
-                <ProfileHeader profile=profile on_level=move |_| level_modal.set(true) />
+                <ProfileHeader profile=profile on_level=move |_| level_modal.set(true) on_share=move |_| share_open.set(true) />
                 {move || {
                     let h = highlights.get();
                     if h.is_null() {
@@ -222,13 +223,19 @@ pub fn ProfilePage() -> impl IntoView {
                         </div>
                     }
                 })}
+
+                <crate::components::share::ShareModal
+                    open=share_open
+                    title=move || t("Share this profile").to_string()
+                    url=move || format!("/profile/{}", user_id())
+                />
             </Show>
         </div>
     }
 }
 
 #[component]
-fn ProfileHeader(profile: RwSignal<Value>, on_level: impl Fn(leptos::ev::MouseEvent) + Copy + Send + Sync + 'static) -> impl IntoView {
+fn ProfileHeader(profile: RwSignal<Value>, on_level: impl Fn(leptos::ev::MouseEvent) + Copy + Send + Sync + 'static, on_share: impl Fn(leptos::ev::MouseEvent) + Copy + Send + Sync + 'static) -> impl IntoView {
     view! {
         {move || {
             let p = profile.get();
@@ -241,7 +248,16 @@ fn ProfileHeader(profile: RwSignal<Value>, on_level: impl Fn(leptos::ev::MouseEv
             let name = p["name"].as_str().unwrap_or("").to_string();
             let initial = name.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_default();
             view! {
-                <section class="mb-6 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-brand-deep via-brand-midnight to-neutral-900 shadow-lg">
+                <section class="relative mb-6 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-brand-deep via-brand-midnight to-neutral-900 shadow-lg">
+                    <button type="button"
+                        class="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/60 transition hover:border-brand-accent/40 hover:text-brand-accent"
+                        title={t("Share this profile")}
+                        aria-label={t("Share this profile")}
+                        on:click=on_share>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-5 w-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
+                        </svg>
+                    </button>
                     <div class="p-6 sm:p-8">
                         <div class="flex flex-col items-center gap-6 text-center sm:flex-row sm:items-start sm:text-left">
                             <div class="relative shrink-0">

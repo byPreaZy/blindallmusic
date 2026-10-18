@@ -979,7 +979,29 @@ pub async fn attach_playlist(
         return validation("playlist_id", "The selected playlist id is invalid.");
     }
     match state.rooms.attach_playlist(id, body.playlist_id).await {
-        Ok(()) => Json(json!({"ok": true})).into_response(),
+        Ok(created) => {
+            if created {
+                if let Ok(Some(playlist)) = state.playlists.find(body.playlist_id).await {
+                    if playlist.user_id != user.id {
+                        let _ = state
+                            .notifications
+                            .notify(
+                                playlist.user_id,
+                                "App\\Notifications\\PlaylistUsed",
+                                json!({
+                                    "room": {"id": room.id, "name": room.name, "slug": room.slug},
+                                    "playlist": {"id": playlist.id, "name": playlist.name},
+                                    "user": {"id": user.id, "name": user.name},
+                                    "created_at": notif_timestamp(),
+                                    "message": format!("{} utilise ta playlist {} dans la room {}", user.name, playlist.name, room.name),
+                                }),
+                            )
+                            .await;
+                    }
+                }
+            }
+            Json(json!({"ok": true})).into_response()
+        }
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
@@ -1071,11 +1093,29 @@ pub async fn bookmark(
         return r;
     }
 
-    if let Err(e) = load_room(&state, id).await {
-        return e;
-    }
+    let room = match load_room(&state, id).await {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
     match state.rooms.bookmark(user.id, id).await {
-        Ok(()) => Json(json!({"is_bookmarked": true})).into_response(),
+        Ok(created) => {
+            if created && room.user_id != user.id {
+                let _ = state
+                    .notifications
+                    .notify(
+                        room.user_id,
+                        "App\\Notifications\\RoomBookmarked",
+                        json!({
+                            "room": {"id": room.id, "name": room.name, "slug": room.slug},
+                            "user": {"id": user.id, "name": user.name},
+                            "created_at": notif_timestamp(),
+                            "message": format!("{} a ajouté {} à ses favoris", user.name, room.name),
+                        }),
+                    )
+                    .await;
+            }
+            Json(json!({"is_bookmarked": true})).into_response()
+        }
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }

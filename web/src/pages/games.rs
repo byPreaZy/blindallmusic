@@ -1,3 +1,7 @@
+// Mini-games are feature-gated off (see MinigamesDisabled): the helpers below
+// belong to the disabled play pages and are kept for the re-enable.
+#![allow(dead_code)]
+
 use crate::api;
 use crate::auth::use_auth;
 use crate::i18n::t;

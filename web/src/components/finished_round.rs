@@ -200,6 +200,7 @@ pub fn FinishedRoundModal(
     users_podium: RwSignal<Vec<Value>>,
     teams_podium: RwSignal<Vec<Value>>,
     room: RwSignal<RoomConfig>,
+    room_id: RwSignal<i64>,
 ) -> impl IntoView {
     let active_tab = RwSignal::new("players");
     let countdown = RwSignal::new(0_i64);
@@ -374,7 +375,21 @@ pub fn FinishedRoundModal(
                                 </div>
                             </Show>
                         </div>
-                        <div class="flex shrink-0 items-center justify-end">
+                        <div class="flex shrink-0 items-center justify-end gap-2">
+                            <Show when=move || room.get().can_edit>
+                                <button type="button" class="btn-primary !px-4 !py-2"
+                                    on:click=move |_| {
+                                        let rid = room_id.get_untracked();
+                                        leptos::task::spawn_local(async move {
+                                            let _ = crate::api::post_empty::<serde_json::Value>(
+                                                &format!("/api/v1/rooms/{rid}/start"),
+                                            ).await;
+                                        });
+                                        show.set(false);
+                                    }>
+                                    {t("Play again")}
+                                </button>
+                            </Show>
                             <button type="button" class="btn-secondary" on:click=move |_| show.set(false)>
                                 {t("Close")}
                             </button>
