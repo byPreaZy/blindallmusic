@@ -130,7 +130,7 @@ pub fn FaqPage() -> impl IntoView {
                                 on:click=move |_| page.update(|p| *p -= 1)>"←"</button>
                             <span class="px-2 py-1">{move || format!("{} / {}", page.get(), last_page())}</span>
                             <button type="button" class="rounded border border-white/10 px-3 py-1 disabled:opacity-30"
-                                disabled=move || page.get() >= last_page()
+                                disabled=move || { page.get() >= last_page() }
                                 on:click=move |_| page.update(|p| *p += 1)>"→"</button>
                         </div>
                     </Show>

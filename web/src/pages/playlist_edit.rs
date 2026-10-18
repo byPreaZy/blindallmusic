@@ -391,7 +391,7 @@ fn TrackList(
                         on:click=move |_| on_page(page.get() - 1)>"←"</button>
                     <span class="text-white/60">{move || format!("{} / {}", page.get(), page_count())}</span>
                     <button type="button" class="text-brand-accent-light disabled:text-white/30"
-                        disabled=move || page.get() >= page_count()
+                        disabled=move || { page.get() >= page_count() }
                         on:click=move |_| on_page(page.get() + 1)>"→"</button>
                 </div>
             </Show>
