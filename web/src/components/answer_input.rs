@@ -76,9 +76,11 @@ pub fn AnswerInput(
         round.get().is_none() || track.get().is_none() || blurred.get()
     });
 
-    // Anti-triche : quitter l'onglet/la fenêtre pendant une piste bloque la
-    // saisie jusqu'à la piste suivante. Les réponses déjà soumises restent
-    // valides (elles ont été tapées avant le blur).
+    // Anti-triche : masquer la page (autre onglet, minimise, switch d'app)
+    // pendant une piste bloque la saisie jusqu'à la piste suivante. Les
+    // réponses déjà soumises restent valides. La simple perte de focus
+    // (second écran, Discord à côté, devtools, notif OS) ne bloque PAS :
+    // trop de faux positifs pour des joueurs qui voient encore la page.
     {
         use wasm_bindgen::prelude::*;
         use wasm_bindgen::JsCast;
@@ -106,28 +108,6 @@ pub fn AnswerInput(
                 );
             });
         }
-        let blur_handle = leptos::leptos_dom::helpers::window_event_listener(
-            leptos::ev::blur,
-            move |_| {
-                if round.get_untracked().is_none() || track.get_untracked().is_none() {
-                    return;
-                }
-                // debounce : les popups (1Password, notifications OS) volent le
-                // focus une fraction de seconde — on bloque seulement si le
-                // focus n'est pas revenu rapidement.
-                gloo_timers::callback::Timeout::new(700, move || {
-                    let Some(w) = web_sys::window() else { return };
-                    let Some(doc) = w.document() else { return };
-                    let gone = doc.hidden() || !doc.has_focus().unwrap_or(true);
-                    if gone && !blurred.get_untracked() {
-                        blurred.set(true);
-                        text.set(String::new());
-                    }
-                })
-                .forget();
-            },
-        );
-        on_cleanup(move || blur_handle.remove());
     }
 
     let last_track_id = RwSignal::new(Option::<i64>::None);
