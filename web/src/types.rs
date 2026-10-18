@@ -155,6 +155,8 @@ pub struct RoomConfig {
     #[serde(default)]
     pub is_bookmarked: bool,
     #[serde(default)]
+    pub is_active: bool,
+    #[serde(default)]
     pub moderators: Vec<Value>,
     #[serde(default)]
     pub owner: Option<Value>,

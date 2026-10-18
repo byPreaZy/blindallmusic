@@ -258,6 +258,7 @@ pub async fn show(
             "tracks_by_round": cfg.tracks_by_round,
             "is_public": cfg.is_public,
             "is_autostart": cfg.is_autostart,
+            "is_active": row.is_active,
             "member_count": member_count,
             "tracks_count": tracks_count,
             "rounds_count": rounds_count,

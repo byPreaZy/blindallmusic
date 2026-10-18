@@ -915,6 +915,12 @@ pub fn RoomPage() -> impl IntoView {
                                 <h1 class="retro-title retro-title--white min-w-0 truncate text-xl sm:text-2xl">
                                     {move || if room.get().name.is_empty() { format!("Room #{}", room_id.get()) } else { room.get().name } }
                                 </h1>
+                                <Show when=move || room.get().can_edit && !room.get().is_active>
+                                    <span class="shrink-0 rounded-md border border-amber-400/40 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300"
+                                        title=t("Hidden from public lists — reactivate it in room options")>
+                                        {t("Hidden")}
+                                    </span>
+                                </Show>
                                 <span class=move || format!(
                                     "flex shrink-0 items-center gap-1.5 text-xs font-medium sm:text-sm {}",
                                     if conn() == "reconnecting" { "text-brand-secondary" } else { "text-white/60" }
