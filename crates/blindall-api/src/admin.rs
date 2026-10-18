@@ -1096,9 +1096,12 @@ pub async fn data_quality_missing(
                 .into_iter()
                 .map(|mut r| {
                     let title = r["title"].as_str().unwrap_or_default().to_string();
+                    let best = suggest_work_name(&title)
+                        .or_else(|| r["dict_work"].as_str().map(|s| s.to_string()))
+                        .or_else(|| r["mb_work"].as_str().map(|s| s.to_string()));
                     r.as_object_mut().unwrap().insert(
                         "suggestion".into(),
-                        match suggest_work_name(&title) {
+                        match best {
                             Some(s) => json!(s),
                             None => Value::Null,
                         },
@@ -1246,6 +1249,100 @@ pub async fn data_quality_actions(
     }
     match state.admin.data_quality_actions(200).await {
         Ok(v) => Json(json!({ "actions": v })).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// Batch-import external research evidence (album, MusicBrainz work, dict
+/// match, confidence). Rows for missing tracks are skipped; capped at 500.
+pub async fn data_quality_enrichment(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Json(b): Json<Value>,
+) -> Response {
+    if !user.is_administrator {
+        return forbidden();
+    }
+    let rows = b["rows"].as_array().cloned().unwrap_or_default();
+    if rows.is_empty() || rows.len() > 500 {
+        return err("rows", "1-500 rows required");
+    }
+    match state.admin.upsert_enrichment(&rows).await {
+        Ok(n) => Json(json!({ "ok": true, "imported": n })).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+pub async fn data_quality_playlists(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
+    if !user.is_administrator {
+        return forbidden();
+    }
+    match state.admin.playlist_options().await {
+        Ok(v) => Json(json!({ "playlists": v })).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct DqMoveBody {
+    room_id: i64,
+    playlist_id: i64,
+    to_playlist_id: i64,
+}
+
+/// Move a misplaced track to another playlist, audited.
+pub async fn data_quality_move_track(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path(track_id): Path<i64>,
+    Json(b): Json<DqMoveBody>,
+) -> Response {
+    if !user.is_administrator {
+        return forbidden();
+    }
+    if b.playlist_id == b.to_playlist_id {
+        return err("to_playlist_id", "same playlist");
+    }
+    let expected = match state.admin.room_expected_answer_type(b.room_id).await {
+        Ok(v) => v,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+    let Some((type_id, _)) = expected else {
+        return err("room", "no_expected_type");
+    };
+    match state
+        .admin
+        .move_track(
+            track_id,
+            b.playlist_id,
+            b.to_playlist_id,
+            b.room_id,
+            type_id,
+            user.id,
+        )
+        .await
+    {
+        Ok(true) => Json(json!({ "ok": true })).into_response(),
+        Ok(false) => StatusCode::NOT_FOUND.into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// Restore a track removed through the review queue (snapshot replay).
+pub async fn data_quality_undo_remove(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path(action_id): Path<i64>,
+) -> Response {
+    if !user.is_administrator {
+        return forbidden();
+    }
+    match state.admin.undo_remove(action_id, user.id).await {
+        Ok(true) => Json(json!({ "ok": true })).into_response(),
+        Ok(false) => StatusCode::NOT_FOUND.into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }

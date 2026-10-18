@@ -187,6 +187,13 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0020_data_quality_audit.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            21,
+            "track_enrichment".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0021_track_enrichment.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {

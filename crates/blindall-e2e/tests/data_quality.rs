@@ -192,3 +192,138 @@ async fn data_quality_review_flow() {
         .await;
     assert_eq!(r.status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn data_quality_enrichment_move_undo() {
+    let admin = Client::admin().await;
+    let (room_id, playlist_id, _) = game_fixture(&admin, &[("Test Game", 12, 1.0)]).await;
+    let t4 = track(&admin, playlist_id).await;
+    admin
+        .post(
+            &format!("/api/v1/tracks/{t4}/answers"),
+            json!({"answer_type_id": 12, "value": "Test Game", "score": 1.0}),
+        )
+        .await
+        .expect_ok("typed answer");
+    let t2 = track(&admin, playlist_id).await;
+
+    // Enrichment import: upserts and is surfaced on the queue row.
+    let rows = json!({"rows": [{
+        "track_id": t2, "album": "OST Vol 1", "mb_work": "Test Game",
+        "mb_releases": "OST Vol 1 | OST Vol 2", "confidence": "high",
+    }]});
+    let r = admin
+        .post("/api/v1/admin/data-quality/enrichment", rows.clone())
+        .await
+        .expect_ok("enrichment");
+    assert_eq!(r.json("/imported").as_i64(), Some(1));
+    admin
+        .post("/api/v1/admin/data-quality/enrichment", rows)
+        .await
+        .expect_ok("enrichment idempotent");
+
+    let data = admin
+        .get(&format!(
+            "/api/v1/admin/data-quality/rooms/{room_id}/missing?page=1&per_page=100"
+        ))
+        .await
+        .expect_ok("missing")
+        .json("/data")
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let row = data
+        .iter()
+        .find(|r| r["id"].as_i64() == Some(t2))
+        .expect("t2 in queue")
+        .clone();
+    assert_eq!(row["album"].as_str(), Some("OST Vol 1"));
+    assert_eq!(row["mb_work"].as_str(), Some("Test Game"));
+    assert_eq!(row["confidence"].as_str(), Some("high"));
+
+    // Playlist options for the move picker.
+    let pl2 = admin
+        .post("/api/v1/playlists", json!({"name": uniq_name("dq-target")}))
+        .await
+        .expect_ok("target playlist")
+        .json("/id")
+        .as_i64()
+        .unwrap();
+    let options = admin
+        .get("/api/v1/admin/data-quality/playlists")
+        .await
+        .expect_ok("playlist options")
+        .json("/playlists")
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(options.iter().any(|p| p["id"].as_i64() == Some(pl2)));
+
+    // Move the track: audited, lands in the target playlist.
+    admin
+        .post(
+            &format!("/api/v1/admin/data-quality/tracks/{t2}/move"),
+            json!({"room_id": room_id, "playlist_id": playlist_id, "to_playlist_id": pl2}),
+        )
+        .await
+        .expect_ok("move");
+    let moved = admin
+        .get(&format!("/api/v1/playlists/{pl2}/tracks"))
+        .await
+        .expect_ok("target tracks")
+        .json("/data")
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(moved.iter().any(|t| t["id"].as_i64() == Some(t2)));
+    assert!(!missing_ids(&admin, room_id).await.contains(&t2));
+
+    // Remove + undo restores the snapshot (track + answers, original ids).
+    let t3 = track(&admin, playlist_id).await;
+    admin
+        .post(
+            &format!("/api/v1/admin/data-quality/tracks/{t3}/remove"),
+            json!({"room_id": room_id, "playlist_id": playlist_id}),
+        )
+        .await
+        .expect_ok("remove");
+    let actions = admin
+        .get("/api/v1/admin/data-quality/actions")
+        .await
+        .expect_ok("actions")
+        .json("/actions")
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let remove_action = actions
+        .iter()
+        .find(|a| {
+            a["action"].as_str() == Some("remove_track") && a["track_id"].as_i64() == Some(t3)
+        })
+        .expect("remove logged")
+        .clone();
+    admin
+        .post_empty(&format!(
+            "/api/v1/admin/data-quality/actions/{}/undo",
+            remove_action["id"].as_i64().unwrap()
+        ))
+        .await
+        .expect_ok("undo");
+    let restored = admin
+        .get(&format!("/api/v1/playlists/{playlist_id}/tracks"))
+        .await
+        .expect_ok("tracks after undo")
+        .json("/data")
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let t3r = restored
+        .iter()
+        .find(|t| t["id"].as_i64() == Some(t3))
+        .expect("t3 restored");
+    assert!(
+        t3r["answers"].as_array().unwrap().len() >= 2,
+        "restored answers: {}",
+        t3r["answers"]
+    );
+}

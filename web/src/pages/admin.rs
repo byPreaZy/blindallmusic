@@ -1274,8 +1274,22 @@ pub fn AdminDataQuality() -> impl IntoView {
     let loading = RwSignal::new(false);
     let drafts = RwSignal::new(std::collections::HashMap::<i64, String>::new());
     let busy = RwSignal::new(std::collections::HashSet::<i64>::new());
+    let checked = RwSignal::new(std::collections::HashSet::<i64>::new());
+    let move_drafts = RwSignal::new(std::collections::HashMap::<i64, String>::new());
+    let playlist_options = RwSignal::new(Vec::<Value>::new());
     let show_history = RwSignal::new(false);
     let actions = RwSignal::new(Vec::<Value>::new());
+
+    let load_options = move || {
+        if !playlist_options.get_untracked().is_empty() {
+            return;
+        }
+        leptos::task::spawn_local(async move {
+            if let Ok(v) = api::get::<Value>("/api/v1/admin/data-quality/playlists").await {
+                playlist_options.set(v["playlists"].as_array().cloned().unwrap_or_default());
+            }
+        });
+    };
 
     let load_history = move || {
         leptos::task::spawn_local(async move {
@@ -1338,6 +1352,12 @@ pub fn AdminDataQuality() -> impl IntoView {
         drafts.update(|d| {
             d.remove(&tid);
         });
+        checked.update(|c| {
+            c.remove(&tid);
+        });
+        move_drafts.update(|d| {
+            d.remove(&tid);
+        });
     };
 
     view! {
@@ -1374,6 +1394,7 @@ pub fn AdminDataQuality() -> impl IntoView {
                                 let aid = a["id"].as_i64().unwrap_or(0);
                                 let act = a["action"].as_str().unwrap_or("").to_string();
                                 let is_dismiss = act == "dismiss";
+                                let is_remove = act == "remove_track";
                                 let badge_cls = match act.as_str() {
                                     "add_answer" => "rounded bg-emerald-500/20 px-1.5 py-0.5 text-xs text-emerald-300",
                                     "remove_track" => "rounded bg-red-500/20 px-1.5 py-0.5 text-xs text-red-300",
@@ -1399,6 +1420,21 @@ pub fn AdminDataQuality() -> impl IntoView {
                                                         actions.update(|xs| xs.retain(|x| x["id"].as_i64().unwrap_or(0) != aid));
                                                     })>
                                                     {t("Undismiss")}
+                                                </button>
+                                            })}
+                                            {is_remove.then(|| view! {
+                                                <button type="button" class="rounded bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-300 hover:bg-emerald-500/25"
+                                                    title=t("Restore track and answers from the audit snapshot")
+                                                    on:click=move |_| leptos::task::spawn_local(async move {
+                                                        match api::post::<Value, Value>(
+                                                            &format!("/api/v1/admin/data-quality/actions/{aid}/undo"),
+                                                            &json!({}),
+                                                        ).await {
+                                                            Ok(_) => load_history(),
+                                                            Err(e) => error.set(Some(e.message)),
+                                                        }
+                                                    })>
+                                                    {t("Undo")}
                                                 </button>
                                             })}
                                         </td>
@@ -1428,6 +1464,42 @@ pub fn AdminDataQuality() -> impl IntoView {
                     <Show when=move || loading.get()>
                         <div class="py-8 text-center text-white/50">{t("Loading")}"…"</div>
                     </Show>
+                    {move || (!checked.get().is_empty()).then(|| {
+                        let n = checked.get().len();
+                        view! {
+                            <div class="mb-2 flex items-center gap-3 rounded-lg border border-brand-accent/30 bg-brand-accent/10 px-4 py-2">
+                                <span class="text-sm text-white">{n} {t("selected")}</span>
+                                <button type="button" class="rounded bg-brand-accent px-3 py-1 text-xs font-semibold text-black"
+                                    on:click=move |_| {
+                                        let ids: Vec<i64> = checked.get_untracked().iter().copied().collect();
+                                        leptos::task::spawn_local(async move {
+                                            for tid in ids {
+                                                let value = drafts.get_untracked().get(&tid).cloned().unwrap_or_default();
+                                                if value.trim().is_empty() { continue; }
+                                                busy.update(|b| { b.insert(tid); });
+                                                let res = api::post::<Value, Value>(
+                                                    &format!("/api/v1/admin/data-quality/tracks/{tid}/answer"),
+                                                    &json!({"room_id": rid, "playlist_id": tracks.get_untracked()
+                                                        .iter().find(|r| r["id"].as_i64() == Some(tid))
+                                                        .and_then(|r| r["playlist_id"].as_i64()).unwrap_or(0),
+                                                         "value": value.trim()}),
+                                                ).await;
+                                                if let Err(e) = res { error.set(Some(e.message)); }
+                                                else { remove_row(tid); }
+                                                busy.update(|b| { b.remove(&tid); });
+                                            }
+                                            checked.set(std::collections::HashSet::new());
+                                        });
+                                    }>
+                                    {t("Apply selected")}
+                                </button>
+                                <button type="button" class="rounded border border-white/15 px-3 py-1 text-xs text-white/60 hover:bg-white/10"
+                                    on:click=move |_| checked.set(std::collections::HashSet::new())>
+                                    {t("Clear")}
+                                </button>
+                            </div>
+                        }
+                    })}
                     <div class="overflow-hidden rounded-xl border border-white/10">
                         {move || tracks.get().into_iter().map(|tr| {
                             let tid = tr["id"].as_i64().unwrap_or(0);
@@ -1436,9 +1508,19 @@ pub fn AdminDataQuality() -> impl IntoView {
                             let title = tr["title"].as_str().unwrap_or("?").to_string();
                             let preview = tr["preview_url"].as_str().unwrap_or("").to_string();
                             let purl = tr["provider_url"].as_str().map(|s| s.to_string());
+                            let album = tr["album"].as_str().map(|s| s.to_string());
+                            let mb = tr["mb_work"].as_str().map(|s| s.to_string());
+                            let dict = tr["dict_work"].as_str().map(|s| s.to_string());
+                            let conf = tr["confidence"].as_str().map(|s| s.to_string());
                             let rid2 = rid;
                             view! {
                                 <div class="flex flex-wrap items-center gap-2 border-b border-white/5 px-4 py-2.5 last:border-0">
+                                    <input type="checkbox" class="h-4 w-4 accent-brand-accent"
+                                        prop:checked=move || checked.get().contains(&tid)
+                                        on:change=move |ev| {
+                                            let on = event_target_checked(&ev);
+                                            checked.update(|c| { if on { c.insert(tid); } else { c.remove(&tid); } });
+                                        }/>
                                     {(!preview.is_empty()).then(|| view! {
                                         <audio src=preview.clone() controls preload="none"
                                             class="h-8 w-40 rounded"></audio>
@@ -1446,6 +1528,31 @@ pub fn AdminDataQuality() -> impl IntoView {
                                     <div class="min-w-48 flex-1">
                                         <div class="truncate text-sm text-white">{title.clone()}</div>
                                         <div class="truncate text-xs text-white/50">{artist.clone()}</div>
+                                        <div class="mt-0.5 flex flex-wrap items-center gap-1">
+                                            {conf.map(|c| {
+                                                let cls = match c.as_str() {
+                                                    "high" => "rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300",
+                                                    "medium" => "rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-300",
+                                                    _ => "rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/50",
+                                                };
+                                                view! { <span class=cls>{c.clone()}</span> }
+                                            })}
+                                            {album.map(|a| view! {
+                                                <span class="max-w-60 truncate text-[10px] text-white/40" title=a.clone()>
+                                                    "album: " {a.clone()}
+                                                </span>
+                                            })}
+                                            {mb.map(|m| view! {
+                                                <span class="rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-300" title=m.clone()>
+                                                    "MB: " {m.clone()}
+                                                </span>
+                                            })}
+                                            {dict.map(|d| view! {
+                                                <span class="rounded bg-violet-500/15 px-1.5 py-0.5 text-[10px] text-violet-300" title=d.clone()>
+                                                    "dict: " {d.clone()}
+                                                </span>
+                                            })}
+                                        </div>
                                     </div>
                                     {purl.map(|u| view! {
                                         <a href=u target="_blank" class="text-xs text-brand-accent hover:underline">"deezer ↗"</a>
@@ -1515,10 +1622,51 @@ pub fn AdminDataQuality() -> impl IntoView {
                                         }>
                                         {t("Remove")}
                                     </button>
+                                    <div class="flex items-center gap-1">
+                                        <input type="text" list="dq-playlists" placeholder=t("Move to playlist #")
+                                            class="w-36 rounded-lg border border-white/10 bg-surface-base px-2 py-1.5 text-xs text-white outline-none"
+                                            on:focus=move |_| load_options()
+                                            prop:value=move || move_drafts.get().get(&tid).cloned().unwrap_or_default()
+                                            on:input=move |ev| {
+                                                move_drafts.update(|d| { d.insert(tid, event_target_value(&ev)); });
+                                            }/>
+                                        <button type="button"
+                                            class="rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-white/60 hover:bg-white/10 disabled:opacity-40"
+                                            disabled=move || {
+                                                busy.get().contains(&tid)
+                                                    || move_drafts.get().get(&tid)
+                                                        .and_then(|v| v.trim().parse::<i64>().ok())
+                                                        .map(|to| to == pid).unwrap_or(true)
+                                            }
+                                            on:click=move |_| {
+                                                let Some(to) = move_drafts.get_untracked().get(&tid)
+                                                    .and_then(|v| v.trim().parse::<i64>().ok()) else { return };
+                                                busy.update(|b| { b.insert(tid); });
+                                                leptos::task::spawn_local(async move {
+                                                    let res = api::post::<Value, Value>(
+                                                        &format!("/api/v1/admin/data-quality/tracks/{tid}/move"),
+                                                        &json!({"room_id": rid2, "playlist_id": pid, "to_playlist_id": to}),
+                                                    ).await;
+                                                    if let Err(e) = res { error.set(Some(e.message)); }
+                                                    else { remove_row(tid); }
+                                                    busy.update(|b| { b.remove(&tid); });
+                                                });
+                                            }>
+                                            {t("Move")}
+                                        </button>
+                                    </div>
                                 </div>
                             }
                         }).collect::<Vec<_>>()}
                     </div>
+                    <datalist id="dq-playlists">
+                        {move || playlist_options.get().into_iter().map(|p| {
+                            let pid2 = p["id"].as_i64().unwrap_or(0);
+                            let label = format!("{} · {} tracks",
+                                p["name"].as_str().unwrap_or(""), p["tracks"].as_i64().unwrap_or(0));
+                            view! { <option value=pid2.to_string() label=label></option> }
+                        }).collect::<Vec<_>>()}
+                    </datalist>
                     {move || (!loading.get() && tracks.get().is_empty()).then(|| view! {
                         <div class="py-8 text-center text-white/50">{t("Nothing left to review in this room.")}</div>
                     })}

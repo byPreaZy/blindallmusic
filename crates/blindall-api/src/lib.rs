@@ -406,8 +406,24 @@ pub fn router(state: AppState) -> Router {
             post(admin::data_quality_remove_track),
         )
         .route(
+            "/api/v1/admin/data-quality/tracks/{track}/move",
+            post(admin::data_quality_move_track),
+        )
+        .route(
+            "/api/v1/admin/data-quality/enrichment",
+            post(admin::data_quality_enrichment),
+        )
+        .route(
+            "/api/v1/admin/data-quality/playlists",
+            get(admin::data_quality_playlists),
+        )
+        .route(
             "/api/v1/admin/data-quality/actions",
             get(admin::data_quality_actions),
+        )
+        .route(
+            "/api/v1/admin/data-quality/actions/{action}/undo",
+            post(admin::data_quality_undo_remove),
         )
         .route(
             "/api/v1/admin/data-quality/actions/{action}/restore",

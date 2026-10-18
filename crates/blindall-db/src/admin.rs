@@ -1127,11 +1127,13 @@ impl AdminRepo {
         .await?;
         let rows = sqlx::query(
             "SELECT DISTINCT t.id, t.playlist_id, t.preview_url, t.provider_url,
-                    a1.value AS artist, a2.value AS title
+                    a1.value AS artist, a2.value AS title,
+                    e.album, e.mb_work, e.mb_releases, e.dict_work, e.confidence
              FROM playlist_room pr
              JOIN tracks t ON t.playlist_id = pr.playlist_id
              LEFT JOIN track_answers a1 ON a1.track_id = t.id AND a1.answer_type_id = 1
              LEFT JOIN track_answers a2 ON a2.track_id = t.id AND a2.answer_type_id = 2
+             LEFT JOIN track_enrichment e ON e.track_id = t.id
              WHERE pr.room_id = $1
                AND NOT EXISTS (SELECT 1 FROM track_answers ta
                                WHERE ta.track_id = t.id AND ta.answer_type_id = $2)
@@ -1159,6 +1161,11 @@ impl AdminRepo {
                         "provider_url": r.get::<Option<String>, _>("provider_url"),
                         "artist": r.get::<Option<String>, _>("artist"),
                         "title": r.get::<Option<String>, _>("title"),
+                        "album": r.get::<Option<String>, _>("album"),
+                        "mb_work": r.get::<Option<String>, _>("mb_work"),
+                        "mb_releases": r.get::<Option<String>, _>("mb_releases"),
+                        "dict_work": r.get::<Option<String>, _>("dict_work"),
+                        "confidence": r.get::<Option<String>, _>("confidence"),
                     })
                 })
                 .collect(),
@@ -1288,6 +1295,194 @@ impl AdminRepo {
         .execute(&mut *tx)
         .await?;
         tx.commit().await
+    }
+
+    /// Upsert external-research evidence for a batch of tracks. Rows whose
+    /// track no longer exists are skipped. Returns the number of touched rows.
+    pub async fn upsert_enrichment(&self, rows: &[Value]) -> Result<i64, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let mut n = 0i64;
+        for r in rows {
+            let Some(tid) = r["track_id"].as_i64() else {
+                continue;
+            };
+            n += sqlx::query(
+                "INSERT INTO track_enrichment
+                   (track_id, album, mb_work, mb_releases, dict_work, confidence)
+                 SELECT $1, $2, $3, $4, $5, $6
+                 WHERE EXISTS (SELECT 1 FROM tracks WHERE id = $1)
+                 ON CONFLICT (track_id) DO UPDATE SET
+                   album = EXCLUDED.album,
+                   mb_work = EXCLUDED.mb_work,
+                   mb_releases = EXCLUDED.mb_releases,
+                   dict_work = EXCLUDED.dict_work,
+                   confidence = EXCLUDED.confidence,
+                   researched_at = NOW()",
+            )
+            .bind(tid)
+            .bind(r["album"].as_str())
+            .bind(r["mb_work"].as_str())
+            .bind(r["mb_releases"].as_str())
+            .bind(r["dict_work"].as_str())
+            .bind(r["confidence"].as_str())
+            .execute(&mut *tx)
+            .await?
+            .rows_affected() as i64;
+        }
+        tx.commit().await?;
+        Ok(n)
+    }
+
+    /// id + name (+track count) pairs for the move-target picker.
+    pub async fn playlist_options(&self) -> Result<Vec<Value>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT p.id, p.name, COUNT(t.id) AS tracks
+             FROM playlists p
+             LEFT JOIN tracks t ON t.playlist_id = p.id
+             GROUP BY p.id, p.name
+             ORDER BY p.name",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|r| {
+                json!({
+                    "id": r.get::<i64, _>("id"),
+                    "name": r.get::<String, _>("name"),
+                    "tracks": r.get::<i64, _>("tracks"),
+                })
+            })
+            .collect())
+    }
+
+    /// Move a track to another playlist (e.g. misplaced anisong → Anime).
+    /// Audited with from/to in the payload.
+    pub async fn move_track(
+        &self,
+        track_id: i64,
+        from_playlist_id: i64,
+        to_playlist_id: i64,
+        room_id: i64,
+        answer_type_id: i64,
+        reviewer_id: i64,
+    ) -> Result<bool, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let moved = sqlx::query(
+            "UPDATE tracks SET playlist_id = $2, updated_at = NOW()
+             WHERE id = $1 AND playlist_id = $3
+               AND EXISTS (SELECT 1 FROM playlists WHERE id = $2)",
+        )
+        .bind(track_id)
+        .bind(to_playlist_id)
+        .bind(from_playlist_id)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected()
+            == 1;
+        if moved {
+            sqlx::query(
+                "INSERT INTO data_quality_actions
+                   (track_id, playlist_id, room_id, answer_type_id, action, payload, reviewer_id)
+                 VALUES ($1, $2, $3, $4, 'move_track',
+                         jsonb_build_object('from', $5, 'to', $2), $6)",
+            )
+            .bind(track_id)
+            .bind(to_playlist_id)
+            .bind(room_id)
+            .bind(answer_type_id)
+            .bind(from_playlist_id)
+            .bind(reviewer_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(moved)
+    }
+
+    /// Restore a track purged via purge_track: re-inserts the snapshot row and
+    /// its answers with their original ids. Idempotent (no-op if track exists).
+    pub async fn undo_remove(&self, action_id: i64, reviewer_id: i64) -> Result<bool, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let row = sqlx::query(
+            "SELECT payload, playlist_id, room_id, answer_type_id, track_id
+             FROM data_quality_actions WHERE id = $1 AND action = 'remove_track'",
+        )
+        .bind(action_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some(row) = row else {
+            tx.rollback().await?;
+            return Ok(false);
+        };
+        let payload = row
+            .get::<Option<Value>, _>("payload")
+            .unwrap_or(Value::Null);
+        let Some(track) = payload.get("track").cloned() else {
+            tx.rollback().await?;
+            return Ok(false);
+        };
+        let playlist_id: i64 = row.get("playlist_id");
+        let room_id: i64 = row.get("room_id");
+        let type_id: Option<i64> = row.get("answer_type_id");
+        let track_id: i64 = row.get("track_id");
+        // Only restore when the target playlist still exists and the track is
+        // still gone.
+        let exists: i64 =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tracks WHERE id = $1)::int::bigint")
+                .bind(track_id)
+                .fetch_one(&mut *tx)
+                .await?;
+        let pl_ok: i64 =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM playlists WHERE id = $1)::int::bigint")
+                .bind(playlist_id)
+                .fetch_one(&mut *tx)
+                .await?;
+        if exists == 1 || pl_ok != 1 {
+            tx.rollback().await?;
+            return Ok(false);
+        }
+        sqlx::query(
+            "INSERT INTO tracks
+             SELECT * FROM jsonb_populate_record(NULL::tracks, $1::jsonb)",
+        )
+        .bind(&track)
+        .execute(&mut *tx)
+        .await?;
+        if let Some(answers) = payload.get("answers").and_then(|a| a.as_array()) {
+            for a in answers {
+                sqlx::query(
+                    "INSERT INTO track_answers
+                     SELECT * FROM jsonb_populate_record(NULL::track_answers, $1::jsonb)",
+                )
+                .bind(a)
+                .execute(&mut *tx)
+                .await?;
+            }
+        }
+        sqlx::query("SELECT setval('tracks_id_seq', GREATEST((SELECT MAX(id) FROM tracks), 1))")
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query(
+            "SELECT setval('track_answers_id_seq', GREATEST((SELECT MAX(id) FROM track_answers), 1))",
+        )
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            "INSERT INTO data_quality_actions
+               (track_id, playlist_id, room_id, answer_type_id, action, payload, reviewer_id)
+             VALUES ($1, $2, $3, $4, 'restore_track', jsonb_build_object('undo_of', $5), $6)",
+        )
+        .bind(track_id)
+        .bind(playlist_id)
+        .bind(room_id)
+        .bind(type_id)
+        .bind(action_id)
+        .bind(reviewer_id)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(true)
     }
 
     /// Recent audit entries for the data-quality review log.
