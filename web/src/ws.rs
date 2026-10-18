@@ -20,6 +20,7 @@ struct Inner {
     presence: RefCell<HashMap<String, Vec<PresenceCallback>>>,
     reconnect_hooks: RefCell<Vec<Rc<dyn Fn()>>>,
     pub conn_state: ArcRwSignal<&'static str>,
+    last_rx: Cell<f64>,
     generation: Cell<u64>,
     ever_connected: Cell<bool>,
 }
@@ -46,6 +47,7 @@ impl Realtime {
             presence: RefCell::new(HashMap::new()),
             reconnect_hooks: RefCell::new(Vec::new()),
             conn_state: ArcRwSignal::new("reconnecting"),
+            last_rx: Cell::new(js_sys::Date::now()),
             generation: Cell::new(0),
             ever_connected: Cell::new(false),
         }));
@@ -93,6 +95,7 @@ impl Realtime {
             let ws2 = ws.clone();
             let onopen = Closure::<dyn FnMut()>::new(move || {
                 inner.conn_state.set("connected");
+                inner.last_rx.set(js_sys::Date::now());
                 let channels: Vec<String> = inner.channels.borrow().iter().cloned().collect();
                 for ch in channels {
                     Self::send_raw(&ws2, &json!({"op": "subscribe", "channel": ch}));
@@ -110,6 +113,7 @@ impl Realtime {
         {
             let inner = inner.clone();
             let onmessage = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
+                inner.last_rx.set(js_sys::Date::now());
                 let Some(text) = e.data().as_string() else {
                     return;
                 };
@@ -237,6 +241,17 @@ impl Realtime {
     pub fn start_heartbeat(&self) -> gloo_timers::callback::Interval {
         let rt = self.clone();
         gloo_timers::callback::Interval::new(25_000, move || {
+            // Dead sockets don't always fire `close` — in a tunnel the TCP
+            // timeout can take minutes. No inbound traffic for ~2 missed
+            // pongs → force-close, the close handler drives the reconnect.
+            if rt.0.conn_state.get_untracked() == "connected"
+                && js_sys::Date::now() - rt.0.last_rx.get() > 50_000.0
+            {
+                rt.0.conn_state.set("reconnecting");
+                if let Some(ws) = rt.0.ws.borrow().as_ref() {
+                    let _ = ws.close();
+                }
+            }
             rt.send(&json!({"op": "heartbeat", "ts": js_sys::Date::now() as i64}));
         })
     }

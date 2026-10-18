@@ -68,15 +68,21 @@ impl Resp {
 impl Client {
     pub fn anon() -> Self {
         let n = next();
-        let r = run();
-        let a = 1 + u16::from_str_radix(&r[0..2], 16).unwrap_or(1) % 254;
-        let b = 1 + u16::from_str_radix(&r[2..4], 16).unwrap_or(1) % 254;
+        // ~16M unique IPs per run: bans are keyed on IP and the old
+        // single-octet scheme wrapped onto banned addresses past 254 clients.
+        let seed = u64::from_str_radix(&run()[0..4], 16).unwrap_or(0);
+        let k = (seed + n) % (254 * 254 * 254);
         Self {
             http: Http::new(),
             token: None,
             user_id: 0,
             name: String::new(),
-            ip: format!("10.{a}.{b}.{}", 1 + (n & 0xffff) % 254),
+            ip: format!(
+                "10.{}.{}.{}",
+                k / 64516 + 1,
+                (k / 254) % 254 + 1,
+                k % 254 + 1
+            ),
         }
     }
 

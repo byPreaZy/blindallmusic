@@ -107,7 +107,9 @@ services:
         "-c",
         "config_file=/etc/postgresql/postgresql.conf",
         "-c",
-        "log_min_messages=fatal"
+        "log_min_messages=fatal",
+        "-c",
+        "log_min_duration_statement=${PG_SLOW_QUERY_MS:-300}"
       ]
 
 volumes:

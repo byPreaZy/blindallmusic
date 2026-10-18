@@ -235,13 +235,32 @@ async fn main() -> anyhow::Result<()> {
         .collect(),
     };
 
+    let slow_ms: u64 = std::env::var("SLOW_REQUEST_MS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(500);
+
     let app = router(state)
         // Never log query strings: /ws carries the bearer token
-        .layer(tower_http::trace::TraceLayer::new_for_http().make_span_with(
-            |req: &axum::http::Request<axum::body::Body>| {
-                tracing::info_span!("http", method = %req.method(), path = %req.uri().path())
-            },
-        ))
+        .layer(
+            tower_http::trace::TraceLayer::new_for_http()
+                .make_span_with(|req: &axum::http::Request<axum::body::Body>| {
+                    tracing::info_span!("http", method = %req.method(), path = %req.uri().path())
+                })
+                .on_response(
+                    move |resp: &axum::http::Response<axum::body::Body>,
+                          latency: std::time::Duration,
+                          _span: &tracing::Span| {
+                        if latency > std::time::Duration::from_millis(slow_ms) {
+                            tracing::warn!(
+                                status = %resp.status().as_u16(),
+                                latency_ms = latency.as_millis(),
+                                "slow request"
+                            );
+                        }
+                    },
+                ),
+        )
         .layer(
             tower_http::set_header::SetResponseHeaderLayer::overriding(
                 axum::http::header::X_CONTENT_TYPE_OPTIONS,
