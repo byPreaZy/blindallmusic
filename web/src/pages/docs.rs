@@ -1299,9 +1299,9 @@ pub fn ContactPage() -> impl IntoView {
                         <p class="mb-4 text-sm text-white/60">
                             {t("To report a bug or suggest a site improvement, please use the following link:")}
                             " "
-                            <A href="/contact" attr:class="underline">
+                            <a href="https://github.com/byPreaZy/blindallmusic/issues" target="_blank" rel="noopener noreferrer" class="underline">
                                 {t("Report a bug")}
-                            </A>
+                            </a>
                         </p>
                         <form class="space-y-4"
                             on:submit=move |ev| {
