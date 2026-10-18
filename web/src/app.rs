@@ -19,7 +19,8 @@ use crate::pages::login::{
     VerifyEmailConfirmPage, VerifyEmailPage,
 };
 use crate::pages::moderation::{
-    ModBannedUsers, ModDashboard, ModModerators, ModSuggestions, ModTracks, ModTrashedMessages,
+    ModBannedUsers, ModDashboard, ModDataQuality, ModModerators, ModSuggestions, ModTracks,
+    ModTrashedMessages,
     ModUserShow, ModUsers,
 };
 use crate::pages::pages::StaticPage;
@@ -211,6 +212,7 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/moderation/moderators") view=ModModerators/>
                         <Route path=path!("/moderation/suggestions") view=ModSuggestions/>
                         <Route path=path!("/moderation/tracks") view=ModTracks/>
+                        <Route path=path!("/moderation/data-quality") view=ModDataQuality/>
                         <Route path=path!("/language/:lang") view=LanguageSwitch/>
                         <Route path=path!("/en") view=LocaleRedirect/>
                         <Route path=path!("/es") view=LocaleRedirect/>

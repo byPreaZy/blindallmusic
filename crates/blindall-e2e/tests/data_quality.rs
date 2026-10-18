@@ -194,6 +194,85 @@ async fn data_quality_review_flow() {
 }
 
 #[tokio::test]
+async fn data_quality_moderator_scope() {
+    let admin = Client::admin().await;
+    let (room_id, playlist_id, _) = game_fixture(&admin, &[("Test Game", 12, 1.0)]).await;
+    let t4 = track(&admin, playlist_id).await;
+    admin
+        .post(
+            &format!("/api/v1/tracks/{t4}/answers"),
+            json!({"answer_type_id": 12, "value": "Test Game", "score": 1.0}),
+        )
+        .await
+        .expect_ok("typed answer");
+    let t2 = track(&admin, playlist_id).await;
+
+    // Make the room public so attached moderators become public moderators.
+    admin
+        .put(
+            &format!("/api/v1/admin/rooms/{room_id}"),
+            json!({"name": format!("DQ{}", uniq_name("room")), "is_public": true}),
+        )
+        .await
+        .expect_ok("publish room");
+
+    let (mod_u, _) = Client::register("dqmod").await;
+    admin
+        .post(
+            &format!("/api/v1/rooms/{room_id}/moderators/attach"),
+            json!({"user_id": mod_u.user_id}),
+        )
+        .await
+        .expect_ok("attach moderator");
+
+    // Moderator can review: list, queue, apply, dismiss, history.
+    mod_u
+        .get("/api/v1/admin/data-quality/rooms")
+        .await
+        .expect_ok("mod rooms");
+    mod_u
+        .get(&format!(
+            "/api/v1/admin/data-quality/rooms/{room_id}/missing"
+        ))
+        .await
+        .expect_ok("mod missing");
+    mod_u
+        .post(
+            &format!("/api/v1/admin/data-quality/tracks/{t2}/answer"),
+            json!({"room_id": room_id, "playlist_id": playlist_id, "value": "Test Game"}),
+        )
+        .await
+        .expect_ok("mod apply");
+    let t3 = track(&admin, playlist_id).await;
+    mod_u
+        .post(
+            &format!("/api/v1/admin/data-quality/tracks/{t3}/dismiss"),
+            json!({"room_id": room_id, "playlist_id": playlist_id}),
+        )
+        .await
+        .expect_ok("mod dismiss");
+
+    // But structural ops stay admin-only.
+    for (path, body) in [
+        (
+            format!("/api/v1/admin/data-quality/tracks/{t3}/remove"),
+            json!({"room_id": room_id, "playlist_id": playlist_id}),
+        ),
+        (
+            format!("/api/v1/admin/data-quality/tracks/{t3}/move"),
+            json!({"room_id": room_id, "playlist_id": playlist_id, "to_playlist_id": playlist_id}),
+        ),
+        (
+            "/api/v1/admin/data-quality/enrichment".to_string(),
+            json!({"rows": [{"track_id": t3}]}),
+        ),
+    ] {
+        let r = mod_u.post(&path, body).await;
+        assert_eq!(r.status, StatusCode::FORBIDDEN, "{path}");
+    }
+}
+
+#[tokio::test]
 async fn data_quality_enrichment_move_undo() {
     let admin = Client::admin().await;
     let (room_id, playlist_id, _) = game_fixture(&admin, &[("Test Game", 12, 1.0)]).await;

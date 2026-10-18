@@ -14,6 +14,7 @@ const SECTIONS: &[(&str, &str)] = &[
     ("/moderation/moderators", "Moderators"),
     ("/moderation/suggestions", "Suggestions"),
     ("/moderation/tracks", "Local tracks"),
+    ("/moderation/data-quality", "Data quality"),
 ];
 
 #[component]
@@ -925,6 +926,17 @@ pub fn ModTracks() -> impl IntoView {
                 </div>
                 {pager(page, last_page, load)}
             </Show>
+        </ModShell>
+    }
+}
+
+// ---- data quality (shared body, admin-gated destructive ops) -------------------
+
+#[component]
+pub fn ModDataQuality() -> impl IntoView {
+    view! {
+        <ModShell active="/moderation/data-quality">
+            <crate::pages::admin::DataQualityBody/>
         </ModShell>
     }
 }

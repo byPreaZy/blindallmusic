@@ -1257,11 +1257,28 @@ pub fn AdminFaqs() -> impl IntoView {
 // ---- data quality ------------------------------------------------------------
 
 /// Tracks present in a room but missing the room's expected screen answer type
-/// (Movie/Anime/Cartoon/Video game/... inferred from the majority). Admins can
-/// preview the audio, apply a suggested value, edit it, or remove the track
-/// from its playlist entirely.
+/// (Movie/Anime/Cartoon/Video game/... inferred from the majority). Reviewers
+/// (admins + public moderators) can preview, apply a suggested value, edit it,
+/// or dismiss; structural ops (remove/move/undo) stay admin-only.
 #[component]
 pub fn AdminDataQuality() -> impl IntoView {
+    view! {
+        <AdminShell active="/admin/data-quality">
+            <DataQualityBody/>
+        </AdminShell>
+    }
+}
+
+/// Shared queue body — rendered under AdminShell or ModShell.
+#[component]
+pub fn DataQualityBody() -> impl IntoView {
+    let auth = use_auth();
+    let is_admin = move || {
+        auth.user
+            .get()
+            .map(|u| u.is_administrator)
+            .unwrap_or(false)
+    };
     let rooms = RwSignal::new(Vec::<Value>::new());
     let selected = RwSignal::new(Option::<(i64, String)>::None); // (room_id, room_name)
     let type_id = RwSignal::new(0i64);
@@ -1361,7 +1378,6 @@ pub fn AdminDataQuality() -> impl IntoView {
     };
 
     view! {
-        <AdminShell active="/admin/data-quality">
             <ErrorLine error=error/>
             <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <p class="max-w-2xl text-sm text-white/60">
@@ -1422,7 +1438,7 @@ pub fn AdminDataQuality() -> impl IntoView {
                                                     {t("Undismiss")}
                                                 </button>
                                             })}
-                                            {is_remove.then(|| view! {
+                                            {(is_remove && is_admin()).then(|| view! {
                                                 <button type="button" class="rounded bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-300 hover:bg-emerald-500/25"
                                                     title=t("Restore track and answers from the audit snapshot")
                                                     on:click=move |_| leptos::task::spawn_local(async move {
@@ -1600,6 +1616,7 @@ pub fn AdminDataQuality() -> impl IntoView {
                                         }>
                                         {t("Dismiss")}
                                     </button>
+                                    {is_admin().then(|| view! {
                                     <button type="button"
                                         class="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-40"
                                         disabled=move || busy.get().contains(&tid)
@@ -1622,6 +1639,8 @@ pub fn AdminDataQuality() -> impl IntoView {
                                         }>
                                         {t("Remove")}
                                     </button>
+                                    })}
+                                    {is_admin().then(|| view! {
                                     <div class="flex items-center gap-1">
                                         <input type="text" list="dq-playlists" placeholder=t("Move to playlist #")
                                             class="w-36 rounded-lg border border-white/10 bg-surface-base px-2 py-1.5 text-xs text-white outline-none"
@@ -1655,6 +1674,7 @@ pub fn AdminDataQuality() -> impl IntoView {
                                             {t("Move")}
                                         </button>
                                     </div>
+                                    })}
                                 </div>
                             }
                         }).collect::<Vec<_>>()}
@@ -1729,6 +1749,5 @@ pub fn AdminDataQuality() -> impl IntoView {
                     <div class="py-8 text-center text-white/50">{t("No room with a dominant screen answer type.")}</div>
                 })}
             })}
-        </AdminShell>
     }
 }

@@ -1048,11 +1048,16 @@ fn suggest_work_name(title: &str) -> Option<String> {
     }
 }
 
+/// Reviewers: admins and public moderators. Destructive ops stay admin-only.
+async fn can_review(state: &AppState, user: &blindall_db::entities::User) -> bool {
+    user.is_administrator || state.auth.is_public_moderator(user.id).await
+}
+
 pub async fn data_quality_rooms(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
-    if !user.is_administrator {
+    if !can_review(&state, &user).await {
         return forbidden();
     }
     match state.admin.data_quality_rooms().await {
@@ -1074,7 +1079,7 @@ pub async fn data_quality_missing(
     Path(room_id): Path<i64>,
     Query(q): Query<DataQualityQuery>,
 ) -> Response {
-    if !user.is_administrator {
+    if !can_review(&state, &user).await {
         return forbidden();
     }
     let Some((type_id, type_name)) = (match state.admin.room_expected_answer_type(room_id).await {
@@ -1136,7 +1141,7 @@ pub async fn data_quality_apply_answer(
     Path(track_id): Path<i64>,
     Json(b): Json<DqTrackBody>,
 ) -> Response {
-    if !user.is_administrator {
+    if !can_review(&state, &user).await {
         return forbidden();
     }
     let Some(value) = b.value.as_deref().map(str::trim).filter(|v| !v.is_empty()) else {
@@ -1176,7 +1181,7 @@ pub async fn data_quality_dismiss(
     Path(track_id): Path<i64>,
     Json(b): Json<DqTrackBody>,
 ) -> Response {
-    if !user.is_administrator {
+    if !can_review(&state, &user).await {
         return forbidden();
     }
     let expected = match state.admin.room_expected_answer_type(b.room_id).await {
@@ -1244,7 +1249,7 @@ pub async fn data_quality_actions(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
-    if !user.is_administrator {
+    if !can_review(&state, &user).await {
         return forbidden();
     }
     match state.admin.data_quality_actions(200).await {
@@ -1353,7 +1358,7 @@ pub async fn data_quality_restore(
     CurrentUser(user): CurrentUser,
     Path(action_id): Path<i64>,
 ) -> Response {
-    if !user.is_administrator {
+    if !can_review(&state, &user).await {
         return forbidden();
     }
     match state.admin.restore_candidate(action_id).await {
