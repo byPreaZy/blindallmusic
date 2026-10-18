@@ -1,11 +1,11 @@
 use crate::auth::OptionalUser;
 use crate::state::AppState;
+use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
-use axum::Json;
 use blindall_db::CatalogRoom;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 const PER_PAGE: usize = 16;
 
@@ -41,10 +41,7 @@ where
     })
 }
 
-fn room_json(
-    r: &CatalogRoom,
-    storage: &std::sync::Arc<dyn crate::storage::Storage>,
-) -> Value {
+fn room_json(r: &CatalogRoom, storage: &std::sync::Arc<dyn crate::storage::Storage>) -> Value {
     let photo = r.photo_path.as_ref().map(|p| {
         if p.starts_with("http") {
             p.clone()
@@ -83,12 +80,7 @@ fn room_json(
 }
 
 fn popularity_key(r: &CatalogRoom) -> (i64, i64, i64, i64) {
-    (
-        r.subscriptions,
-        r.is_playing as i64,
-        r.rounds_count,
-        r.id,
-    )
+    (r.subscriptions, r.is_playing as i64, r.rounds_count, r.id)
 }
 
 pub async fn index(
@@ -124,8 +116,7 @@ pub async fn index(
     let storage = state.storage.clone();
     let now = chrono::Utc::now().timestamp();
 
-    if let Some(search) = q.search.as_deref().map(str::trim).filter(|s| !s.is_empty())
-    {
+    if let Some(search) = q.search.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         let mut rooms = state.home.search_rooms(search).await.unwrap_or_default();
         for r in &mut rooms {
             r.subscriptions = state.presence.member_count(r.id, now).await.unwrap_or(0);
@@ -209,8 +200,7 @@ pub async fn index(
     let featured_rooms: Vec<Value> = match featured {
         Ok(mut fr) => {
             for r in &mut fr {
-                r.subscriptions =
-                    state.presence.member_count(r.id, now).await.unwrap_or(0);
+                r.subscriptions = state.presence.member_count(r.id, now).await.unwrap_or(0);
             }
             fr.iter().map(|r| room_json(r, &storage)).collect()
         }
@@ -230,8 +220,7 @@ pub async fn index(
 
     let mut minigame_items: Vec<Value> = vec![];
     if tab == "minigames" {
-        minigame_items =
-            crate::minigames::games_list(&state, user.0.as_ref().map(|u| u.id)).await;
+        minigame_items = crate::minigames::games_list(&state, user.0.as_ref().map(|u| u.id)).await;
     }
     let catalog_items = if tab == "minigames" {
         json!({"data": minigame_items, "total": minigame_items.len(), "current_page": 1, "last_page": 1})

@@ -1,11 +1,11 @@
 use crate::auth_session::client_ip;
 use crate::state::AppState;
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -34,7 +34,9 @@ impl OAuthStates {
         use rand::Rng;
         const CH: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         let mut rng = rand::rng();
-        let state: String = (0..40).map(|_| CH[rng.random_range(0..CH.len())] as char).collect();
+        let state: String = (0..40)
+            .map(|_| CH[rng.random_range(0..CH.len())] as char)
+            .collect();
         let mut map = self.issued.lock().unwrap();
         map.retain(|_, t| t.elapsed() < STATE_TTL);
         map.insert(state.clone(), Instant::now());
@@ -66,10 +68,7 @@ fn provider_meta(name: &str) -> Option<(&'static str, &'static str, &'static str
     }
 }
 
-pub async fn redirect(
-    State(state): State<AppState>,
-    Path(provider): Path<String>,
-) -> Response {
+pub async fn redirect(State(state): State<AppState>, Path(provider): Path<String>) -> Response {
     match authorize_url(&state, &provider) {
         Ok(url) => Json(json!({ "url": url })).into_response(),
         Err(r) => r,
@@ -154,13 +153,25 @@ pub async fn callback(
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
     };
     if q.error.is_some() {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "oauth_denied"}))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "oauth_denied"})),
+        )
+            .into_response();
     }
     let (Some(code), Some(oauth_state)) = (q.code, q.state) else {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "missing_code_or_state"}))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "missing_code_or_state"})),
+        )
+            .into_response();
     };
     if !state.oauth_states.consume(&oauth_state) {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "invalid_state"}))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "invalid_state"})),
+        )
+            .into_response();
     }
 
     let t0 = Instant::now();
@@ -168,7 +179,11 @@ pub async fn callback(
         Ok(t) => t,
         Err(e) => {
             tracing::warn!(provider, error = %e, "oauth token exchange failed");
-            return (StatusCode::BAD_GATEWAY, Json(json!({"error": "oauth_exchange_failed"}))).into_response();
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error": "oauth_exchange_failed"})),
+            )
+                .into_response();
         }
     };
     let t_exchange = t0.elapsed();
@@ -177,7 +192,11 @@ pub async fn callback(
         Ok(i) => i,
         Err(e) => {
             tracing::warn!(provider, error = %e, "oauth profile fetch failed");
-            return (StatusCode::BAD_GATEWAY, Json(json!({"error": "oauth_profile_failed"}))).into_response();
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error": "oauth_profile_failed"})),
+            )
+                .into_response();
         }
     };
     let t_profile = t1.elapsed();
@@ -191,44 +210,45 @@ pub async fn callback(
 
     let user = match state.auth.find_by_provider_id(&provider, &info.id).await {
         Ok(Some(u)) => u,
-        Ok(None) => {
-            match state.auth.find_for_login(&email).await {
-                Ok(Some((existing, _, _))) => {
-                    let _ = state.auth.link_provider(existing.id, &provider, &info.id).await;
-                    existing
-                }
-                Ok(None) => {
-                    let name = unique_name(&state, &info.name).await;
-                    match state
-                        .auth
-                        .create_social_user(&name, &email, &provider, &info.id)
-                        .await
-                    {
-                        Ok(id) => {
-                            let mail = state.mail.clone();
-                            let (e2, n2) = (email.clone(), name.clone());
-                            tokio::spawn(async move {
-                                let _ = crate::mail::send_welcome(&mail, &e2, &n2).await;
-                            });
-                            blindall_db::entities::User {
-                                id,
-                                name,
-                                photo_path: None,
-                                elo: 1500,
-                                is_guest: false,
-                                is_administrator: false,
-                                team_id: None,
-                            }
-                        }
-                        Err(e) => {
-                            tracing::warn!(error = %e, "oauth create_user failed");
-                            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        Ok(None) => match state.auth.find_for_login(&email).await {
+            Ok(Some((existing, _, _))) => {
+                let _ = state
+                    .auth
+                    .link_provider(existing.id, &provider, &info.id)
+                    .await;
+                existing
+            }
+            Ok(None) => {
+                let name = unique_name(&state, &info.name).await;
+                match state
+                    .auth
+                    .create_social_user(&name, &email, &provider, &info.id)
+                    .await
+                {
+                    Ok(id) => {
+                        let mail = state.mail.clone();
+                        let (e2, n2) = (email.clone(), name.clone());
+                        tokio::spawn(async move {
+                            let _ = crate::mail::send_welcome(&mail, &e2, &n2).await;
+                        });
+                        blindall_db::entities::User {
+                            id,
+                            name,
+                            photo_path: None,
+                            elo: 1500,
+                            is_guest: false,
+                            is_administrator: false,
+                            team_id: None,
                         }
                     }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "oauth create_user failed");
+                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    }
                 }
-                Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
             }
-        }
+            Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        },
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
 
@@ -265,7 +285,11 @@ struct SocialProfile {
 }
 
 async fn unique_name(state: &AppState, base: &str) -> String {
-    let base = if base.trim().is_empty() { "Player" } else { base.trim() };
+    let base = if base.trim().is_empty() {
+        "Player"
+    } else {
+        base.trim()
+    };
     let mut name = base.to_string();
     let mut count = 0;
     while state.auth.name_taken(&name).await.unwrap_or(false) {

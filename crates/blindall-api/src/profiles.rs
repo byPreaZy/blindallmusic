@@ -1,11 +1,11 @@
 use crate::auth::CurrentUser;
 use crate::state::AppState;
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 pub fn photo_url(state: &AppState, photo_path: &str, name: &str) -> String {
     if !photo_path.is_empty() {
@@ -146,11 +146,7 @@ pub async fn profile_minigames(
             .map(|(_, l, _)| *l)
             .unwrap_or("Minigame")
     };
-    let history = match state
-        .minigames
-        .history_for_user(user_id, page, 15)
-        .await
-    {
+    let history = match state.minigames.history_for_user(user_id, page, 15).await {
         Ok(mut h) => {
             if let Some(rows) = h["data"].as_array_mut() {
                 for r in rows.iter_mut() {
@@ -206,23 +202,74 @@ pub async fn highlights(State(state): State<AppState>, Path(user_id): Path<i64>)
             let m = &v["badge_metrics"];
             let g = |k: &str| m[k].as_i64().unwrap_or(0);
             let mut badges = vec![
-                badge("supporter", "crown", is_supporter, is_supporter as i64, 1, "/docs/support"),
-                badge("creator", "sparkles", g("rooms_created_count") >= 1, g("rooms_created_count"), 1, "/rooms/create"),
-                badge("explorer", "map-pin", g("unique_rooms_played_count") >= 5, g("unique_rooms_played_count").min(5), 5, "/"),
-                badge("regular", "flame", g("consecutive_days_streak") >= 7, g("consecutive_days_streak").min(7), 7, "/"),
-                badge("minigamer", "gamepad", g("minigame_scores_total") > 0, g("minigame_scores_total").min(1), 1, "/games"),
-                badge("veteran", "badge-check",
+                badge(
+                    "supporter",
+                    "crown",
+                    is_supporter,
+                    is_supporter as i64,
+                    1,
+                    "/docs/support",
+                ),
+                badge(
+                    "creator",
+                    "sparkles",
+                    g("rooms_created_count") >= 1,
+                    g("rooms_created_count"),
+                    1,
+                    "/rooms/create",
+                ),
+                badge(
+                    "explorer",
+                    "map-pin",
+                    g("unique_rooms_played_count") >= 5,
+                    g("unique_rooms_played_count").min(5),
+                    5,
+                    "/",
+                ),
+                badge(
+                    "regular",
+                    "flame",
+                    g("consecutive_days_streak") >= 7,
+                    g("consecutive_days_streak").min(7),
+                    7,
+                    "/",
+                ),
+                badge(
+                    "minigamer",
+                    "gamepad",
+                    g("minigame_scores_total") > 0,
+                    g("minigame_scores_total").min(1),
+                    1,
+                    "/games",
+                ),
+                badge(
+                    "veteran",
+                    "badge-check",
                     g("months_seniority") >= 12 || g("rounds_played_count") >= 100,
-                    (g("months_seniority").min(12)).max(g("rounds_played_count").min(100)), 100, "/"),
-                badge("top_elo", "trophy",
+                    (g("months_seniority").min(12)).max(g("rounds_played_count").min(100)),
+                    100,
+                    "/",
+                ),
+                badge(
+                    "top_elo",
+                    "trophy",
                     elo_rank.is_some_and(|r| r <= 100),
                     match elo_rank {
                         Some(r) if r <= 100 => 100,
                         Some(r) => (100 - (r - 100)).max(0),
                         None => 0,
-                    }, 100, "/rankings?sort=elo"),
-                badge("collector", "heart", g("tracks_liked_count") >= 50, g("tracks_liked_count").min(50), 50,
-                    &format!("/profile/{user_id}?tab=likes")),
+                    },
+                    100,
+                    "/rankings?sort=elo",
+                ),
+                badge(
+                    "collector",
+                    "heart",
+                    g("tracks_liked_count") >= 50,
+                    g("tracks_liked_count").min(50),
+                    50,
+                    &format!("/profile/{user_id}?tab=likes"),
+                ),
             ];
             badges.sort_by(|a, b| b["earned"].as_bool().cmp(&a["earned"].as_bool()));
             v["badges"] = json!(badges);

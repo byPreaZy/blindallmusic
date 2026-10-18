@@ -72,9 +72,7 @@ pub fn evaluate_match(sanitized: &str, user_words: &[String], raw_line: &str) ->
 
         for word in &answer_words {
             if php_is_numeric(word) {
-                let found = user_words
-                    .iter()
-                    .any(|uw| php_is_numeric(uw) && uw == word);
+                let found = user_words.iter().any(|uw| php_is_numeric(uw) && uw == word);
                 if !found {
                     can_accept_levenshtein = false;
                     break;
@@ -147,7 +145,11 @@ mod tests {
 
     #[test]
     fn typo_per_word() {
-        let v = evaluate_match("thriler michael jackson", &words(&["thriler", "michael", "jackson"]), "Thriller Michael Jackson");
+        let v = evaluate_match(
+            "thriler michael jackson",
+            &words(&["thriler", "michael", "jackson"]),
+            "Thriller Michael Jackson",
+        );
         assert!(v.complete);
     }
 
@@ -161,7 +163,11 @@ mod tests {
 
     #[test]
     fn almost_when_half_words_found() {
-        let v = evaluate_match("red hot peppers", &words(&["red", "hot", "peppers"]), "Red Hot Chili Peppers");
+        let v = evaluate_match(
+            "red hot peppers",
+            &words(&["red", "hot", "peppers"]),
+            "Red Hot Chili Peppers",
+        );
         assert!(!v.complete && v.almost);
     }
 
@@ -191,6 +197,9 @@ mod tests {
             aliases: vec!["hello".into(), "  HELLO ".into(), "Hi".into(), "".into()],
             score: 0.5,
         };
-        assert_eq!(candidate_lines(&answer), vec!["Hello".to_string(), "Hi".to_string()]);
+        assert_eq!(
+            candidate_lines(&answer),
+            vec!["Hello".to_string(), "Hi".to_string()]
+        );
     }
 }

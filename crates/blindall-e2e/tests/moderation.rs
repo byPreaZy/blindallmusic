@@ -55,7 +55,10 @@ async fn admin_anonymous_401() {
 #[tokio::test]
 async fn admin_dashboard_shape() {
     let admin = Client::admin().await;
-    let r = admin.get("/api/v1/admin/dashboard").await.expect_ok("dashboard");
+    let r = admin
+        .get("/api/v1/admin/dashboard")
+        .await
+        .expect_ok("dashboard");
     assert!(r.body.is_object());
     assert!(
         r.body.get("cacheDriver").is_some() || r.body.get("stats").is_some(),
@@ -75,7 +78,11 @@ async fn admin_users_list_and_search() {
 #[tokio::test]
 async fn admin_rooms_playlists_teams() {
     let admin = Client::admin().await;
-    for ep in ["/api/v1/admin/rooms", "/api/v1/admin/playlists", "/api/v1/admin/teams"] {
+    for ep in [
+        "/api/v1/admin/rooms",
+        "/api/v1/admin/playlists",
+        "/api/v1/admin/teams",
+    ] {
         let r = admin.get(ep).await;
         assert!(r.status.is_success(), "{ep}: {} {}", r.status, r.text);
     }
@@ -89,12 +96,25 @@ async fn admin_answer_types_crud() {
         .post("/api/v1/admin/answer-types", json!({"name": name}))
         .await;
     assert!(r.ok(), "create: {} {}", r.status, r.text);
-    let id = r.json("/id").as_i64().unwrap_or_else(|| r.json("/answer_type/id").as_i64().unwrap());
-    let r = Client::anon().get("/api/v1/answer-types").await.expect_ok("types");
-    let names: Vec<String> = r.json("/answer_types").as_array().unwrap().iter()
-        .filter_map(|t| t["name"].as_str().map(String::from)).collect();
+    let id = r
+        .json("/id")
+        .as_i64()
+        .unwrap_or_else(|| r.json("/answer_type/id").as_i64().unwrap());
+    let r = Client::anon()
+        .get("/api/v1/answer-types")
+        .await
+        .expect_ok("types");
+    let names: Vec<String> = r
+        .json("/answer_types")
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|t| t["name"].as_str().map(String::from))
+        .collect();
     assert!(names.iter().any(|n| *n == name), "{names:?}");
-    let r = admin.delete(&format!("/api/v1/admin/answer-types/{id}")).await;
+    let r = admin
+        .delete(&format!("/api/v1/admin/answer-types/{id}"))
+        .await;
     assert!(r.ok(), "delete: {}", r.text);
 }
 
@@ -109,7 +129,9 @@ async fn admin_pages_crud() {
         )
         .await;
     assert!(r.ok(), "create page: {} {}", r.status, r.text);
-    let r = Client::anon().get(&format!("/api/v1/pages/{}", title.to_lowercase())).await;
+    let r = Client::anon()
+        .get(&format!("/api/v1/pages/{}", title.to_lowercase()))
+        .await;
     assert!(r.status.is_success(), "public page: {}", r.text);
     assert!(r.text.contains(&title), "{}", r.text);
 }
@@ -129,7 +151,12 @@ async fn admin_clear_cache_and_force_clear_rounds() {
 async fn moderation_dashboard_as_admin() {
     let admin = Client::admin().await;
     let r = admin.get("/api/v1/moderation").await;
-    assert!(r.status.is_success(), "modo dashboard: {} {}", r.status, r.text);
+    assert!(
+        r.status.is_success(),
+        "modo dashboard: {} {}",
+        r.status,
+        r.text
+    );
 }
 
 #[tokio::test]
@@ -142,9 +169,16 @@ async fn moderation_ban_unban_flow() {
             json!({"reason": "e2e ban test"}),
         )
         .await;
-    assert!(r.status.is_success() || r.status == StatusCode::NO_CONTENT,
-        "ban: {} {}", r.status, r.text);
-    let r = admin.get("/api/v1/moderation/banned-users").await.expect_ok("banned");
+    assert!(
+        r.status.is_success() || r.status == StatusCode::NO_CONTENT,
+        "ban: {} {}",
+        r.status,
+        r.text
+    );
+    let r = admin
+        .get("/api/v1/moderation/banned-users")
+        .await
+        .expect_ok("banned");
     let found = r.text.contains(&victim.name);
     let r = admin
         .post(
@@ -152,8 +186,12 @@ async fn moderation_ban_unban_flow() {
             json!({}),
         )
         .await;
-    assert!(r.status.is_success() || r.status == StatusCode::NO_CONTENT,
-        "unban: {} {}", r.status, r.text);
+    assert!(
+        r.status.is_success() || r.status == StatusCode::NO_CONTENT,
+        "unban: {} {}",
+        r.status,
+        r.text
+    );
     assert!(found, "victim was in banned list");
 }
 
@@ -165,7 +203,11 @@ async fn moderation_users_search() {
         .get(&format!("/api/v1/moderation/users?search={}", victim.name))
         .await
         .expect_ok("users");
-    assert!(r.text.contains(&victim.name), "{}", &r.text[..r.text.len().min(400)]);
+    assert!(
+        r.text.contains(&victim.name),
+        "{}",
+        &r.text[..r.text.len().min(400)]
+    );
 }
 
 #[tokio::test]

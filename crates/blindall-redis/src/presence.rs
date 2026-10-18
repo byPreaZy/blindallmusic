@@ -1,5 +1,5 @@
-use crate::keys;
 use crate::Result;
+use crate::keys;
 use fred::prelude::*;
 
 #[derive(Clone)]
@@ -76,11 +76,7 @@ impl RoomPresenceStore {
             .map_err(Into::into)
     }
 
-    pub async fn member_counts(
-        &self,
-        room_ids: &[i64],
-        now_unix: i64,
-    ) -> Result<Vec<(i64, i64)>> {
+    pub async fn member_counts(&self, room_ids: &[i64], now_unix: i64) -> Result<Vec<(i64, i64)>> {
         let cutoff = now_unix - keys::PRESENCE_PRUNE_SECONDS;
         let pipe = self.client.pipeline();
         for id in room_ids {

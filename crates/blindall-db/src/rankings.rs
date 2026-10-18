@@ -1,5 +1,5 @@
+use serde_json::{Value, json};
 use sqlx::{PgPool, Row};
-use serde_json::{json, Value};
 
 const PER_PAGE: i64 = 10;
 const TEAMS_PER_PAGE: i64 = 50;
@@ -73,22 +73,20 @@ impl RankingsRepo {
             Some(_) => {
                 format!("SELECT DISTINCT user_id FROM round_standings WHERE room_id = ${n}")
             }
-            None => {
-                "SELECT DISTINCT rs.user_id FROM round_standings rs \
+            None => "SELECT DISTINCT rs.user_id FROM round_standings rs \
                  JOIN rooms r ON r.id = rs.room_id AND r.is_public"
-                    .to_string()
-            }
+                .to_string(),
         }
     }
 
     fn standings_scope(room_id: Option<i64>, n: usize) -> String {
         match room_id {
-            Some(_) => format!("FROM round_standings rs JOIN users u ON u.id = rs.user_id AND u.is_guest = false WHERE rs.room_id = ${n}"),
-            None => {
-                "FROM round_standings rs JOIN rooms r ON r.id = rs.room_id AND r.is_public \
+            Some(_) => format!(
+                "FROM round_standings rs JOIN users u ON u.id = rs.user_id AND u.is_guest = false WHERE rs.room_id = ${n}"
+            ),
+            None => "FROM round_standings rs JOIN rooms r ON r.id = rs.room_id AND r.is_public \
                  WHERE 1=1"
-                    .to_string()
-            }
+                .to_string(),
         }
     }
 
@@ -98,11 +96,9 @@ impl RankingsRepo {
                 "FROM total_scores ts WHERE ts.totalscorable_type = 'App\\Models\\User' \
                  AND ts.room_id = ${n}"
             ),
-            None => {
-                "FROM total_scores ts JOIN rooms r ON r.id = ts.room_id AND r.is_public \
+            None => "FROM total_scores ts JOIN rooms r ON r.id = ts.room_id AND r.is_public \
                  WHERE ts.totalscorable_type = 'App\\Models\\User'"
-                    .to_string()
-            }
+                .to_string(),
         }
     }
 
@@ -251,12 +247,20 @@ impl RankingsRepo {
         let room_bind = room_id.is_some();
         let total: i64 = {
             let q = sqlx::query_scalar::<_, i64>(&count_sql);
-            let q = if room_bind { q.bind(room_id.unwrap()) } else { q };
+            let q = if room_bind {
+                q.bind(room_id.unwrap())
+            } else {
+                q
+            };
             q.fetch_one(&self.pool).await?
         };
         let rows = {
             let q = sqlx::query(&rows_sql);
-            let q = if room_bind { q.bind(room_id.unwrap()) } else { q };
+            let q = if room_bind {
+                q.bind(room_id.unwrap())
+            } else {
+                q
+            };
             q.bind(PER_PAGE)
                 .bind(offset)
                 .fetch_all(&self.pool)
@@ -338,7 +342,11 @@ impl RankingsRepo {
             vec![]
         };
 
-        let stats_of = |uid: i64| stats_rows.iter().find(|r| r.get::<i64, _>("user_id") == uid);
+        let stats_of = |uid: i64| {
+            stats_rows
+                .iter()
+                .find(|r| r.get::<i64, _>("user_id") == uid)
+        };
         let room_score_of = |uid: i64| {
             room_score_rows
                 .iter()
@@ -355,18 +363,14 @@ impl RankingsRepo {
             let elo: i64 = u.get::<Option<i64>, _>("elo").unwrap_or(1500);
             let score = match room_id {
                 Some(_) => room_score_of(*uid).unwrap_or(0.0),
-                None => u
-                    .get::<Option<i64>, _>("score_public_rooms")
-                    .unwrap_or(0) as f64,
+                None => u.get::<Option<i64>, _>("score_public_rooms").unwrap_or(0) as f64,
             };
             let standing_best: f64 = st
                 .and_then(|r| r.try_get::<f64, _>("best_round_score").ok())
                 .unwrap_or(0.0);
             let best_round = match room_id {
                 Some(_) => standing_best,
-                None => standing_best.max(
-                    u.get::<Option<f64>, _>("lvl_best").unwrap_or(0.0),
-                ),
+                None => standing_best.max(u.get::<Option<f64>, _>("lvl_best").unwrap_or(0.0)),
             };
             let rounds_played: i64 = st
                 .map(|r| r.get::<i64, _>("rounds_played"))
@@ -450,28 +454,36 @@ impl RankingsRepo {
     ) -> Result<Option<i64>, sqlx::Error> {
         let pos: Option<i64> = match sort {
             "level" => {
-                let lvl = sqlx::query(
-                    "SELECT level, total_xp FROM user_levels WHERE user_id = $1",
-                )
-                .bind(user_id)
-                .fetch_optional(&self.pool)
-                .await?;
+                let lvl = sqlx::query("SELECT level, total_xp FROM user_levels WHERE user_id = $1")
+                    .bind(user_id)
+                    .fetch_optional(&self.pool)
+                    .await?;
                 let Some(lvl) = lvl else { return Ok(None) };
                 let (l, x): (i64, i64) = (lvl.get("level"), lvl.get("total_xp"));
-                let (a, b, c): (usize, usize, usize) =
-                    if room_id.is_some() { (2, 3, 4) } else { (1, 2, 3) };
+                let (a, b, c): (usize, usize, usize) = if room_id.is_some() {
+                    (2, 3, 4)
+                } else {
+                    (1, 2, 3)
+                };
                 let q = format!(
                     "SELECT COUNT(*) + 1 FROM user_levels ul JOIN users u ON u.id = ul.user_id \
                      WHERE u.deleted_at IS NULL AND u.is_guest = false {} \
                      AND (ul.level > ${a} OR (ul.level = ${b} AND ul.total_xp > ${c}))",
                     if room_id.is_some() {
-                        format!("AND ul.user_id IN ({})", Self::scoped_users_subquery(room_id, 1))
+                        format!(
+                            "AND ul.user_id IN ({})",
+                            Self::scoped_users_subquery(room_id, 1)
+                        )
                     } else {
                         String::new()
                     }
                 );
                 let q = sqlx::query_scalar::<_, i64>(&q);
-                let q = if room_id.is_some() { q.bind(room_id.unwrap()) } else { q };
+                let q = if room_id.is_some() {
+                    q.bind(room_id.unwrap())
+                } else {
+                    q
+                };
                 Some(q.bind(l).bind(l).bind(x).fetch_one(&self.pool).await?)
             }
             "score" => {
@@ -523,12 +535,11 @@ impl RankingsRepo {
                 }
             }
             "elo" => {
-                let elo: i64 = sqlx::query_scalar(
-                    "SELECT COALESCE(elo, 1500) FROM users WHERE id = $1",
-                )
-                .bind(user_id)
-                .fetch_one(&self.pool)
-                .await?;
+                let elo: i64 =
+                    sqlx::query_scalar("SELECT COALESCE(elo, 1500) FROM users WHERE id = $1")
+                        .bind(user_id)
+                        .fetch_one(&self.pool)
+                        .await?;
                 let q = format!(
                     "SELECT COUNT(*) + 1 FROM users WHERE elo IS NOT NULL AND is_guest = false AND deleted_at IS NULL AND elo > $1 {}",
                     if room_id.is_some() {
@@ -538,7 +549,11 @@ impl RankingsRepo {
                     }
                 );
                 let q = sqlx::query_scalar::<_, i64>(&q).bind(elo);
-                let q = if room_id.is_some() { q.bind(room_id.unwrap()) } else { q };
+                let q = if room_id.is_some() {
+                    q.bind(room_id.unwrap())
+                } else {
+                    q
+                };
                 Some(q.fetch_one(&self.pool).await?)
             }
             "week" => {
@@ -709,12 +724,11 @@ impl RankingsRepo {
     }
 
     pub async fn user_team_position(&self, user_id: i64) -> Result<Value, sqlx::Error> {
-        let team_id: Option<i64> =
-            sqlx::query_scalar("SELECT team_id FROM users WHERE id = $1")
-                .bind(user_id)
-                .fetch_optional(&self.pool)
-                .await?
-                .flatten();
+        let team_id: Option<i64> = sqlx::query_scalar("SELECT team_id FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?
+            .flatten();
         let Some(team_id) = team_id else {
             return Ok(json!({"position": null, "team_score": 0}));
         };
@@ -796,7 +810,11 @@ impl RankingsRepo {
         }))
     }
 
-    pub async fn minigames_user_context(&self, user_id: i64, is_guest: bool) -> Result<Value, sqlx::Error> {
+    pub async fn minigames_user_context(
+        &self,
+        user_id: i64,
+        is_guest: bool,
+    ) -> Result<Value, sqlx::Error> {
         if is_guest {
             return Ok(json!({"position": null, "score": 0}));
         }
@@ -832,14 +850,13 @@ impl RankingsRepo {
         .bind(user_id)
         .fetch_optional(&self.pool)
         .await?;
-        let has_team: bool = sqlx::query_scalar::<_, Option<i64>>(
-            "SELECT team_id FROM users WHERE id = $1",
-        )
-        .bind(user_id)
-        .fetch_optional(&self.pool)
-        .await?
-        .flatten()
-        .is_some();
+        let has_team: bool =
+            sqlx::query_scalar::<_, Option<i64>>("SELECT team_id FROM users WHERE id = $1")
+                .bind(user_id)
+                .fetch_optional(&self.pool)
+                .await?
+                .flatten()
+                .is_some();
         let Some(r) = row else {
             return Ok(json!({
                 "level": 1, "current_xp": 0, "xp_for_next_level": 100, "total_xp": 0,

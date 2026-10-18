@@ -1,5 +1,5 @@
-use sqlx::postgres::PgPool;
 use sqlx::Row;
+use sqlx::postgres::PgPool;
 
 #[derive(Clone)]
 pub struct ProfileRepo {
@@ -39,12 +39,10 @@ impl ProfileRepo {
         if user.get::<bool, _>("is_guest") {
             return Ok(None);
         }
-        let level = sqlx::query(
-            "SELECT * FROM user_levels WHERE user_id = $1",
-        )
-        .bind(user_id)
-        .fetch_optional(&self.pool)
-        .await?;
+        let level = sqlx::query("SELECT * FROM user_levels WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
         let totals = sqlx::query(
             "SELECT COALESCE(SUM(ts.score), 0) AS total_score, \
              COALESCE(SUM(CASE WHEN r.is_public = true THEN ts.score ELSE 0 END), 0) AS total_public_score, \
@@ -237,7 +235,11 @@ impl ProfileRepo {
         Ok(())
     }
 
-    pub async fn bookmarks(&self, user_id: i64, page: i64) -> Result<serde_json::Value, sqlx::Error> {
+    pub async fn bookmarks(
+        &self,
+        user_id: i64,
+        page: i64,
+    ) -> Result<serde_json::Value, sqlx::Error> {
         const PER_PAGE: i64 = 10;
         let total: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM bookmarks WHERE user_id = $1 \
@@ -277,7 +279,10 @@ impl ProfileRepo {
         }))
     }
 
-    pub async fn score_evolution(&self, user_id: i64) -> Result<Vec<serde_json::Value>, sqlx::Error> {
+    pub async fn score_evolution(
+        &self,
+        user_id: i64,
+    ) -> Result<Vec<serde_json::Value>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT DATE(created_at) AS date, SUM(score) AS daily_score \
              FROM scores WHERE user_id = $1 \
@@ -335,24 +340,23 @@ impl ProfileRepo {
             .bind(user_id)
             .bind(public.to_vec())
             .fetch_all(&self.pool)
-                .await?
-                .iter()
-                .map(|r| {
-                    let updated: Option<chrono::DateTime<chrono::Utc>> =
-                        r.try_get("updated_at").ok();
-                    serde_json::json!({
-                        "score": r.get::<f64, _>("score"),
-                        "updated_at": updated
-                            .map(|d| d.format("%d/%m/%Y").to_string()),
-                        "room": {
-                            "id": r.get::<i64, _>("room_id"),
-                            "name": r.get::<String, _>("name"),
-                            "slug": r.get::<Option<String>, _>("slug"),
-                            "photo": r.get::<Option<String>, _>("photo_path"),
-                        },
-                    })
+            .await?
+            .iter()
+            .map(|r| {
+                let updated: Option<chrono::DateTime<chrono::Utc>> = r.try_get("updated_at").ok();
+                serde_json::json!({
+                    "score": r.get::<f64, _>("score"),
+                    "updated_at": updated
+                        .map(|d| d.format("%d/%m/%Y").to_string()),
+                    "room": {
+                        "id": r.get::<i64, _>("room_id"),
+                        "name": r.get::<String, _>("name"),
+                        "slug": r.get::<Option<String>, _>("slug"),
+                        "photo": r.get::<Option<String>, _>("photo_path"),
+                    },
                 })
-                .collect();
+            })
+            .collect();
         }
         let week_score: f64 = sqlx::query_scalar(
             "SELECT COALESCE(ROUND(SUM(rs.total_score)::numeric, 1)::float8, 0) \
@@ -363,21 +367,22 @@ impl ProfileRepo {
         .bind(user_id)
         .fetch_one(&self.pool)
         .await?;
-        let position: Option<i64> = match sqlx::query_scalar::<_, i64>("SELECT elo FROM users WHERE id = $1")
-            .bind(user_id)
-            .fetch_optional(&self.pool)
-            .await?
-        {
-            Some(elo) => Some(
-                sqlx::query_scalar::<_, i64>(
-                    "SELECT COUNT(*) + 1 FROM users WHERE elo > $1 AND deleted_at IS NULL",
-                )
-                .bind(elo)
-                .fetch_one(&self.pool)
-                .await?,
-            ),
-            None => None,
-        };
+        let position: Option<i64> =
+            match sqlx::query_scalar::<_, i64>("SELECT elo FROM users WHERE id = $1")
+                .bind(user_id)
+                .fetch_optional(&self.pool)
+                .await?
+            {
+                Some(elo) => Some(
+                    sqlx::query_scalar::<_, i64>(
+                        "SELECT COUNT(*) + 1 FROM users WHERE elo > $1 AND deleted_at IS NULL",
+                    )
+                    .bind(elo)
+                    .fetch_one(&self.pool)
+                    .await?,
+                ),
+                None => None,
+            };
         Ok(serde_json::json!({
             "performance": {
                 "rounds_played": lvl("rounds_played_count"),

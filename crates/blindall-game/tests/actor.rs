@@ -2,13 +2,15 @@ use blindall_core::scoring::CheckOutcome;
 use blindall_game::actor::{RoomActor, RoomCommand, RoomSnapshot};
 use blindall_game::events;
 use blindall_game::store::{RoundRow, ScoreStore};
-use blindall_game::testkit::{fake_room, fake_track, FakeGameStore, FakePresenceStore, FakeScoreStore};
+use blindall_game::testkit::{
+    FakeGameStore, FakePresenceStore, FakeScoreStore, fake_room, fake_track,
+};
 use blindall_realtime::{Hub, ServerOp};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
-use tokio::time::{advance, timeout, Instant};
+use tokio::time::{Instant, advance, timeout};
 
 struct Fixture {
     tx: mpsc::Sender<RoomCommand>,
@@ -32,8 +34,12 @@ async fn spawn_fixture() -> Fixture {
     presence.counts.lock().unwrap().insert(1, 2);
     let hub = Hub::new();
     let (mut conn, rx) = hub.connect(100);
-    hub.subscribe(&mut conn, &events::room_channel(1), Some(json!({"user_id": 100, "name": "observer"})))
-        .await;
+    hub.subscribe(
+        &mut conn,
+        &events::room_channel(1),
+        Some(json!({"user_id": 100, "name": "observer"})),
+    )
+    .await;
     std::mem::forget(conn); // keep the socket alive for the test duration
 
     let tx = RoomActor::spawn(
@@ -117,7 +123,11 @@ async fn track_end_waits_pause_then_plays_next() {
     next_event(&mut fx.rx, "TrackPlayed").await;
 
     advance(Duration::from_secs(29)).await;
-    assert!(!drain_events(&mut fx.rx).await.contains(&"TrackEnded".to_string()));
+    assert!(
+        !drain_events(&mut fx.rx)
+            .await
+            .contains(&"TrackEnded".to_string())
+    );
 
     advance(Duration::from_secs(2)).await; // t=31 > 30
     let ended = next_event(&mut fx.rx, "TrackEnded").await;
@@ -173,7 +183,8 @@ async fn no_subscriber_means_no_autostart() {
     );
 
     let (mut conn, mut rx) = hub.connect(55);
-    hub.subscribe(&mut conn, &events::room_channel(1), None).await;
+    hub.subscribe(&mut conn, &events::room_channel(1), None)
+        .await;
 
     tx.send(RoomCommand::Start { user_id: None }).await.unwrap();
     next_event(&mut rx, "TrackPlayed").await;
@@ -206,13 +217,21 @@ async fn pause_freezes_and_resume_re_arms() {
     next_event(&mut fx.rx, "TrackPaused").await;
 
     advance(Duration::from_secs(60)).await;
-    assert!(!drain_events(&mut fx.rx).await.contains(&"TrackEnded".to_string()));
+    assert!(
+        !drain_events(&mut fx.rx)
+            .await
+            .contains(&"TrackEnded".to_string())
+    );
 
     fx.tx.send(RoomCommand::Resume).await.unwrap();
     next_event(&mut fx.rx, "TrackResumed").await;
 
     advance(Duration::from_secs(19)).await;
-    assert!(!drain_events(&mut fx.rx).await.contains(&"TrackEnded".to_string()));
+    assert!(
+        !drain_events(&mut fx.rx)
+            .await
+            .contains(&"TrackEnded".to_string())
+    );
     advance(Duration::from_secs(2)).await;
     next_event(&mut fx.rx, "TrackEnded").await;
 }
@@ -235,9 +254,16 @@ async fn check_answer_scores_and_broadcasts() {
         })
         .await
         .unwrap();
-    let outcome = timeout(Duration::from_secs(30), out_rx).await.unwrap().unwrap();
+    let outcome = timeout(Duration::from_secs(30), out_rx)
+        .await
+        .unwrap()
+        .unwrap();
     match outcome {
-        CheckOutcome::Good { answers, found_all, total_score } => {
+        CheckOutcome::Good {
+            answers,
+            found_all,
+            total_score,
+        } => {
             assert_eq!(answers.len(), 1);
             assert_eq!(answers[0].answer_id, 10);
             assert!(found_all); // only answer of the track
@@ -262,8 +288,14 @@ async fn check_answer_scores_and_broadcasts() {
         })
         .await
         .unwrap();
-    let dup = timeout(Duration::from_secs(30), out_rx2).await.unwrap().unwrap();
-    assert!(matches!(dup, CheckOutcome::AlreadyFound | CheckOutcome::Bad));
+    let dup = timeout(Duration::from_secs(30), out_rx2)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(matches!(
+        dup,
+        CheckOutcome::AlreadyFound | CheckOutcome::Bad
+    ));
 }
 
 #[tokio::test(start_paused = true)]
@@ -297,15 +329,19 @@ async fn stop_writes_standings_and_cleans_scores() {
         advance(Duration::from_millis(10)).await;
     }
     let standings = fx.store.standings_written.lock().unwrap();
-    assert!(standings.iter().any(|s| s.user_id == 5), "standings written");
+    assert!(
+        standings.iter().any(|s| s.user_id == 5),
+        "standings written"
+    );
     drop(standings);
-    assert!(fx
-        .store
-        .total_scores
-        .lock()
-        .unwrap()
-        .iter()
-        .any(|(_, u, _)| *u == 5));
+    assert!(
+        fx.store
+            .total_scores
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(_, u, _)| *u == 5)
+    );
     assert!(fx.scores.cleaned.lock().unwrap().contains(&1));
 }
 
@@ -423,6 +459,9 @@ async fn track_mismatch_is_rejected() {
         })
         .await
         .unwrap();
-    let outcome = timeout(Duration::from_secs(30), out_rx).await.unwrap().unwrap();
+    let outcome = timeout(Duration::from_secs(30), out_rx)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(outcome, CheckOutcome::Bad);
 }

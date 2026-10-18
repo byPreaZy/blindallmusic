@@ -1,16 +1,20 @@
 use crate::auth::{CurrentUser, OptionalUser};
 use crate::state::AppState;
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use blindall_db::RoomOptions;
 use blindall_game::{GameStore, PlayerInfo, RoomCommand};
 use serde::Deserialize;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 fn forbidden() -> Response {
-    (StatusCode::FORBIDDEN, Json(json!({"error": "unauthorized"}))).into_response()
+    (
+        StatusCode::FORBIDDEN,
+        Json(json!({"error": "unauthorized"})),
+    )
+        .into_response()
 }
 
 fn ip_banned_response() -> Response {
@@ -31,7 +35,11 @@ fn validation(field: &str, msg: &str) -> Response {
 
 pub(crate) fn require_not_guest(user: &blindall_db::entities::User) -> Option<Response> {
     user.is_guest.then(|| {
-        (StatusCode::FORBIDDEN, Json(json!({"error": "guest_forbidden"}))).into_response()
+        (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "guest_forbidden"})),
+        )
+            .into_response()
     })
 }
 
@@ -40,11 +48,7 @@ pub async fn list(State(state): State<AppState>) -> Json<Value> {
     let now = chrono::Utc::now().timestamp();
     let mut out = Vec::with_capacity(rooms.len());
     for r in rooms {
-        let members = state
-            .presence
-            .member_count(r.id, now)
-            .await
-            .unwrap_or(0);
+        let members = state.presence.member_count(r.id, now).await.unwrap_or(0);
         out.push(json!({
             "id": r.id,
             "name": r.name,
@@ -116,15 +120,16 @@ pub async fn show(
     }
 
     let can_edit = match &user.0 {
-        Some(u) => state.rooms.has_control(&row, u.id, u.is_administrator).await,
+        Some(u) => {
+            state
+                .rooms
+                .has_control(&row, u.id, u.is_administrator)
+                .await
+        }
         None => false,
     };
     let is_bookmarked = match &user.0 {
-        Some(u) => state
-            .rooms
-            .is_bookmarked(u.id, id)
-            .await
-            .unwrap_or(false),
+        Some(u) => state.rooms.is_bookmarked(u.id, id).await.unwrap_or(false),
         None => false,
     };
 
@@ -155,13 +160,19 @@ pub async fn show(
         .collect();
     let tracks_count = state.rooms.tracks_count(id).await.unwrap_or(0);
     let rounds_count = state.rooms.rounds_count(id).await.unwrap_or(0);
-    let owner = state.rooms.owner(id).await.ok().flatten().map(|(oid, name, photo_path)| {
-        json!({
-            "id": oid,
-            "name": name,
-            "photo": photo_path.as_deref().map(|p| state.storage.url(p)),
-        })
-    });
+    let owner = state
+        .rooms
+        .owner(id)
+        .await
+        .ok()
+        .flatten()
+        .map(|(oid, name, photo_path)| {
+            json!({
+                "id": oid,
+                "name": name,
+                "photo": photo_path.as_deref().map(|p| state.storage.url(p)),
+            })
+        });
     let category = match row.category_id {
         Some(cid) => state
             .rooms
@@ -187,56 +198,55 @@ pub async fn show(
         })
         .collect();
 
-    let seo = if row.is_public && room_password.is_none() && crate::official_seo::is_official_slug(&slug)
-    {
-        let mut breadcrumbs = vec![json!({"label": "Home", "href": "/"})];
-        if let Some(cat) = &category {
-            if let (Some(cname), Some(cslug)) =
-                (cat["name"].as_str(), cat["slug"].as_str())
-            {
-                breadcrumbs.push(json!({
-                    "label": cname,
-                    "href": format!("/blind-test-{cslug}"),
-                }));
+    let seo =
+        if row.is_public && room_password.is_none() && crate::official_seo::is_official_slug(&slug)
+        {
+            let mut breadcrumbs = vec![json!({"label": "Home", "href": "/"})];
+            if let Some(cat) = &category {
+                if let (Some(cname), Some(cslug)) = (cat["name"].as_str(), cat["slug"].as_str()) {
+                    breadcrumbs.push(json!({
+                        "label": cname,
+                        "href": format!("/blind-test-{cslug}"),
+                    }));
+                }
             }
-        }
-        breadcrumbs.push(json!({"label": row.name, "href": null}));
+            breadcrumbs.push(json!({"label": row.name, "href": null}));
 
-        let similar_rooms: Vec<Value> = match row.category_id {
-            Some(cid) => state
-                .rooms
-                .official_similar_rooms(cid, id, crate::official_seo::slugs(), 4)
-                .await
-                .unwrap_or_default()
-                .into_iter()
-                .map(|(rslug, name, photo_path)| {
-                    json!({
-                        "slug": rslug,
-                        "name": name,
-                        "photo": photo_path.as_deref().map(|p| state.storage.url(p)),
+            let similar_rooms: Vec<Value> = match row.category_id {
+                Some(cid) => state
+                    .rooms
+                    .official_similar_rooms(cid, id, crate::official_seo::slugs(), 4)
+                    .await
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(rslug, name, photo_path)| {
+                        json!({
+                            "slug": rslug,
+                            "name": name,
+                            "photo": photo_path.as_deref().map(|p| state.storage.url(p)),
+                        })
                     })
-                })
-                .collect(),
-            None => Vec::new(),
-        };
+                    .collect(),
+                None => Vec::new(),
+            };
 
-        let intro = crate::official_seo::configured_intro(&slug, "fr");
-        json!({
-            "breadcrumbs": breadcrumbs,
-            "stats": {
-                "rounds": rounds_count,
-                "tracks": tracks_count,
-                "players_online": member_count,
-            },
-            "similar_rooms": similar_rooms,
-            "content": {
-                "intro": intro.as_ref().and_then(|i| i.intro.clone()),
-                "intro_secondary": intro.as_ref().and_then(|i| i.intro_secondary.clone()),
-            },
-        })
-    } else {
-        Value::Null
-    };
+            let intro = crate::official_seo::configured_intro(&slug, "fr");
+            json!({
+                "breadcrumbs": breadcrumbs,
+                "stats": {
+                    "rounds": rounds_count,
+                    "tracks": tracks_count,
+                    "players_online": member_count,
+                },
+                "similar_rooms": similar_rooms,
+                "content": {
+                    "intro": intro.as_ref().and_then(|i| i.intro.clone()),
+                    "intro_secondary": intro.as_ref().and_then(|i| i.intro_secondary.clone()),
+                },
+            })
+        } else {
+            Value::Null
+        };
 
     Ok(Json(json!({
         "seo": seo,
@@ -397,11 +407,7 @@ async fn broadcast_room_state(state: &AppState, room_id: i64) {
 
 async fn broadcast_public_state(state: &AppState, cfg: &blindall_game::store::RoomConfig) {
     let now = chrono::Utc::now().timestamp();
-    let count = state
-        .presence
-        .member_count(cfg.id, now)
-        .await
-        .unwrap_or(0);
+    let count = state.presence.member_count(cfg.id, now).await.unwrap_or(0);
     let snapshot = state.manager.snapshot(cfg.id).await.ok().flatten();
     let (idx, playing) = snapshot
         .as_ref()
@@ -425,14 +431,18 @@ pub async fn joined(
     Path(id): Path<i64>,
     user: CurrentUser,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let row = load_room(&state, id)
-        .await
-        .map_err(|_| (StatusCode::NOT_FOUND, Json(json!({"error": "room_not_found"}))))?;
-    let cfg = state
-        .store
-        .room_config(id)
-        .await
-        .map_err(|_| (StatusCode::NOT_FOUND, Json(json!({"error": "room_not_found"}))))?;
+    let row = load_room(&state, id).await.map_err(|_| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "room_not_found"})),
+        )
+    })?;
+    let cfg = state.store.room_config(id).await.map_err(|_| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "room_not_found"})),
+        )
+    })?;
 
     if !state
         .presence
@@ -449,9 +459,12 @@ pub async fn joined(
     if !row.is_playing && cfg.is_autostart {
         let _ = state
             .manager
-            .send(id, RoomCommand::Start {
-                user_id: Some(user.id()),
-            })
+            .send(
+                id,
+                RoomCommand::Start {
+                    user_id: Some(user.id()),
+                },
+            )
             .await;
     }
 
@@ -495,7 +508,8 @@ pub async fn joined(
                         })).collect::<Vec<_>>(),
                     });
                     if let Some(started) = r.current_track_started_at {
-                        let elapsed = (chrono::Utc::now() - started).num_milliseconds() as f64 / 1000.0;
+                        let elapsed =
+                            (chrono::Utc::now() - started).num_milliseconds() as f64 / 1000.0;
                         start_time = elapsed.max(0.0).min(cfg.track_duration as f64);
                     }
                 }
@@ -530,11 +544,12 @@ pub async fn presence_joined(
         ));
     }
 
-    let cfg = state
-        .store
-        .room_config(id)
-        .await
-        .map_err(|_| (StatusCode::NOT_FOUND, Json(json!({"error": "room_not_found"}))))?;
+    let cfg = state.store.room_config(id).await.map_err(|_| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "room_not_found"})),
+        )
+    })?;
     let now = chrono::Utc::now().timestamp();
     let _ = state.presence.add_member(id, user.id(), now).await;
     let st = room_state(&state, id).await;
@@ -571,11 +586,12 @@ pub async fn presence_left(
         ));
     }
 
-    let cfg = state
-        .store
-        .room_config(id)
-        .await
-        .map_err(|_| (StatusCode::NOT_FOUND, Json(json!({"error": "room_not_found"}))))?;
+    let cfg = state.store.room_config(id).await.map_err(|_| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "room_not_found"})),
+        )
+    })?;
     let _ = state.presence.remove_member(id, user.id()).await;
     broadcast_room_state(&state, id).await;
     broadcast_public_state(&state, &cfg).await;
@@ -677,16 +693,26 @@ pub async fn edit(
         Err(e) => return e,
     };
     let id = room.id;
-    if !state.rooms.has_control(&room, user.id, user.is_administrator).await {
+    if !state
+        .rooms
+        .has_control(&room, user.id, user.is_administrator)
+        .await
+    {
         return forbidden();
     }
     let mods = state.rooms.moderators(id).await.unwrap_or_default();
     let pls = state.rooms.room_playlists(id).await.unwrap_or_default();
     let mut v = room_json(&room);
-    v["moderators"] =
-        json!(mods.iter().map(|(id, n)| json!({"id": id, "name": n})).collect::<Vec<_>>());
-    v["playlists"] =
-        json!(pls.iter().map(|(id, n)| json!({"id": id, "name": n})).collect::<Vec<_>>());
+    v["moderators"] = json!(
+        mods.iter()
+            .map(|(id, n)| json!({"id": id, "name": n}))
+            .collect::<Vec<_>>()
+    );
+    v["playlists"] = json!(
+        pls.iter()
+            .map(|(id, n)| json!({"id": id, "name": n}))
+            .collect::<Vec<_>>()
+    );
     Json(json!({
         "room": v,
         "owned": user.is_administrator || room.user_id == user.id,
@@ -710,16 +736,28 @@ pub async fn store(
     }
     let name = body.name.trim();
     if name.is_empty() || name.chars().count() > 25 {
-        return validation("name", "The name field is required and must not exceed 25 characters.");
+        return validation(
+            "name",
+            "The name field is required and must not exceed 25 characters.",
+        );
     }
-    let mods = state.auth.reserved_moderator_names().await.unwrap_or_default();
+    let mods = state
+        .auth
+        .reserved_moderator_names()
+        .await
+        .unwrap_or_default();
     if crate::auth_session::validate_name(name, &mods).is_err() {
         return validation("name", "validation.reserved");
     }
     if state.rooms.name_taken(name, None).await.unwrap_or(false) {
         return validation("name", "The name has already been taken.");
     }
-    if !state.rooms.category_exists(body.category_id).await.unwrap_or(false) {
+    if !state
+        .rooms
+        .category_exists(body.category_id)
+        .await
+        .unwrap_or(false)
+    {
         return validation("category_id", "The selected category id is invalid.");
     }
     match state.rooms.create(user.id, name, body.category_id).await {
@@ -761,23 +799,44 @@ pub async fn update(
         Ok(r) => r,
         Err(e) => return e,
     };
-    if !state.rooms.has_control(&room, user.id, user.is_administrator).await {
+    if !state
+        .rooms
+        .has_control(&room, user.id, user.is_administrator)
+        .await
+    {
         return forbidden();
     }
     let name = body.name.trim();
     if name.is_empty() || name.chars().count() > 25 {
-        return validation("name", "The name field is required and must not exceed 25 characters.");
+        return validation(
+            "name",
+            "The name field is required and must not exceed 25 characters.",
+        );
     }
-    let mods = state.auth.reserved_moderator_names().await.unwrap_or_default();
+    let mods = state
+        .auth
+        .reserved_moderator_names()
+        .await
+        .unwrap_or_default();
     if !name.eq_ignore_ascii_case(&room.name)
         && crate::auth_session::validate_name(name, &mods).is_err()
     {
         return validation("name", "validation.reserved");
     }
-    if state.rooms.name_taken(name, Some(id)).await.unwrap_or(false) {
+    if state
+        .rooms
+        .name_taken(name, Some(id))
+        .await
+        .unwrap_or(false)
+    {
         return validation("name", "The name has already been taken.");
     }
-    if !state.rooms.category_exists(body.category_id).await.unwrap_or(false) {
+    if !state
+        .rooms
+        .category_exists(body.category_id)
+        .await
+        .unwrap_or(false)
+    {
         return validation("category_id", "The selected category id is invalid.");
     }
     match state
@@ -819,20 +878,36 @@ pub async fn update_options(
         Ok(r) => r,
         Err(e) => return e,
     };
-    if !state.rooms.has_control(&room, user.id, user.is_administrator).await {
+    if !state
+        .rooms
+        .has_control(&room, user.id, user.is_administrator)
+        .await
+    {
         return forbidden();
     }
     if !(1..=50).contains(&body.tracks_by_round) {
-        return validation("tracks_by_round", "The tracks by round field must be between 1 and 50.");
+        return validation(
+            "tracks_by_round",
+            "The tracks by round field must be between 1 and 50.",
+        );
     }
     if !(5..=30).contains(&body.track_duration) {
-        return validation("track_duration", "The track duration field must be between 5 and 30.");
+        return validation(
+            "track_duration",
+            "The track duration field must be between 5 and 30.",
+        );
     }
     if !(0..=60).contains(&body.pause_between_tracks) {
-        return validation("pause_between_tracks", "The pause between tracks field must be between 0 and 60.");
+        return validation(
+            "pause_between_tracks",
+            "The pause between tracks field must be between 0 and 60.",
+        );
     }
     if !(0..=60).contains(&body.pause_between_rounds) {
-        return validation("pause_between_rounds", "The pause between rounds field must be between 0 and 60.");
+        return validation(
+            "pause_between_rounds",
+            "The pause between rounds field must be between 0 and 60.",
+        );
     }
     let options = RoomOptions {
         password: body.password,
@@ -874,7 +949,11 @@ pub async fn destroy(
         Ok(r) => r,
         Err(e) => return e,
     };
-    if !state.rooms.has_control(&room, user.id, user.is_administrator).await {
+    if !state
+        .rooms
+        .has_control(&room, user.id, user.is_administrator)
+        .await
+    {
         return forbidden();
     }
     if let Some(p) = room.photo_path.as_deref() {
@@ -900,7 +979,11 @@ pub async fn restore(
         Ok(r) => r,
         Err(e) => return e,
     };
-    if !state.rooms.has_control(&room, user.id, user.is_administrator).await {
+    if !state
+        .rooms
+        .has_control(&room, user.id, user.is_administrator)
+        .await
+    {
         return forbidden();
     }
     match state.rooms.restore(id).await {
@@ -929,8 +1012,16 @@ pub async fn mine(
                 let mut v = room_json(r);
                 let mods = state.rooms.moderators(r.id).await.unwrap_or_default();
                 let pls = state.rooms.room_playlists(r.id).await.unwrap_or_default();
-                v["moderators"] = json!(mods.iter().map(|(id, n)| json!({"id": id, "name": n})).collect::<Vec<_>>());
-                v["playlists"] = json!(pls.iter().map(|(id, n)| json!({"id": id, "name": n})).collect::<Vec<_>>());
+                v["moderators"] = json!(
+                    mods.iter()
+                        .map(|(id, n)| json!({"id": id, "name": n}))
+                        .collect::<Vec<_>>()
+                );
+                v["playlists"] = json!(
+                    pls.iter()
+                        .map(|(id, n)| json!({"id": id, "name": n}))
+                        .collect::<Vec<_>>()
+                );
                 v["rounds_count"] = json!(rounds_count);
                 v["category"] = match (r.category_id, category_name) {
                     (Some(id), Some(name)) => json!({"id": id, "name": name}),
@@ -975,7 +1066,12 @@ pub async fn attach_playlist(
     if !(user.is_administrator || room.user_id == user.id) {
         return forbidden();
     }
-    if !state.rooms.playlist_exists(body.playlist_id).await.unwrap_or(false) {
+    if !state
+        .rooms
+        .playlist_exists(body.playlist_id)
+        .await
+        .unwrap_or(false)
+    {
         return validation("playlist_id", "The selected playlist id is invalid.");
     }
     match state.rooms.attach_playlist(id, body.playlist_id).await {
@@ -1073,8 +1169,7 @@ pub async fn detach_moderator(
     if let Err(e) = load_room(&state, id).await {
         return e;
     }
-    let allowed = user.is_administrator
-        || state.rooms.is_moderator(id, user.id).await;
+    let allowed = user.is_administrator || state.rooms.is_moderator(id, user.id).await;
     if !allowed {
         return forbidden();
     }
@@ -1188,10 +1283,7 @@ pub async fn categories(State(state): State<AppState>) -> Response {
     }
 }
 
-pub async fn category_landing(
-    State(state): State<AppState>,
-    Path(slug): Path<String>,
-) -> Response {
+pub async fn category_landing(State(state): State<AppState>, Path(slug): Path<String>) -> Response {
     let Some((cat_id, cat_name, cat_slug)) =
         state.rooms.category_by_slug(&slug).await.ok().flatten()
     else {
@@ -1371,11 +1463,7 @@ pub async fn alert(
     if message.chars().count() > 255 {
         return validation("message", "The message must not exceed 255 characters.");
     }
-    let moderators = state
-        .auth
-        .public_moderator_ids()
-        .await
-        .unwrap_or_default();
+    let moderators = state.auth.public_moderator_ids().await.unwrap_or_default();
     let text = if message.is_empty() {
         format!("{} reports a problem on the chat {}", user.name, room.name)
     } else {
@@ -1436,9 +1524,10 @@ pub async fn suggestion(
     // Fresh accounts may still report broken data (they are the ones who find
     // it), but throttled so the notification queue cannot be flooded.
     if !veteran {
-        if let Some(secs) = state
-            .suggestion_rate
-            .retry_after(&format!("sugg|{}", user.id), 10, 3600)
+        if let Some(secs) =
+            state
+                .suggestion_rate
+                .retry_after(&format!("sugg|{}", user.id), 10, 3600)
         {
             return (
                 StatusCode::TOO_MANY_REQUESTS,
@@ -1452,7 +1541,10 @@ pub async fn suggestion(
         .room_playlists(room.id)
         .await
         .unwrap_or_default();
-    let playlists: Vec<String> = room_playlists.iter().map(|(_, name)| name.clone()).collect();
+    let playlists: Vec<String> = room_playlists
+        .iter()
+        .map(|(_, name)| name.clone())
+        .collect();
     let playlist_list: Vec<Value> = room_playlists
         .iter()
         .map(|(pid, name)| json!({"id": pid, "name": name}))
@@ -1508,7 +1600,11 @@ pub async fn update_photo(
         Ok(r) => r,
         Err(e) => return e,
     };
-    if !state.rooms.has_control(&room, user.id, user.is_administrator).await {
+    if !state
+        .rooms
+        .has_control(&room, user.id, user.is_administrator)
+        .await
+    {
         return forbidden();
     }
     let mut bytes = None;
@@ -1555,7 +1651,11 @@ pub async fn delete_picture(
         Ok(r) => r,
         Err(e) => return e,
     };
-    if !state.rooms.has_control(&room, user.id, user.is_administrator).await {
+    if !state
+        .rooms
+        .has_control(&room, user.id, user.is_administrator)
+        .await
+    {
         return forbidden();
     }
     match state.rooms.clear_photo(id).await {
@@ -1628,9 +1728,11 @@ async fn require_track_mod(
 async fn track_in_room(state: &AppState, room_id: i64, track_id: i64) -> Result<(), Response> {
     match state.rooms.track_in_room(room_id, track_id).await {
         Ok(true) => Ok(()),
-        Ok(false) => Err(
-            (StatusCode::NOT_FOUND, Json(json!({"error": "track_not_found"}))).into_response(),
-        ),
+        Ok(false) => Err((
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "track_not_found"})),
+        )
+            .into_response()),
         Err(e) => {
             tracing::warn!(error = %e, "track_in_room failed");
             Err(StatusCode::INTERNAL_SERVER_ERROR.into_response())
@@ -1740,11 +1842,7 @@ pub async fn mod_track_update_answer(
     if let Err(r) = track_mod_gate(&state, &user, room_id, track_id).await {
         return r;
     }
-    if !state
-        .playlists
-        .answer_belongs_to(track_id, answer_id)
-        .await
-    {
+    if !state.playlists.answer_belongs_to(track_id, answer_id).await {
         return (
             StatusCode::NOT_FOUND,
             Json(json!({"error": "answer_not_found"})),
@@ -1798,11 +1896,7 @@ pub async fn mod_track_delete_answer(
     if let Err(r) = track_mod_gate(&state, &user, room_id, track_id).await {
         return r;
     }
-    if !state
-        .playlists
-        .answer_belongs_to(track_id, answer_id)
-        .await
-    {
+    if !state.playlists.answer_belongs_to(track_id, answer_id).await {
         return (
             StatusCode::NOT_FOUND,
             Json(json!({"error": "answer_not_found"})),

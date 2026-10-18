@@ -1,7 +1,7 @@
 use crate::store::{GameTrack, RoomConfig, RoundRow};
 use blindall_core::types::TrackAnswer;
 use chrono::{DateTime, SecondsFormat, Utc};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 pub fn room_channel(room_id: i64) -> String {
     format!("room:{room_id}")
@@ -86,7 +86,12 @@ pub fn round_started(round: &RoundRow, room: &Value) -> Value {
     json!({ "round": r })
 }
 
-pub fn round_finished(round: &RoundRow, room: &Value, users_podium: Value, teams_podium: Value) -> Value {
+pub fn round_finished(
+    round: &RoundRow,
+    room: &Value,
+    users_podium: Value,
+    teams_podium: Value,
+) -> Value {
     let mut r = round_payload(round);
     r["room"] = room.clone();
     json!({
@@ -135,7 +140,13 @@ pub fn new_score(
     })
 }
 
-pub fn user_found_all(room: &Value, user_name: &str, user_id: i64, photo: &str, time: f64) -> Value {
+pub fn user_found_all(
+    room: &Value,
+    user_name: &str,
+    user_id: i64,
+    photo: &str,
+    time: f64,
+) -> Value {
     json!({
         "room": room,
         "user": {

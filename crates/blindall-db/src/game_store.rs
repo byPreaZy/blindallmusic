@@ -2,12 +2,12 @@ use crate::entities;
 use async_trait::async_trait;
 use blindall_core::types::{Standing, TrackAnswer, TrackHistoryEntry};
 use blindall_game::store::{
-    GameStore, GameTrack, PassthroughResolver, PlayerInfo, PreviewResolver,
-    Result, RoomConfig, RoundRow, StoreError, TrackDeletionNotice,
+    GameStore, GameTrack, PassthroughResolver, PlayerInfo, PreviewResolver, Result, RoomConfig,
+    RoundRow, StoreError, TrackDeletionNotice,
 };
 use chrono::{DateTime, Utc};
-use sqlx::postgres::PgPool;
 use sqlx::Row;
+use sqlx::postgres::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -223,11 +223,13 @@ impl GameStore for DbGameStore {
     }
 
     async fn pick_tracks(&self, room: &RoomConfig) -> Result<Vec<i64>> {
-        const BASE: &str =
-            "SELECT DISTINCT t.id FROM tracks t JOIN playlist_room pr \
+        const BASE: &str = "SELECT DISTINCT t.id FROM tracks t JOIN playlist_room pr \
              ON pr.playlist_id = t.playlist_id WHERE pr.room_id = $1";
         let sql = if room.is_random {
-            format!("SELECT id FROM ({BASE}) d ORDER BY random() LIMIT {}", room.tracks_by_round)
+            format!(
+                "SELECT id FROM ({BASE}) d ORDER BY random() LIMIT {}",
+                room.tracks_by_round
+            )
         } else {
             format!("{BASE} LIMIT {}", room.tracks_by_round)
         };
@@ -384,13 +386,11 @@ impl GameStore for DbGameStore {
         track_id: i64,
         actor: Option<String>,
     ) -> Result<Vec<TrackDeletionNotice>> {
-        let Some(track) = sqlx::query(
-            "SELECT provider, playlist_id FROM tracks WHERE id = $1",
-        )
-        .bind(track_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| StoreError::Other(e.into()))?
+        let Some(track) = sqlx::query("SELECT provider, playlist_id FROM tracks WHERE id = $1")
+            .bind(track_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| StoreError::Other(e.into()))?
         else {
             return Ok(vec![]);
         };
@@ -410,11 +410,10 @@ impl GameStore for DbGameStore {
         };
 
         if self.environment == "production" {
-            self.post_discord_to_rooms(playlist_id, &message, 15158332).await;
+            self.post_discord_to_rooms(playlist_id, &message, 15158332)
+                .await;
         }
-        let notified = self
-            .notify_playlist_moderators(playlist_id, &message)
-            .await;
+        let notified = self.notify_playlist_moderators(playlist_id, &message).await;
 
         let mut tx = self
             .pool
@@ -431,19 +430,16 @@ impl GameStore for DbGameStore {
             .execute(&mut *tx)
             .await
             .map_err(|e| StoreError::Other(e.into()))?;
-        tx.commit()
-            .await
-            .map_err(|e| StoreError::Other(e.into()))?;
+        tx.commit().await.map_err(|e| StoreError::Other(e.into()))?;
         Ok(notified)
     }
 
     async fn load_active_rounds(&self) -> Result<Vec<RoundRow>> {
-        let rows = sqlx::query(
-            "SELECT * FROM rounds WHERE is_playing = true OR finished_at IS NULL",
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| StoreError::Other(e.into()))?;
+        let rows =
+            sqlx::query("SELECT * FROM rounds WHERE is_playing = true OR finished_at IS NULL")
+                .fetch_all(&self.pool)
+                .await
+                .map_err(|e| StoreError::Other(e.into()))?;
         Ok(rows
             .iter()
             .map(|r| round_row_to_game(entities::Round::from_row(r)))
@@ -493,8 +489,8 @@ impl GameStore for DbGameStore {
         )
         .bind(user_ids.to_vec())
         .fetch_all(&self.pool)
-            .await
-            .map_err(|e| StoreError::Other(e.into()))?;
+        .await
+        .map_err(|e| StoreError::Other(e.into()))?;
         Ok(rows
             .iter()
             .map(|r| {
@@ -548,13 +544,12 @@ impl GameStore for DbGameStore {
             .await
             .map_err(|e| StoreError::Other(e.into()))?;
 
-        let exists: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM round_standings WHERE round_id = $1",
-        )
-        .bind(round_id)
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(|e| StoreError::Other(e.into()))?;
+        let exists: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM round_standings WHERE round_id = $1")
+                .bind(round_id)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(|e| StoreError::Other(e.into()))?;
         if exists > 0 {
             tx.rollback().await.ok();
             return Ok(()); // already finalized, PHP early-returns
@@ -623,7 +618,11 @@ impl GameStore for DbGameStore {
             .into_iter()
             .chain(team_id.map(|t| ("team", t)))
         {
-            let morph = if ty == "user" { "App\\Models\\User" } else { "App\\Models\\Team" };
+            let morph = if ty == "user" {
+                "App\\Models\\User"
+            } else {
+                "App\\Models\\Team"
+            };
             let existing: Option<i64> = sqlx::query_scalar(
                 "SELECT id FROM total_scores WHERE totalscorable_type = $1 \
                  AND totalscorable_id = $2 AND room_id = $3",
@@ -680,12 +679,7 @@ impl GameStore for DbGameStore {
         .map_err(|e| StoreError::Other(e.into()))
     }
 
-    async fn win_streak(
-        &self,
-        room_id: i64,
-        user_id: i64,
-        before_round_id: i64,
-    ) -> Result<i64> {
+    async fn win_streak(&self, room_id: i64, user_id: i64, before_round_id: i64) -> Result<i64> {
         let positions: Vec<i64> = sqlx::query_scalar(
             "SELECT s.position FROM round_standings s \
              JOIN rounds r ON r.id = s.round_id \
@@ -703,20 +697,15 @@ impl GameStore for DbGameStore {
     }
 
     async fn round_has_standings(&self, round_id: i64) -> Result<bool> {
-        let n: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM round_standings WHERE round_id = $1",
-        )
-        .bind(round_id)
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|e| StoreError::Other(e.into()))?;
+        let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM round_standings WHERE round_id = $1")
+            .bind(round_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| StoreError::Other(e.into()))?;
         Ok(n > 0)
     }
 
-    async fn required_answers_per_track(
-        &self,
-        track_ids: &[i64],
-    ) -> Result<HashMap<i64, usize>> {
+    async fn required_answers_per_track(&self, track_ids: &[i64]) -> Result<HashMap<i64, usize>> {
         if track_ids.is_empty() {
             return Ok(HashMap::new());
         }
@@ -726,16 +715,11 @@ impl GameStore for DbGameStore {
         )
         .bind(track_ids.to_vec())
         .fetch_all(&self.pool)
-            .await
-            .map_err(|e| StoreError::Other(e.into()))?;
+        .await
+        .map_err(|e| StoreError::Other(e.into()))?;
         Ok(rows
             .iter()
-            .map(|r| {
-                (
-                    r.get::<i64, _>("track_id"),
-                    r.get::<i64, _>("c") as usize,
-                )
-            })
+            .map(|r| (r.get::<i64, _>("track_id"), r.get::<i64, _>("c") as usize))
             .collect())
     }
 
@@ -795,13 +779,11 @@ impl GameStore for DbGameStore {
     }
 
     async fn has_legacy_scores(&self, round_id: i64) -> Result<bool> {
-        let n: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM scores WHERE round_id = $1",
-        )
-        .bind(round_id)
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|e| StoreError::Other(e.into()))?;
+        let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM scores WHERE round_id = $1")
+            .bind(round_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| StoreError::Other(e.into()))?;
         Ok(n > 0)
     }
 

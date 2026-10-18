@@ -41,7 +41,7 @@ pub use rankings::RankingsRepo;
 pub use rooms::{RoomOptions, RoomRepo, RoomRow};
 pub use seasons::SeasonRepo;
 pub use seo::SeoRepo;
-pub use teams::{TeamRepo, TeamRow, TEAM_SEATS};
+pub use teams::{TEAM_SEATS, TeamRepo, TeamRow};
 pub use votes::VoteRepo;
 
 pub async fn connect(database_url: &str) -> Result<sqlx::postgres::PgPool, sqlx::Error> {
@@ -182,12 +182,10 @@ fn migrations() -> sqlx::migrate::Migrator {
 }
 
 pub async fn migrate(pool: &sqlx::postgres::PgPool) -> anyhow::Result<()> {
-    sqlx::query(
-        "DELETE FROM _sqlx_migrations WHERE version = 3 AND description = 'demo_data'",
-    )
-    .execute(pool)
-    .await
-    .ok(); // table may not exist yet on a fresh database
+    sqlx::query("DELETE FROM _sqlx_migrations WHERE version = 3 AND description = 'demo_data'")
+        .execute(pool)
+        .await
+        .ok(); // table may not exist yet on a fresh database
     migrations().run(pool).await?;
     Ok(())
 }

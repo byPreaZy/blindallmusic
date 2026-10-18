@@ -14,7 +14,16 @@ async fn home_payload_shape() {
     assert!(items["current_page"].is_number(), "paginator current_page");
     assert!(items["last_page"].is_number(), "paginator last_page");
     if let Some(room) = items["data"].as_array().and_then(|d| d.first()) {
-        for key in ["id", "name", "slug", "photo", "is_playing", "is_public", "owner", "user_count"] {
+        for key in [
+            "id",
+            "name",
+            "slug",
+            "photo",
+            "is_playing",
+            "is_public",
+            "owner",
+            "user_count",
+        ] {
             assert!(room.get(key).is_some(), "room card .{key} missing: {room}");
         }
     }
@@ -110,13 +119,19 @@ async fn room_create_validation_and_shape() {
     assert_eq!(bad.status, StatusCode::UNPROCESSABLE_ENTITY);
 
     let bad_cat = owner
-        .post("/api/v1/rooms", json!({"name": uniq_name("r"), "category_id": 9999}))
+        .post(
+            "/api/v1/rooms",
+            json!({"name": uniq_name("r"), "category_id": 9999}),
+        )
         .await;
     assert_eq!(bad_cat.status, StatusCode::UNPROCESSABLE_ENTITY);
     assert!(bad_cat.json("/errors/category_id").is_array());
 
     let ok = owner
-        .post("/api/v1/rooms", json!({"name": uniq_name("r"), "category_id": 4}))
+        .post(
+            "/api/v1/rooms",
+            json!({"name": uniq_name("r"), "category_id": 4}),
+        )
         .await;
     assert_eq!(ok.status, StatusCode::CREATED, "{}", ok.text);
     let room = &ok.body["room"];
@@ -128,7 +143,10 @@ async fn room_create_validation_and_shape() {
 async fn room_guest_cannot_create() {
     let g = Client::guest().await;
     let r = g
-        .post("/api/v1/rooms", json!({"name": uniq_name("g"), "category_id": 4}))
+        .post(
+            "/api/v1/rooms",
+            json!({"name": uniq_name("g"), "category_id": 4}),
+        )
         .await;
     assert!(
         r.status == StatusCode::FORBIDDEN || r.status == StatusCode::UNAUTHORIZED,
@@ -148,14 +166,32 @@ async fn room_show_payload_complete() {
         .expect_ok("room show");
     let room = &r.body["room"];
     for key in [
-        "id", "name", "slug", "description", "category", "owner", "moderators",
-        "photo", "is_playing", "is_public", "is_chat_active", "is_bookmarked",
-        "track_duration", "pause_between_tracks", "pause_between_rounds",
-        "tracks_by_round", "rounds_count", "can_edit",
+        "id",
+        "name",
+        "slug",
+        "description",
+        "category",
+        "owner",
+        "moderators",
+        "photo",
+        "is_playing",
+        "is_public",
+        "is_chat_active",
+        "is_bookmarked",
+        "track_duration",
+        "pause_between_tracks",
+        "pause_between_rounds",
+        "tracks_by_round",
+        "rounds_count",
+        "can_edit",
     ] {
         assert!(room.get(key).is_some(), "room.{key} missing");
     }
-    assert!(r.body["public_rooms"].as_array().is_some_and(|a| !a.is_empty()));
+    assert!(
+        r.body["public_rooms"]
+            .as_array()
+            .is_some_and(|a| !a.is_empty())
+    );
     assert!(r.body.get("game").is_some());
 }
 
@@ -183,7 +219,10 @@ async fn room_private_not_in_public_index() {
         .post("/api/v1/rooms", json!({"name": name, "category_id": 4}))
         .await
         .expect_ok("create");
-    let list = Client::anon().get("/api/v1/rooms?per_page=100").await.expect_ok("list");
+    let list = Client::anon()
+        .get("/api/v1/rooms?per_page=100")
+        .await
+        .expect_ok("list");
     let found = list.body["rooms"]
         .as_array()
         .unwrap()
@@ -197,7 +236,10 @@ async fn room_update_options_owner_only() {
     let (owner, _) = Client::register("uo").await;
     let (other, _) = Client::register("uo2").await;
     let r = owner
-        .post("/api/v1/rooms", json!({"name": uniq_name("opt"), "category_id": 4}))
+        .post(
+            "/api/v1/rooms",
+            json!({"name": uniq_name("opt"), "category_id": 4}),
+        )
         .await
         .expect_ok("create");
     let id = r.json("/room/id").as_i64().unwrap();
@@ -210,7 +252,11 @@ async fn room_update_options_owner_only() {
     let denied = other
         .put(&format!("/api/v1/rooms/{id}/options"), full.clone())
         .await;
-    assert_eq!(denied.status, StatusCode::FORBIDDEN, "non-owner options → 403");
+    assert_eq!(
+        denied.status,
+        StatusCode::FORBIDDEN,
+        "non-owner options → 403"
+    );
 
     let ok = owner
         .put(&format!("/api/v1/rooms/{id}/options"), full)
@@ -223,7 +269,10 @@ async fn room_edit_non_owner_forbidden() {
     let (owner, _) = Client::register("ed").await;
     let (other, _) = Client::register("ed2").await;
     let r = owner
-        .post("/api/v1/rooms", json!({"name": uniq_name("e"), "category_id": 4}))
+        .post(
+            "/api/v1/rooms",
+            json!({"name": uniq_name("e"), "category_id": 4}),
+        )
         .await
         .expect_ok("create");
     let id = r.json("/room/id").as_i64().unwrap();
@@ -234,7 +283,10 @@ async fn room_edit_non_owner_forbidden() {
 #[tokio::test]
 async fn public_state_returns_game_snapshot() {
     let c = Client::anon();
-    let r = c.get("/api/v1/rooms/6/public-state").await.expect_ok("public-state");
+    let r = c
+        .get("/api/v1/rooms/6/public-state")
+        .await
+        .expect_ok("public-state");
     assert!(r.body.is_object());
 }
 
@@ -291,7 +343,10 @@ async fn room_is_active_toggle_forbidden_for_outsider() {
     let (owner, _) = Client::register("vo").await;
     let (other, _) = Client::register("vo2").await;
     let r = owner
-        .post("/api/v1/rooms", json!({"name": uniq_name("visf"), "category_id": 4}))
+        .post(
+            "/api/v1/rooms",
+            json!({"name": uniq_name("visf"), "category_id": 4}),
+        )
         .await
         .expect_ok("create");
     let id = r.json("/room/id").as_i64().unwrap();
@@ -317,17 +372,23 @@ async fn room_start_requires_control() {
     let (other, _) = Client::register("so2").await;
     let (mod_u, _) = Client::register("so3").await;
     let r = owner
-        .post("/api/v1/rooms", json!({"name": uniq_name("st"), "category_id": 4}))
+        .post(
+            "/api/v1/rooms",
+            json!({"name": uniq_name("st"), "category_id": 4}),
+        )
         .await
         .expect_ok("create");
     let id = r.json("/room/id").as_i64().unwrap();
     let mod_id = mod_u.user_id;
 
     // outsider → 403
-    let denied = other
-        .post_empty(&format!("/api/v1/rooms/{id}/start"))
-        .await;
-    assert_eq!(denied.status, StatusCode::FORBIDDEN, "outsider start → 403: {}", denied.text);
+    let denied = other.post_empty(&format!("/api/v1/rooms/{id}/start")).await;
+    assert_eq!(
+        denied.status,
+        StatusCode::FORBIDDEN,
+        "outsider start → 403: {}",
+        denied.text
+    );
 
     // guest → 403
     let guest = Client::guest().await;
@@ -342,14 +403,10 @@ async fn room_start_requires_control() {
         )
         .await;
     assert!(attach.ok(), "attach moderator: {}", attach.text);
-    let ok = mod_u
-        .post_empty(&format!("/api/v1/rooms/{id}/start"))
-        .await;
+    let ok = mod_u.post_empty(&format!("/api/v1/rooms/{id}/start")).await;
     assert!(ok.ok(), "moderator start: {}", ok.text);
 
     // owner can also start (room not playing after empty round auto-finish)
-    let own = owner
-        .post_empty(&format!("/api/v1/rooms/{id}/start"))
-        .await;
+    let own = owner.post_empty(&format!("/api/v1/rooms/{id}/start")).await;
     assert!(own.ok(), "owner start: {}", own.text);
 }

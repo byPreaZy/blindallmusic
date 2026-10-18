@@ -85,10 +85,8 @@ pub type Result<T> = std::result::Result<T, StoreError>;
 
 #[async_trait::async_trait]
 pub trait ScoreStore: Send + Sync {
-    async fn found_answer_ids(&self, round_id: i64, user_id: i64, track_id: i64)
-        -> Vec<i64>;
-    async fn players_who_found(&self, round_id: i64, answer_id: i64, exclude: Option<i64>)
-        -> i64;
+    async fn found_answer_ids(&self, round_id: i64, user_id: i64, track_id: i64) -> Vec<i64>;
+    async fn players_who_found(&self, round_id: i64, answer_id: i64, exclude: Option<i64>) -> i64;
     async fn record_answer(
         &self,
         round_id: i64,
@@ -105,7 +103,10 @@ pub trait ScoreStore: Send + Sync {
     async fn user_score(&self, round_id: i64, user_id: i64) -> f64;
     async fn count_found_for_user(&self, round_id: i64, user_id: i64, track_id: i64) -> usize;
     async fn all_scores(&self, round_id: i64) -> Vec<(i64, f64)>;
-    async fn all_tracks_history(&self, round_id: i64) -> Vec<(i64, Vec<blindall_redis::scores::TrackRecord>)>;
+    async fn all_tracks_history(
+        &self,
+        round_id: i64,
+    ) -> Vec<(i64, Vec<blindall_redis::scores::TrackRecord>)>;
     async fn cleanup(&self, round_id: i64);
 }
 
@@ -117,7 +118,9 @@ pub trait PresenceStore: Send + Sync {
 #[async_trait::async_trait]
 impl ScoreStore for blindall_redis::RoundScoreStore {
     async fn found_answer_ids(&self, r: i64, u: i64, t: i64) -> Vec<i64> {
-        Self::found_answer_ids(self, r, u, t).await.unwrap_or_default()
+        Self::found_answer_ids(self, r, u, t)
+            .await
+            .unwrap_or_default()
     }
     async fn players_who_found(&self, r: i64, a: i64, e: Option<i64>) -> i64 {
         Self::players_who_found(self, r, a, e).await.unwrap_or(0)
@@ -130,12 +133,7 @@ impl ScoreStore for blindall_redis::RoundScoreStore {
     ) -> bool {
         Self::record_answer(self, r, u, rec).await.unwrap_or(false)
     }
-    async fn record_listened(
-        &self,
-        r: i64,
-        u: i64,
-        rec: &blindall_redis::scores::TrackRecord,
-    ) {
+    async fn record_listened(&self, r: i64, u: i64, rec: &blindall_redis::scores::TrackRecord) {
         let _ = Self::record_listened(self, r, u, rec).await;
     }
     async fn add_score(&self, r: i64, u: i64, s: f64) {
@@ -150,7 +148,10 @@ impl ScoreStore for blindall_redis::RoundScoreStore {
     async fn all_scores(&self, r: i64) -> Vec<(i64, f64)> {
         Self::all_scores(self, r).await.unwrap_or_default()
     }
-    async fn all_tracks_history(&self, r: i64) -> Vec<(i64, Vec<blindall_redis::scores::TrackRecord>)> {
+    async fn all_tracks_history(
+        &self,
+        r: i64,
+    ) -> Vec<(i64, Vec<blindall_redis::scores::TrackRecord>)> {
         Self::all_tracks_history(self, r).await.unwrap_or_default()
     }
     async fn cleanup(&self, r: i64) {
@@ -173,12 +174,8 @@ impl PresenceStore for blindall_redis::RoomPresenceStore {
 
 #[async_trait::async_trait]
 pub trait PreviewResolver: Send + Sync {
-    async fn resolve(
-        &self,
-        provider: &str,
-        provider_id: &str,
-        preview_url: &str,
-    ) -> Option<String>;
+    async fn resolve(&self, provider: &str, provider_id: &str, preview_url: &str)
+    -> Option<String>;
 }
 
 #[derive(Default)]
@@ -208,7 +205,7 @@ pub trait GameStore: Send + Sync {
     async fn room_config(&self, room_id: i64) -> Result<RoomConfig>;
     async fn pick_tracks(&self, room: &RoomConfig) -> Result<Vec<i64>>;
     async fn create_round(&self, room_id: i64, user_id: Option<i64>, tracks: &[i64])
-        -> Result<i64>;
+    -> Result<i64>;
     async fn advance_round(&self, round_id: i64, started_at: DateTime<Utc>) -> Result<()>;
     async fn finish_round(&self, round_id: i64, at: DateTime<Utc>) -> Result<()>;
     async fn set_room_playing(&self, room_id: i64, playing: bool) -> Result<()>;
@@ -227,8 +224,13 @@ pub trait GameStore: Send + Sync {
         standings: &[blindall_core::types::Standing],
         elo_updates: &[(i64, i64)],
     ) -> Result<()>;
-    async fn bump_total_score(&self, room_id: i64, user_id: i64, team_id: Option<i64>, score: f64)
-        -> Result<()>;
+    async fn bump_total_score(
+        &self,
+        room_id: i64,
+        user_id: i64,
+        team_id: Option<i64>,
+        score: f64,
+    ) -> Result<()>;
     async fn placement_rounds_played(&self, user_id: i64) -> Result<i64>;
     async fn win_streak(&self, room_id: i64, user_id: i64, before_round_id: i64) -> Result<i64>;
     async fn round_has_standings(&self, round_id: i64) -> Result<bool>;

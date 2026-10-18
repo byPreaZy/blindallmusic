@@ -21,10 +21,7 @@ impl LevelDispatcher {
         }
     }
 
-    pub async fn snapshot(
-        &self,
-        user_id: i64,
-    ) -> Option<serde_json::Value> {
+    pub async fn snapshot(&self, user_id: i64) -> Option<serde_json::Value> {
         self.levels.snapshot(user_id).await.ok().flatten()
     }
 
@@ -35,7 +32,10 @@ impl LevelDispatcher {
             if map.len() > 10_000 {
                 map.retain(|_, t| now.duration_since(*t) < UNIQUE_FOR);
             }
-            if map.get(&user_id).is_some_and(|t| now.duration_since(*t) < UNIQUE_FOR) {
+            if map
+                .get(&user_id)
+                .is_some_and(|t| now.duration_since(*t) < UNIQUE_FOR)
+            {
                 return;
             }
             map.insert(user_id, now);

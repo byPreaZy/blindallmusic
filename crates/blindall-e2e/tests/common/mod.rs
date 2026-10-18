@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
 use reqwest::{Client as Http, Method, StatusCode};
-use serde_json::{json, Value};
-use std::sync::atomic::{AtomicU64, Ordering};
+use serde_json::{Value, json};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 pub fn base() -> String {
     std::env::var("TEST_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".into())
@@ -202,10 +202,7 @@ impl Client {
     }
 }
 
-pub async fn game_fixture(
-    owner: &Client,
-    extra_answers: &[(&str, i64, f64)],
-) -> (i64, i64, i64) {
+pub async fn game_fixture(owner: &Client, extra_answers: &[(&str, i64, f64)]) -> (i64, i64, i64) {
     let pl = owner
         .post("/api/v1/playlists", json!({"name": uniq_name("pl")}))
         .await;
@@ -247,7 +244,10 @@ pub async fn game_fixture(
 
     let room_name = uniq_name("room");
     let r = owner
-        .post("/api/v1/rooms", json!({"name": room_name, "category_id": 4}))
+        .post(
+            "/api/v1/rooms",
+            json!({"name": room_name, "category_id": 4}),
+        )
         .await;
     assert_eq!(r.status, StatusCode::CREATED, "room: {}", r.text);
     let room_id = r.json("/room/id").as_i64().unwrap();

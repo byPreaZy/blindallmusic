@@ -1,6 +1,6 @@
 use crate::store::{
-    GameStore, GameTrack, PlayerInfo, PresenceStore, Result, RoomConfig,
-    RoundRow, ScoreStore, StoreError,
+    GameStore, GameTrack, PlayerInfo, PresenceStore, Result, RoomConfig, RoundRow, ScoreStore,
+    StoreError,
 };
 use async_trait::async_trait;
 use blindall_core::types::Standing;
@@ -81,7 +81,9 @@ impl GameStore for FakeGameStore {
     }
     async fn advance_round(&self, round_id: i64, started_at: DateTime<Utc>) -> Result<()> {
         let mut rounds = self.rounds.lock().unwrap();
-        let r = rounds.get_mut(&round_id).ok_or(StoreError::NotFound("round"))?;
+        let r = rounds
+            .get_mut(&round_id)
+            .ok_or(StoreError::NotFound("round"))?;
         r.current += 1;
         r.current_track_started_at = Some(started_at);
         Ok(())
@@ -160,11 +162,7 @@ impl GameStore for FakeGameStore {
             })
             .collect())
     }
-    async fn write_standings(
-        &self,
-        standings: &[Standing],
-        _elo: &[(i64, i64)],
-    ) -> Result<()> {
+    async fn write_standings(&self, standings: &[Standing], _elo: &[(i64, i64)]) -> Result<()> {
         self.standings_written
             .lock()
             .unwrap()
@@ -295,7 +293,12 @@ impl ScoreStore for FakeScoreStore {
         *self.scores.lock().unwrap().entry((r, u)).or_default() += s;
     }
     async fn user_score(&self, r: i64, u: i64) -> f64 {
-        self.scores.lock().unwrap().get(&(r, u)).copied().unwrap_or(0.0)
+        self.scores
+            .lock()
+            .unwrap()
+            .get(&(r, u))
+            .copied()
+            .unwrap_or(0.0)
     }
     async fn count_found_for_user(&self, r: i64, u: i64, t: i64) -> usize {
         self.found
@@ -326,7 +329,10 @@ impl ScoreStore for FakeScoreStore {
     async fn cleanup(&self, r: i64) {
         self.cleaned.lock().unwrap().push(r);
         self.found.lock().unwrap().retain(|(rr, _, _), _| *rr != r);
-        self.answer_players.lock().unwrap().retain(|(rr, _), _| *rr != r);
+        self.answer_players
+            .lock()
+            .unwrap()
+            .retain(|(rr, _), _| *rr != r);
         self.scores.lock().unwrap().retain(|(rr, _), _| *rr != r);
         self.history.lock().unwrap().retain(|(rr, _), _| *rr != r);
         self.players.lock().unwrap().remove(&r);
@@ -341,7 +347,12 @@ pub struct FakePresenceStore {
 #[async_trait]
 impl PresenceStore for FakePresenceStore {
     async fn member_count(&self, room_id: i64, _now: i64) -> i64 {
-        self.counts.lock().unwrap().get(&room_id).copied().unwrap_or(0)
+        self.counts
+            .lock()
+            .unwrap()
+            .get(&room_id)
+            .copied()
+            .unwrap_or(0)
     }
 }
 

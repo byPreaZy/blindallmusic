@@ -1,6 +1,6 @@
-use serde_json::{json, Value};
-use sqlx::postgres::PgPool;
+use serde_json::{Value, json};
 use sqlx::Row;
+use sqlx::postgres::PgPool;
 
 #[derive(Clone)]
 pub struct AdminRepo {
@@ -127,7 +127,6 @@ impl AdminRepo {
         .bind(now)
         .fetch_one(&self.pool)
         .await
-        
     }
 
     pub async fn update_user(
@@ -327,7 +326,6 @@ impl AdminRepo {
             .bind(now)
             .fetch_one(&self.pool)
             .await
-            
     }
 
     pub async fn update_category(&self, id: i64, name: &str) -> Result<bool, sqlx::Error> {
@@ -367,7 +365,6 @@ impl AdminRepo {
         .bind(now)
         .fetch_one(&self.pool)
         .await
-        
     }
 
     pub async fn answer_type_update(
@@ -443,7 +440,6 @@ impl AdminRepo {
         .bind(now)
         .fetch_one(&self.pool)
         .await
-        
     }
 
     pub async fn page_original(&self, id: i64) -> Result<Option<Option<i64>>, sqlx::Error> {
@@ -485,11 +481,10 @@ impl AdminRepo {
     }
 
     pub async fn faqs(&self) -> Result<Vec<Value>, sqlx::Error> {
-        let rows = sqlx::query(
-            "SELECT id, locale, question, answer, created_at FROM faqs ORDER BY id",
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let rows =
+            sqlx::query("SELECT id, locale, question, answer, created_at FROM faqs ORDER BY id")
+                .fetch_all(&self.pool)
+                .await?;
         Ok(rows
             .iter()
             .map(|r| {
@@ -521,7 +516,6 @@ impl AdminRepo {
         .bind(now)
         .fetch_one(&self.pool)
         .await
-        
     }
 
     pub async fn update_faq(
@@ -610,7 +604,12 @@ impl AdminRepo {
                 "deleted_at": Value::Null,
             }));
         }
-        Ok(crate::moderation::Page { items, total, page, per_page })
+        Ok(crate::moderation::Page {
+            items,
+            total,
+            page,
+            per_page,
+        })
     }
 
     pub async fn admin_update_playlist(
@@ -713,7 +712,12 @@ impl AdminRepo {
                 "deleted_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("deleted_at"),
             }));
         }
-        Ok(crate::moderation::Page { items, total, page, per_page })
+        Ok(crate::moderation::Page {
+            items,
+            total,
+            page,
+            per_page,
+        })
     }
 
     pub async fn admin_update_room(
@@ -825,7 +829,12 @@ impl AdminRepo {
                 })
             })
             .collect();
-        Ok(crate::moderation::Page { items, total, page, per_page })
+        Ok(crate::moderation::Page {
+            items,
+            total,
+            page,
+            per_page,
+        })
     }
 
     pub async fn admin_update_team(
@@ -995,5 +1004,4 @@ impl AdminRepo {
         .await
         .map(|v| v == 1)
     }
-
 }

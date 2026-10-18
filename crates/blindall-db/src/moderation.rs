@@ -1,6 +1,6 @@
-use serde_json::{json, Value};
-use sqlx::postgres::PgPool;
+use serde_json::{Value, json};
 use sqlx::Row;
+use sqlx::postgres::PgPool;
 
 #[derive(Clone)]
 pub struct ModerationRepo {
@@ -168,10 +168,10 @@ impl ModerationRepo {
         for r in &rows {
             let user_id: i64 = r.get("id");
             let bans = self.ban_history(user_id, sensitive).await?;
-            let active = bans.iter().find(|b| {
-                b["expires_at"].is_null()
-                    || b["is_permanent"] == json!(true)
-            }).cloned();
+            let active = bans
+                .iter()
+                .find(|b| b["expires_at"].is_null() || b["is_permanent"] == json!(true))
+                .cloned();
             let mut v = json!({
                 "id": user_id,
                 "name": r.get::<String, _>("name"),
@@ -363,7 +363,11 @@ impl ModerationRepo {
         })
     }
 
-    pub async fn user_detail(&self, user_id: i64, sensitive: bool) -> Result<Option<Value>, sqlx::Error> {
+    pub async fn user_detail(
+        &self,
+        user_id: i64,
+        sensitive: bool,
+    ) -> Result<Option<Value>, sqlx::Error> {
         let row = sqlx::query(
             "SELECT id, name, photo_path, created_at, provider, is_guest, \
              is_administrator, email, ip, elo, team_id FROM users \

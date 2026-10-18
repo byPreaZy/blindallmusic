@@ -1,11 +1,11 @@
 use crate::auth::CurrentUser;
 use crate::state::AppState;
+use axum::Json;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -66,7 +66,12 @@ pub(crate) fn client_ip(headers: &HeaderMap, fallback: &str) -> String {
         return ip.to_string();
     }
     if let Some(xff) = h("x-forwarded-for") {
-        if let Some(first) = xff.split(',').next().map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(first) = xff
+            .split(',')
+            .next()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
             return first.to_string();
         }
     }
@@ -119,19 +124,35 @@ pub(crate) async fn enriched_user_json(
             .unwrap_or(Value::Null),
         None => Value::Null,
     };
-    base["custom_tag"] = json!(state
-        .auth
-        .custom_tag_of(u.id)
-        .await
-        .ok()
-        .flatten()
-        .unwrap_or_default());
+    base["custom_tag"] = json!(
+        state
+            .auth
+            .custom_tag_of(u.id)
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or_default()
+    );
     let snap = state.levels.snapshot(u.id).await;
-    base["level"] = snap.as_ref().and_then(|s| s["level"].as_i64()).map_or(json!(1), |v| v.into());
-    base["current_xp"] = snap.as_ref().map(|s| s["current_xp"].clone()).unwrap_or(json!(0));
-    base["xp_for_next_level"] = snap.as_ref().map(|s| s["xp_for_next_level"].clone()).unwrap_or(json!(100));
-    base["total_xp"] = snap.as_ref().map(|s| s["total_xp"].clone()).unwrap_or(json!(0));
-    base["level_metrics"] = snap.map(|s| s["level_metrics"].clone()).unwrap_or(Value::Null);
+    base["level"] = snap
+        .as_ref()
+        .and_then(|s| s["level"].as_i64())
+        .map_or(json!(1), |v| v.into());
+    base["current_xp"] = snap
+        .as_ref()
+        .map(|s| s["current_xp"].clone())
+        .unwrap_or(json!(0));
+    base["xp_for_next_level"] = snap
+        .as_ref()
+        .map(|s| s["xp_for_next_level"].clone())
+        .unwrap_or(json!(100));
+    base["total_xp"] = snap
+        .as_ref()
+        .map(|s| s["total_xp"].clone())
+        .unwrap_or(json!(0));
+    base["level_metrics"] = snap
+        .map(|s| s["level_metrics"].clone())
+        .unwrap_or(Value::Null);
     let is_supporter = !u.is_guest
         && state
             .donations_repo
@@ -150,8 +171,19 @@ pub(crate) async fn enriched_user_json(
 
 pub(crate) fn validate_name(name: &str, moderator_names: &[String]) -> Result<(), &'static str> {
     const RESERVED: &[&str] = &[
-        "admin", "admins", "mchev", "administrateur", "administrator", "superadmin",
-        "blindallmusic.com", "moderator", "moderateur", "test", "playlist", "room", "team",
+        "admin",
+        "admins",
+        "mchev",
+        "administrateur",
+        "administrator",
+        "superadmin",
+        "blindallmusic.com",
+        "moderator",
+        "moderateur",
+        "test",
+        "playlist",
+        "room",
+        "team",
     ];
     let lower = name.to_lowercase();
     if RESERVED.contains(&lower.as_str()) {
@@ -209,9 +241,16 @@ pub async fn register(
     }
     let name = body.name.trim();
     if name.is_empty() || name.chars().count() > 25 {
-        return validation_error("name", "The name field is required and must not exceed 25 characters.");
+        return validation_error(
+            "name",
+            "The name field is required and must not exceed 25 characters.",
+        );
     }
-    let moderator_names = state.auth.reserved_moderator_names().await.unwrap_or_default();
+    let moderator_names = state
+        .auth
+        .reserved_moderator_names()
+        .await
+        .unwrap_or_default();
     if let Err(msg) = validate_name(name, &moderator_names) {
         return validation_error("name", msg);
     }
@@ -229,10 +268,16 @@ pub async fn register(
         return validation_error("email", "The email has already been taken.");
     }
     if body.password.len() < 8 {
-        return validation_error("password", "The password field must be at least 8 characters.");
+        return validation_error(
+            "password",
+            "The password field must be at least 8 characters.",
+        );
     }
     if body.password_confirmation.as_deref() != Some(body.password.as_str()) {
-        return validation_error("password", "The password field confirmation does not match.");
+        return validation_error(
+            "password",
+            "The password field confirmation does not match.",
+        );
     }
 
     let hash = match bcrypt::hash(&body.password, 12) {
@@ -247,8 +292,7 @@ pub async fn register(
         }
     };
     {
-        let (mail, email, name) =
-            (state.mail.clone(), email.to_string(), name.to_string());
+        let (mail, email, name) = (state.mail.clone(), email.to_string(), name.to_string());
         tokio::spawn(async move {
             if let Err(e) = crate::mail::send_welcome(&mail, &email, &name).await {
                 tracing::warn!(error = %e, "welcome mail failed");
@@ -268,7 +312,11 @@ pub async fn register(
         is_administrator: false,
         team_id: None,
     };
-    (StatusCode::CREATED, Json(json!({ "token": token, "user": user_json(&user, false) }))).into_response()
+    (
+        StatusCode::CREATED,
+        Json(json!({ "token": token, "user": user_json(&user, false) })),
+    )
+        .into_response()
 }
 
 pub async fn login(
@@ -318,7 +366,8 @@ pub async fn login(
         }
     };
     let is_mod = state.auth.is_public_moderator(user.id).await;
-    Json(json!({ "token": token, "user": enriched_user_json(&state, &user, is_mod).await })).into_response()
+    Json(json!({ "token": token, "user": enriched_user_json(&state, &user, is_mod).await }))
+        .into_response()
 }
 
 /// Sliding-window per-key rate limiter (PHP throttle:N,1 equivalent).
@@ -392,7 +441,10 @@ pub async fn guest(
     if let Some(t) = bearer_token_str(&headers) {
         if let Ok(Some(u)) = state.auth.user_for_token(&t).await {
             let is_mod = state.auth.is_public_moderator(u.id).await;
-            return Json(json!({ "token": t, "user": enriched_user_json(&state, &u, is_mod).await })).into_response();
+            return Json(
+                json!({ "token": t, "user": enriched_user_json(&state, &u, is_mod).await }),
+            )
+            .into_response();
         }
     }
     let ip = client_ip(&headers, &addr.ip().to_string());
@@ -412,8 +464,8 @@ pub async fn guest(
             .into_response();
     }
 
-    use rand::distr::Alphanumeric;
     use rand::Rng;
+    use rand::distr::Alphanumeric;
     let name = format!("Guest-{}", rand::rng().random_range(10000..=99999));
     let email = format!(
         "guest-{}@bam.test",
@@ -449,7 +501,11 @@ pub async fn guest(
         is_administrator: false,
         team_id: None,
     };
-    (StatusCode::CREATED, Json(json!({ "token": token, "user": user_json(&user, false) }))).into_response()
+    (
+        StatusCode::CREATED,
+        Json(json!({ "token": token, "user": user_json(&user, false) })),
+    )
+        .into_response()
 }
 
 pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -473,7 +529,9 @@ impl WsTickets {
         use rand::Rng;
         const CH: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         let mut rng = rand::rng();
-        let t: String = (0..48).map(|_| CH[rng.random_range(0..CH.len())] as char).collect();
+        let t: String = (0..48)
+            .map(|_| CH[rng.random_range(0..CH.len())] as char)
+            .collect();
         let mut map = self.issued.lock().unwrap();
         map.retain(|_, (_, t0)| t0.elapsed() < WS_TICKET_TTL);
         map.insert(t.clone(), (user_id, Instant::now()));
@@ -496,7 +554,8 @@ pub async fn ws_ticket(State(state): State<AppState>, CurrentUser(user): Current
 fn bearer_token_str(headers: &HeaderMap) -> Option<String> {
     headers
         .get(axum::http::header::AUTHORIZATION)?
-        .to_str().ok()?
+        .to_str()
+        .ok()?
         .strip_prefix("Bearer ")
         .map(str::to_string)
 }
@@ -507,24 +566,126 @@ pub async fn me(State(state): State<AppState>, CurrentUser(user): CurrentUser) -
 }
 
 pub(crate) const BAD_WORDS: &[&str] = &[
-    "abruti", "andouille", "anal", "anus", "baise", "baltringue", "batard", "biatch",
-    " bite", "bordel", "bouffon", "bouffonne", "bougnoul", "bougnoule", "branlette",
-    "branleur", "bride", "burne", "branquignole", "cageot", "casse-couille",
-    "casse-couilles", "chagasse", "charogne", "chiennasse", "chier", "chieur",
-    "chieuse", "chinetoc", "chinetoque", "chinetok", "chleuh", " con ", "conchie",
-    "conchier", "connard", "connasse", "couille", "couilles", "couiller", "couillon",
-    "couillonne", "crote", " cul ", "debile", "ducon", "dugland", "emmerde",
-    "emmerder", "emmerdeur", "emmerdeuse", "encule", "enculer", "enflure", "enfoire",
-    "etron", "fiotte", "fouteur", "foutre", "fumier", "gland", "glandeur", "glandeuse",
-    "glandu", "gogol", "gogole", "gourdasse", "gourgandine", "lavette", "lopette",
-    "mange-merde", "merde", "merdeux", "merdeuse", "michto", "michtoneur",
-    "michtoneuse", "mongol", "mongole", "mongolien", "mongolienne", "nazi", "nichon",
-    "nique", "niquer", "niquez", "orchidoclaste", "pd", "pede", "pequenaud",
-    "petasse", "pouffe", "pouffiasse", "putain", "pute", "raclure", "salaud",
-    "salop", "salope", "sexe", "schlague", "schleu", "schnock", "schnoque",
-    "sous-merde", "tafiole", "tantouse", "tantouze", "tarlouse", "tarlouze",
-    "tarlouz", "tebe", "teub", "teube", "tepu", "tocard", "trouduc", "vaurien",
-    "vide-couille", "vide-couilles",
+    "abruti",
+    "andouille",
+    "anal",
+    "anus",
+    "baise",
+    "baltringue",
+    "batard",
+    "biatch",
+    " bite",
+    "bordel",
+    "bouffon",
+    "bouffonne",
+    "bougnoul",
+    "bougnoule",
+    "branlette",
+    "branleur",
+    "bride",
+    "burne",
+    "branquignole",
+    "cageot",
+    "casse-couille",
+    "casse-couilles",
+    "chagasse",
+    "charogne",
+    "chiennasse",
+    "chier",
+    "chieur",
+    "chieuse",
+    "chinetoc",
+    "chinetoque",
+    "chinetok",
+    "chleuh",
+    " con ",
+    "conchie",
+    "conchier",
+    "connard",
+    "connasse",
+    "couille",
+    "couilles",
+    "couiller",
+    "couillon",
+    "couillonne",
+    "crote",
+    " cul ",
+    "debile",
+    "ducon",
+    "dugland",
+    "emmerde",
+    "emmerder",
+    "emmerdeur",
+    "emmerdeuse",
+    "encule",
+    "enculer",
+    "enflure",
+    "enfoire",
+    "etron",
+    "fiotte",
+    "fouteur",
+    "foutre",
+    "fumier",
+    "gland",
+    "glandeur",
+    "glandeuse",
+    "glandu",
+    "gogol",
+    "gogole",
+    "gourdasse",
+    "gourgandine",
+    "lavette",
+    "lopette",
+    "mange-merde",
+    "merde",
+    "merdeux",
+    "merdeuse",
+    "michto",
+    "michtoneur",
+    "michtoneuse",
+    "mongol",
+    "mongole",
+    "mongolien",
+    "mongolienne",
+    "nazi",
+    "nichon",
+    "nique",
+    "niquer",
+    "niquez",
+    "orchidoclaste",
+    "pd",
+    "pede",
+    "pequenaud",
+    "petasse",
+    "pouffe",
+    "pouffiasse",
+    "putain",
+    "pute",
+    "raclure",
+    "salaud",
+    "salop",
+    "salope",
+    "sexe",
+    "schlague",
+    "schleu",
+    "schnock",
+    "schnoque",
+    "sous-merde",
+    "tafiole",
+    "tantouse",
+    "tantouze",
+    "tarlouse",
+    "tarlouze",
+    "tarlouz",
+    "tebe",
+    "teub",
+    "teube",
+    "tepu",
+    "tocard",
+    "trouduc",
+    "vaurien",
+    "vide-couille",
+    "vide-couilles",
 ];
 
 #[cfg(test)]

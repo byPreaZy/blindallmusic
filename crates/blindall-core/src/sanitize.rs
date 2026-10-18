@@ -87,8 +87,10 @@ static IMPORT_JUNK_PAREN: Lazy<Regex> = Lazy::new(|| {
 });
 static IMPORT_BRACKET: Lazy<Regex> = Lazy::new(|| Regex::new(r"\[[^\]]*\]").unwrap());
 static IMPORT_FEAT: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)[\(\[]?\s*\b(?:feat\.?|featuring|ft\.?)\s+([^)\[\]]+?)(?:\s*[\)\]]|\s+[-:]\s|$)")
-        .unwrap()
+    Regex::new(
+        r"(?i)[\(\[]?\s*\b(?:feat\.?|featuring|ft\.?)\s+([^)\[\]]+?)(?:\s*[\)\]]|\s+[-:]\s|$)",
+    )
+    .unwrap()
 });
 static IMPORT_MEDLEY: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s+/\s+").unwrap());
 
@@ -128,7 +130,10 @@ pub fn clean_import_title(input: &str) -> (String, Vec<String>, Vec<String>) {
             break;
         }
     }
-    title = title.trim_end_matches(['"', '\'', '»', '“', '”']).trim_end().to_string();
+    title = title
+        .trim_end_matches(['"', '\'', '»', '“', '”'])
+        .trim_end()
+        .to_string();
     while title.matches('(').count() > title.matches(')').count() {
         if let Some(pos) = title.rfind('(') {
             title.truncate(pos);
@@ -250,8 +255,7 @@ mod tests {
     fn import_title_keeps_media_refs() {
         let (t, _, _) = clean_import_title("Shallow (De \"A Star Is Born\")");
         assert_eq!(t, "Shallow (De \"A Star Is Born\")");
-        let (t, _, _) =
-            clean_import_title("My Heart Will Go On (Love Theme from \"Titanic\")");
+        let (t, _, _) = clean_import_title("My Heart Will Go On (Love Theme from \"Titanic\")");
         assert_eq!(t, "My Heart Will Go On (Love Theme from \"Titanic\")");
     }
 

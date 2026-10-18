@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
-use sqlx::postgres::PgRow;
 use sqlx::Row;
+use sqlx::postgres::PgRow;
 
 fn get<T>(r: &PgRow, name: &str) -> T
 where

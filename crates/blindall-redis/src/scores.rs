@@ -1,5 +1,5 @@
-use crate::keys;
 use crate::Result;
+use crate::keys;
 use fred::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -206,11 +206,7 @@ impl RoundScoreStore {
         Ok(serde_json::to_string(&tracks)?)
     }
 
-    pub async fn tracks_history(
-        &self,
-        round_id: i64,
-        user_id: i64,
-    ) -> Result<Vec<TrackRecord>> {
+    pub async fn tracks_history(&self, round_id: i64, user_id: i64) -> Result<Vec<TrackRecord>> {
         let raw: Option<String> = self
             .client
             .get(keys::round_user_tracks(round_id, user_id))
@@ -270,13 +266,13 @@ impl RoundScoreStore {
         user_id: i64,
         track_id: i64,
     ) -> Result<usize> {
-        Ok(self.found_answer_ids(round_id, user_id, track_id).await?.len())
+        Ok(self
+            .found_answer_ids(round_id, user_id, track_id)
+            .await?
+            .len())
     }
 
-    pub async fn all_tracks_history(
-        &self,
-        round_id: i64,
-    ) -> Result<Vec<(i64, Vec<TrackRecord>)>> {
+    pub async fn all_tracks_history(&self, round_id: i64) -> Result<Vec<(i64, Vec<TrackRecord>)>> {
         let mut out = Vec::new();
         for uid in self.player_ids(round_id).await? {
             let h = self.tracks_history(round_id, uid).await?;

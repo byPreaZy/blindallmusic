@@ -1,7 +1,7 @@
 use crate::state::AppState;
 use axum::{
     extract::State,
-    http::{header, HeaderValue},
+    http::{HeaderValue, header},
     response::{IntoResponse, Response},
 };
 use std::fmt::Write as _;
@@ -15,7 +15,14 @@ fn localized_path(base: &str, path: &str, locale: &str) -> String {
     };
     let path = path.trim_matches('/');
     if path.is_empty() {
-        return format!("{base}{}", if prefix.is_empty() { "/".into() } else { prefix });
+        return format!(
+            "{base}{}",
+            if prefix.is_empty() {
+                "/".into()
+            } else {
+                prefix
+            }
+        );
     }
     format!("{base}{prefix}/{path}")
 }
@@ -92,7 +99,9 @@ fn atom(dt: chrono::DateTime<chrono::Utc>) -> String {
 pub async fn sitemap(State(state): State<AppState>) -> Response {
     let base = state.app_url.trim_end_matches('/').to_string();
     let now = atom(chrono::Utc::now());
-    let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
+    let mut xml = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
+    );
 
     let mut entry = |loc: &str, lastmod: &str, freq: &str, priority: &str| {
         let _ = writeln!(
@@ -117,7 +126,12 @@ pub async fn sitemap(State(state): State<AppState>) -> Response {
     }
 
     for locale in LOCALES {
-        entry(&localized_path(&base, "rankings", locale), &now, "daily", "0.75");
+        entry(
+            &localized_path(&base, "rankings", locale),
+            &now,
+            "daily",
+            "0.75",
+        );
     }
 
     if let Ok(categories) = state
@@ -152,7 +166,12 @@ pub async fn sitemap(State(state): State<AppState>) -> Response {
 
     for locale in LOCALES {
         for (path, priority) in DOC_PATHS {
-            entry(&localized_path(&base, path, locale), &now, "monthly", priority);
+            entry(
+                &localized_path(&base, path, locale),
+                &now,
+                "monthly",
+                priority,
+            );
         }
     }
 

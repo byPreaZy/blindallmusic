@@ -23,7 +23,11 @@ impl SpotifyClient {
                 .unwrap_or_default(),
             client_id: client_id.to_string(),
             client_secret: client_secret.to_string(),
-            market: if market.is_empty() { "FR".into() } else { market.into() },
+            market: if market.is_empty() {
+                "FR".into()
+            } else {
+                market.into()
+            },
             token: Mutex::new(None),
         }
     }
@@ -79,7 +83,11 @@ impl SpotifyClient {
         let j = resp.json::<Value>().await.unwrap_or_default();
         if status != 200 {
             let msg = j["error"]["message"].as_str().unwrap_or("Spotify error");
-            return Err(ProviderError::new("spotify", format!("Spotify : {msg}"), status));
+            return Err(ProviderError::new(
+                "spotify",
+                format!("Spotify : {msg}"),
+                status,
+            ));
         }
 
         let items = j["tracks"]["items"].as_array();
@@ -125,7 +133,11 @@ impl SpotifyClient {
         let j = resp.json::<Value>().await.unwrap_or_default();
         if status != 200 {
             let msg = j["error"]["message"].as_str().unwrap_or("Spotify error");
-            return Err(ProviderError::new("spotify", format!("Spotify : {msg}"), status));
+            return Err(ProviderError::new(
+                "spotify",
+                format!("Spotify : {msg}"),
+                status,
+            ));
         }
         Ok(serde_json::json!({
             "id": j["id"].as_str().unwrap_or_default(),
@@ -163,7 +175,11 @@ impl SpotifyClient {
             let j = resp.json::<Value>().await.unwrap_or_default();
             if status != 200 {
                 let msg = j["error"]["message"].as_str().unwrap_or("Spotify error");
-                return Err(ProviderError::new("spotify", format!("Spotify : {msg}"), status));
+                return Err(ProviderError::new(
+                    "spotify",
+                    format!("Spotify : {msg}"),
+                    status,
+                ));
             }
             if let Some(items) = j["items"].as_array() {
                 out.extend(

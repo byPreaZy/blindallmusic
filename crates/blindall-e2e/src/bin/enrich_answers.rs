@@ -1,5 +1,5 @@
-use sqlx::postgres::PgPoolOptions;
 use sqlx::Row;
+use sqlx::postgres::PgPoolOptions;
 use std::time::Duration;
 
 const RATE_DELAY: Duration = Duration::from_millis(130);
@@ -8,18 +8,64 @@ fn media_type_for(names: &[String]) -> Option<i64> {
     let mut best: Option<(i64, u8)> = None;
     for n in names {
         let l = n.to_lowercase();
-        let (t, p) = if contains_word(&l, &["video game", "videogame", "gaming", "gamer", "jeu", "jeux", "games", "game"])
-        {
+        let (t, p) = if contains_word(
+            &l,
+            &[
+                "video game",
+                "videogame",
+                "gaming",
+                "gamer",
+                "jeu",
+                "jeux",
+                "games",
+                "game",
+            ],
+        ) {
             (12, 1)
-        } else if contains_word(&l, &["anime", "animes", "manga", "mangas", "japan", "japon", "otaku", "naruto"]) {
+        } else if contains_word(
+            &l,
+            &[
+                "anime", "animes", "manga", "mangas", "japan", "japon", "otaku", "naruto",
+            ],
+        ) {
             (8, 2)
         } else if l.contains("anim") {
             (9, 3)
-        } else if contains_word(&l, &["série", "serie", "series", "séries", "show", "shows", "tv", "télé", "tele", "netflix", "feuilleton", "feuilletons"])
-        {
+        } else if contains_word(
+            &l,
+            &[
+                "série",
+                "serie",
+                "series",
+                "séries",
+                "show",
+                "shows",
+                "tv",
+                "télé",
+                "tele",
+                "netflix",
+                "feuilleton",
+                "feuilletons",
+            ],
+        ) {
             (7, 4)
-        } else if contains_word(&l, &["film", "films", "movie", "movies", "cinema", "cinéma", "cinémas", "cine", "disney", "pixar", "dreamworks", "marvel"])
-        {
+        } else if contains_word(
+            &l,
+            &[
+                "film",
+                "films",
+                "movie",
+                "movies",
+                "cinema",
+                "cinéma",
+                "cinémas",
+                "cine",
+                "disney",
+                "pixar",
+                "dreamworks",
+                "marvel",
+            ],
+        ) {
             (6, 5)
         } else {
             continue;
@@ -52,14 +98,26 @@ fn contains_word(s: &str, words: &[&str]) -> bool {
 fn cut_at_marker(s: &str) -> String {
     let l = s.to_lowercase();
     for marker in [
-        " soundtrack", " image album", " image song", " bande originale",
-        " bande sonore", " b.o.f", " o.s.t", " original score", " motion picture",
-        "musique originale", "music from the", " music collection",
-        " générique", " generique",
+        " soundtrack",
+        " image album",
+        " image song",
+        " bande originale",
+        " bande sonore",
+        " b.o.f",
+        " o.s.t",
+        " original score",
+        " motion picture",
+        "musique originale",
+        "music from the",
+        " music collection",
+        " générique",
+        " generique",
     ] {
         if let Some(i) = l.find(marker) {
             if i > 0 {
-                return s[..i].trim_end_matches([' ', '-', '–', '—', ':', ',']).to_string();
+                return s[..i]
+                    .trim_end_matches([' ', '-', '–', '—', ':', ','])
+                    .to_string();
             }
         }
     }
@@ -67,10 +125,29 @@ fn cut_at_marker(s: &str) -> String {
 }
 
 fn generic_whole(l: &str) -> bool {
-    if ["unknown", "untitled", "the album", "album", "n/a", "none", "misc",
-        "the film", "film", "the movie", "movie", "motion picture",
-        "television series", "tv series", "the series", "series",
-        "trailer", "main theme", "theme", "opening", "intro", "the",
+    if [
+        "unknown",
+        "untitled",
+        "the album",
+        "album",
+        "n/a",
+        "none",
+        "misc",
+        "the film",
+        "film",
+        "the movie",
+        "movie",
+        "motion picture",
+        "television series",
+        "tv series",
+        "the series",
+        "series",
+        "trailer",
+        "main theme",
+        "theme",
+        "opening",
+        "intro",
+        "the",
     ]
     .iter()
     .any(|g| l == *g)
@@ -78,10 +155,24 @@ fn generic_whole(l: &str) -> bool {
         return true;
     }
     let head = l.split(|c: char| c.is_ascii_digit()).next().unwrap_or("");
-    let tail = l[head.len()..].trim_end_matches(|c: char| c.is_ascii_digit() || c == '.' || c == ' ');
+    let tail =
+        l[head.len()..].trim_end_matches(|c: char| c.is_ascii_digit() || c == '.' || c == ' ');
     let numbered = matches!(
         head.trim_end(),
-        "level" | "vol" | "vol." | "volume" | "track" | "part" | "pt" | "pt." | "disc" | "cd" | "chapter" | "episode" | "ep" | "ep."
+        "level"
+            | "vol"
+            | "vol."
+            | "volume"
+            | "track"
+            | "part"
+            | "pt"
+            | "pt."
+            | "disc"
+            | "cd"
+            | "chapter"
+            | "episode"
+            | "ep"
+            | "ep."
     );
     numbered && tail.is_empty() && l.len() > head.len()
 }
@@ -89,16 +180,38 @@ fn generic_whole(l: &str) -> bool {
 fn bad_album(album: &str) -> bool {
     let l = album.to_lowercase();
     [
-        "video game music", "game music", "best of", "greatest", "tribute",
-        "karaoke", "hits of", "the hits", "essential", "anthology",
-        "compilation", "now that's", "various artists", "top tracks",
-        "génériques", "generiques",
-        "meilleures musiques", "meilleurs", "notre enfance",
-        "l'histoire de la télé", "de la télé", "séries tv",
-        "dessins animés", "feuilletons", "incontournables",
-        "les plus grands thèmes", "thèmes de la télé",
-        "chansons pour enfants", "l'intégrale", "les hits",
-        "kitch", "reprises",
+        "video game music",
+        "game music",
+        "best of",
+        "greatest",
+        "tribute",
+        "karaoke",
+        "hits of",
+        "the hits",
+        "essential",
+        "anthology",
+        "compilation",
+        "now that's",
+        "various artists",
+        "top tracks",
+        "génériques",
+        "generiques",
+        "meilleures musiques",
+        "meilleurs",
+        "notre enfance",
+        "l'histoire de la télé",
+        "de la télé",
+        "séries tv",
+        "dessins animés",
+        "feuilletons",
+        "incontournables",
+        "les plus grands thèmes",
+        "thèmes de la télé",
+        "chansons pour enfants",
+        "l'intégrale",
+        "les hits",
+        "kitch",
+        "reprises",
     ]
     .iter()
     .any(|k| l.contains(k))
@@ -109,7 +222,8 @@ fn strip_volume(s: &str) -> String {
     for pat in [", vol.", ", vol ", " vol.", " volume "] {
         if let Some(i) = l.rfind(pat) {
             let rest = l[i + pat.len()..].trim_end_matches(|c: char| c == ')' || c == ']');
-            let digits = rest.trim_start_matches(|c: char| c.is_ascii_digit() || c == ' ' || c == '.');
+            let digits =
+                rest.trim_start_matches(|c: char| c.is_ascii_digit() || c == ' ' || c == '.');
             let all_digits = digits.is_empty() && rest.chars().any(|c| c.is_ascii_digit());
             let subtitled = digits.starts_with([':', '-', '–', '—', '(', '[', ',']);
             if all_digits || subtitled {
@@ -153,7 +267,9 @@ fn clean_work_name(album: &str) -> String {
                 || tail.contains("complete")
                 || tail.contains("single")
             {
-                s = s[..i].trim_end_matches([' ', '-', '–', '—', ':', ',']).to_string();
+                s = s[..i]
+                    .trim_end_matches([' ', '-', '–', '—', ':', ','])
+                    .to_string();
             }
         }
         s = strip_suffix(&s);
@@ -161,18 +277,62 @@ fn clean_work_name(album: &str) -> String {
             break;
         }
     }
-    s.trim_matches(|c: char| " -–—,/'\"".contains(c)).trim().to_string()
+    s.trim_matches(|c: char| " -–—,/'\"".contains(c))
+        .trim()
+        .to_string()
 }
 
 fn strip_prefix(s: &str) -> String {
     let l = s.to_lowercase();
     for (prefix, connectors) in [
-        ("music from", &["the motion picture", "the film", "the movie", "and inspired by", "the original", "the wb television series", "the television series", "the tv series", "the series", "the soundtrack of", "the soundtrack", "the "][..]),
+        (
+            "music from",
+            &[
+                "the motion picture",
+                "the film",
+                "the movie",
+                "and inspired by",
+                "the original",
+                "the wb television series",
+                "the television series",
+                "the tv series",
+                "the series",
+                "the soundtrack of",
+                "the soundtrack",
+                "the ",
+            ][..],
+        ),
         ("music of", &["the motion picture", "the film", "the "][..]),
-        ("original music from", &["the motion picture", "the film", "the movie", "the "][..]),
-        ("music inspired by", &["the motion picture", "the film", "the movie", "the "][..]),
-        ("musique", &["originale de", "originale du", "de", "du", "du film", "du jeu"][..]),
-        ("bande originale", &["du film", "de la série", "de la serie", "du jeu", "de", "du"][..]),
+        (
+            "original music from",
+            &["the motion picture", "the film", "the movie", "the "][..],
+        ),
+        (
+            "music inspired by",
+            &["the motion picture", "the film", "the movie", "the "][..],
+        ),
+        (
+            "musique",
+            &[
+                "originale de",
+                "originale du",
+                "de",
+                "du",
+                "du film",
+                "du jeu",
+            ][..],
+        ),
+        (
+            "bande originale",
+            &[
+                "du film",
+                "de la série",
+                "de la serie",
+                "du jeu",
+                "de",
+                "du",
+            ][..],
+        ),
         ("bande sonore", &["de", "du"][..]),
         ("b.o.f.", &["de", "du"][..]),
         ("b.o.f", &["de", "du"][..]),
@@ -269,7 +429,9 @@ fn strip_suffix(s: &str) -> String {
             let needle = format!("{sep}{suf}");
             if l.ends_with(&needle) {
                 let cut = out.trim_end().len() - needle.len();
-                out = out.trim_end()[..cut].trim_end_matches([' ', '-', '–', '—', ':', '/', ',']).to_string();
+                out = out.trim_end()[..cut]
+                    .trim_end_matches([' ', '-', '–', '—', ':', '/', ','])
+                    .to_string();
                 return out;
             }
         }
@@ -283,22 +445,46 @@ fn strip_suffix(s: &str) -> String {
 fn generic_name(s: &str) -> bool {
     let l = s.to_lowercase();
     let l = l.trim();
-    if l.chars().count() < 2 || l.chars().all(|c| c.is_ascii_digit() || c == '.' || c == ' ') {
+    if l.chars().count() < 2
+        || l.chars()
+            .all(|c| c.is_ascii_digit() || c == '.' || c == ' ')
+    {
         return true;
     }
     if generic_whole(l) {
         return true;
     }
     const STRONG: &[&str] = &[
-        "best of", "greatest hits", "the essential", "compilation", "anthology",
-        "the very best", "now that's", "karaoke", "tribute to", "tribute",
-        "various artists", "collection", "hits",
+        "best of",
+        "greatest hits",
+        "the essential",
+        "compilation",
+        "anthology",
+        "the very best",
+        "now that's",
+        "karaoke",
+        "tribute to",
+        "tribute",
+        "various artists",
+        "collection",
+        "hits",
     ];
     const WEAK: &[&str] = &[
-        "covers", "various", "playlist", "session", "sessions", "live",
-        "remixes", "soundtrack", "ost", "score", "music",
+        "covers",
+        "various",
+        "playlist",
+        "session",
+        "sessions",
+        "live",
+        "remixes",
+        "soundtrack",
+        "ost",
+        "score",
+        "music",
     ];
-    STRONG.iter().any(|g| l == *g || l.starts_with(&format!("{g} ")))
+    STRONG
+        .iter()
+        .any(|g| l == *g || l.starts_with(&format!("{g} ")))
         || WEAK
             .iter()
             .any(|g| l == *g || l.starts_with(&format!("{g} ")) && l.len() < g.len() + 8)
@@ -307,9 +493,20 @@ fn generic_name(s: &str) -> bool {
 fn has_media_marker(album: &str) -> bool {
     let l = album.to_lowercase();
     [
-        "soundtrack", "b.o.f", "bof", "o.s.t", "ost", "score", "bande originale",
-        "image album", "image song", "motion picture", "musique originale",
-        "music from", "inspired by", "original music",
+        "soundtrack",
+        "b.o.f",
+        "bof",
+        "o.s.t",
+        "ost",
+        "score",
+        "bande originale",
+        "image album",
+        "image song",
+        "motion picture",
+        "musique originale",
+        "music from",
+        "inspired by",
+        "original music",
     ]
     .iter()
     .any(|k| l.contains(k))
@@ -338,10 +535,11 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or_else(|_| "postgres://postgres:your-super-secret-and-long-postgres-password@localhost:5433/postgres".into());
 
     let pool = PgPoolOptions::new().max_connections(4).connect(&db).await?;
-    let http = reqwest::Client::builder().timeout(Duration::from_secs(8)).build()?;
+    let http = reqwest::Client::builder()
+        .timeout(Duration::from_secs(8))
+        .build()?;
 
-    const MEDIA_FAMILY: &str =
-        "('movie','show','anime','cartoon','video game','video games','videogame','jeu vidéo','jeux vidéo','game','musical','character','documentary','drama')";
+    const MEDIA_FAMILY: &str = "('movie','show','anime','cartoon','video game','video games','videogame','jeu vidéo','jeux vidéo','game','musical','character','documentary','drama')";
 
     let q = r#"
         SELECT t.id AS track_id, t.provider_id::text AS pid,
@@ -359,7 +557,11 @@ async fn main() -> anyhow::Result<()> {
         ORDER BY t.id
         "#
     .to_string();
-    let candidates = sqlx::query(&q).bind(only_room).bind(&except).fetch_all(&pool).await?;
+    let candidates = sqlx::query(&q)
+        .bind(only_room)
+        .bind(&except)
+        .fetch_all(&pool)
+        .await?;
     println!("candidates: {}", candidates.len());
 
     let mut ok = 0u32;
@@ -428,7 +630,12 @@ async fn main() -> anyhow::Result<()> {
                            SELECT 1 FROM track_answers x WHERE x.track_id=$1
                              AND x.answer_type_id IN (SELECT id FROM answer_types WHERE lower(name::text) IN {MEDIA_FAMILY}))"
                     );
-                    let res = sqlx::query(&guard).bind(tid).bind(type_id).bind(&name).execute(&pool).await;
+                    let res = sqlx::query(&guard)
+                        .bind(tid)
+                        .bind(type_id)
+                        .bind(&name)
+                        .execute(&pool)
+                        .await;
                     match res {
                         Ok(r) if r.rows_affected() > 0 => media_added += 1,
                         Ok(_) => {}
@@ -441,7 +648,9 @@ async fn main() -> anyhow::Result<()> {
         let artist_norm = artist.as_deref().map(norm).unwrap_or_default();
         if let Some(contributors) = j["contributors"].as_array() {
             for c in contributors {
-                let Some(cname) = c["name"].as_str() else { continue };
+                let Some(cname) = c["name"].as_str() else {
+                    continue;
+                };
                 let cn = norm(cname);
                 if cn.is_empty() || cn == artist_norm {
                     continue;
@@ -479,6 +688,8 @@ async fn main() -> anyhow::Result<()> {
         tokio::time::sleep(RATE_DELAY).await;
     }
 
-    println!("done: fetched={ok} media_added={media_added} feat_added={feat_added} skipped_untyped={skipped}");
+    println!(
+        "done: fetched={ok} media_added={media_added} feat_added={feat_added} skipped_untyped={skipped}"
+    );
     Ok(())
 }

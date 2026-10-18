@@ -1,13 +1,13 @@
 use crate::auth::{CurrentUser, OptionalUser};
 use crate::state::AppState;
 use axum::{
+    Json,
     body::Bytes,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
-    Json,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 pub const DONOR_PERKS: [&str; 3] = ["ad_free", "avatar_crown", "supporter_reactions"];
 
@@ -73,11 +73,7 @@ pub fn verify_stripe_signature(
                 .fold(0u8, |acc, (x, y)| acc | (x ^ y))
                 == 0
     });
-    if ok {
-        Ok(())
-    } else {
-        Err(())
-    }
+    if ok { Ok(()) } else { Err(()) }
 }
 
 pub async fn stripe_webhook(
@@ -135,7 +131,10 @@ async fn record_session(state: &AppState, session: &Value) -> Result<i64, Respon
         .map(|e| e.to_lowercase());
     let user_id = state
         .donations_repo
-        .resolve_donor(session["client_reference_id"].as_str(), donor_email.as_deref())
+        .resolve_donor(
+            session["client_reference_id"].as_str(),
+            donor_email.as_deref(),
+        )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())?;
     let (_, is_new) = state
@@ -209,12 +208,21 @@ pub fn payment_url_for_user(
     let sep = if base.contains('?') { "&" } else { "?" };
     let qs: Vec<String> = query
         .iter()
-        .map(|(k, v)| format!("{k}={}", url::form_urlencoded::byte_serialize(v.as_bytes()).collect::<String>()))
+        .map(|(k, v)| {
+            format!(
+                "{k}={}",
+                url::form_urlencoded::byte_serialize(v.as_bytes()).collect::<String>()
+            )
+        })
         .collect();
     format!("{base}{sep}{}{fragment}", qs.join("&"))
 }
 
-fn enrich(state: &AppState, mut supporter: Value, perks_map: &std::collections::HashSet<i64>) -> Value {
+fn enrich(
+    state: &AppState,
+    mut supporter: Value,
+    perks_map: &std::collections::HashSet<i64>,
+) -> Value {
     let uid = supporter["id"].as_i64().unwrap_or(0);
     let photo_path = supporter["photo_path"].as_str().unwrap_or("").to_string();
     let name = supporter["name"].as_str().unwrap_or("").to_string();
@@ -277,10 +285,17 @@ pub async fn progress(State(state): State<AppState>, OptionalUser(user): Optiona
         o.insert("ads_disabled".into(), json!(user_supporter));
         o.insert("adsense_client".into(), json!(state.adsense_client));
         o.insert("adsense_slot".into(), json!(state.adsense_slot));
-        o.insert("progress_segments".into(), progress_segments(raised, carryover, goal));
+        o.insert(
+            "progress_segments".into(),
+            progress_segments(raised, carryover, goal),
+        );
     }
-    progress["payment_url"] =
-        json!(payment_url_for_user(&state.donations, user.as_ref(), email.as_deref(), None));
+    progress["payment_url"] = json!(payment_url_for_user(
+        &state.donations,
+        user.as_ref(),
+        email.as_deref(),
+        None
+    ));
     let supporters = monthly_supporters(&state).await.unwrap_or_default();
     progress["monthly_supporters"] = json!(supporters);
     Json(progress).into_response()
@@ -310,10 +325,8 @@ async fn monthly_supporters(state: &AppState) -> Option<Vec<Value>> {
     let goal = state.donations.monthly_goal_cents;
     let donors = state.donations_repo.month_donors(&key).await.ok()?;
     let mut supporters = donors;
-    let mut existing: std::collections::HashSet<i64> = supporters
-        .iter()
-        .filter_map(|s| s["id"].as_i64())
-        .collect();
+    let mut existing: std::collections::HashSet<i64> =
+        supporters.iter().filter_map(|s| s["id"].as_i64()).collect();
     if state
         .donations_repo
         .carryover_cents_before_month(&key, goal)
@@ -322,11 +335,7 @@ async fn monthly_supporters(state: &AppState) -> Option<Vec<Value>> {
         > 0
     {
         if let Some(prev) = blindall_db::donations::prev_month_key(&key) {
-            if let Ok(extra) = state
-                .donations_repo
-                .post_goal_supporters(&prev, goal)
-                .await
-            {
+            if let Ok(extra) = state.donations_repo.post_goal_supporters(&prev, goal).await {
                 for s in extra {
                     if existing.insert(s["id"].as_i64().unwrap_or(0)) {
                         supporters.push(s);
@@ -335,10 +344,7 @@ async fn monthly_supporters(state: &AppState) -> Option<Vec<Value>> {
             }
         }
     }
-    let ids: Vec<i64> = supporters
-        .iter()
-        .filter_map(|s| s["id"].as_i64())
-        .collect();
+    let ids: Vec<i64> = supporters.iter().filter_map(|s| s["id"].as_i64()).collect();
     let map = perks_map(state, &ids).await;
     Some(
         supporters
@@ -366,13 +372,15 @@ fn progress_segments(raised: i64, carryover: i64, goal: i64) -> Value {
 fn days_remaining_in_month(key: &str) -> i64 {
     let now = chrono::Utc::now().with_timezone(&chrono_tz::Europe::Paris);
     let today = now.date_naive();
-    let Some((y, m)) = key.split_once('-').and_then(|(y, m)| {
-        Some((y.parse::<i32>().ok()?, m.parse::<u32>().ok()?))
-    }) else {
+    let Some((y, m)) = key
+        .split_once('-')
+        .and_then(|(y, m)| Some((y.parse::<i32>().ok()?, m.parse::<u32>().ok()?)))
+    else {
         return 0;
     };
     let (ny, nm) = if m == 12 { (y + 1, 1) } else { (y, m + 1) };
-    let Some(end) = chrono::NaiveDate::from_ymd_opt(ny, nm, 1).map(|d| d.pred_opt().unwrap_or(d)) else {
+    let Some(end) = chrono::NaiveDate::from_ymd_opt(ny, nm, 1).map(|d| d.pred_opt().unwrap_or(d))
+    else {
         return 0;
     };
     (end - today).num_days().max(0)
@@ -385,14 +393,11 @@ pub async fn history(State(state): State<AppState>) -> Response {
     for _ in 0..11 {
         start_key = blindall_db::donations::prev_month_key(&start_key).unwrap_or(start_key);
     }
-    let aggregates: std::collections::HashMap<String, (i64, i64)> = match state
-        .donations_repo
-        .month_aggregates(&start_key)
-        .await
-    {
-        Ok(v) => v.into_iter().map(|(k, r, c)| (k, (r, c))).collect(),
-        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    };
+    let aggregates: std::collections::HashMap<String, (i64, i64)> =
+        match state.donations_repo.month_aggregates(&start_key).await {
+            Ok(v) => v.into_iter().map(|(k, r, c)| (k, (r, c))).collect(),
+            Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        };
     let mut carryover = state
         .donations_repo
         .carryover_cents_before_month(&start_key, goal)
@@ -458,8 +463,16 @@ pub async fn user_donations(
     if user.id != id && !user.is_administrator {
         return StatusCode::FORBIDDEN.into_response();
     }
-    let history = state.donations_repo.user_history(id, 50).await.unwrap_or_default();
-    let summary = state.donations_repo.user_summary(id).await.unwrap_or(json!({}));
+    let history = state
+        .donations_repo
+        .user_history(id, 50)
+        .await
+        .unwrap_or_default();
+    let summary = state
+        .donations_repo
+        .user_summary(id)
+        .await
+        .unwrap_or(json!({}));
     Json(json!({"donations": history, "summary": summary})).into_response()
 }
 
@@ -509,7 +522,10 @@ mod tests {
         assert!(url.contains("client_reference_id=7"));
         assert!(url.contains("locked_prefilled_email=u%40e.fr"));
         assert!(url.ends_with("#f"));
-        let guest = blindall_db::entities::User { is_guest: true, ..user };
+        let guest = blindall_db::entities::User {
+            is_guest: true,
+            ..user
+        };
         let url = payment_url_for_user(&cfg, Some(&guest), None, Some("en"));
         assert_eq!(url, "https://donate.stripe.com/x?foo=1&locale=en#f");
     }

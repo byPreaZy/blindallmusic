@@ -3,11 +3,11 @@ use crate::state::AppState;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json};
-use blindall_db::playlists::PlaylistRepo;
 use blindall_db::PlaylistRow;
+use blindall_db::playlists::PlaylistRepo;
 use blindall_game::store::GameStore;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 fn err(status: StatusCode, msg: &str) -> axum::response::Response {
     (status, Json(json!({ "error": msg }))).into_response()
@@ -69,7 +69,11 @@ pub async fn index(
             }
         };
     }
-    match state.playlists.list_for_user(user.id(), user.0.is_administrator).await {
+    match state
+        .playlists
+        .list_for_user(user.id(), user.0.is_administrator)
+        .await
+    {
         Ok(playlists) => Json(json!({ "playlists": playlists })).into_response(),
         Err(e) => {
             tracing::error!(error = %e, "playlists.index failed");
@@ -190,7 +194,12 @@ pub async fn update(
     }
     match state
         .playlists
-        .update(p.id, body.name.trim(), body.description.as_deref(), body.user_id)
+        .update(
+            p.id,
+            body.name.trim(),
+            body.description.as_deref(),
+            body.user_id,
+        )
         .await
     {
         Ok(()) => Json(json!({ "ok": true })).into_response(),
@@ -283,13 +292,20 @@ pub async fn store_track(
     if let Err(r) = editable(&state.playlists, id, &user).await {
         return r;
     }
-    let ok = !b.provider.is_empty() && b.provider.len() <= 50
-        && !b.provider_id.is_empty() && b.provider_id.len() <= 255
-        && !b.provider_url.is_empty() && b.provider_url.len() <= 255
-        && !b.artist_name.is_empty() && b.artist_name.len() <= 255
-        && !b.track_name.is_empty() && b.track_name.len() <= 255
-        && !b.preview_url.is_empty() && b.preview_url.len() <= 2048
-        && !b.artwork_url.is_empty() && b.artwork_url.len() <= 255;
+    let ok = !b.provider.is_empty()
+        && b.provider.len() <= 50
+        && !b.provider_id.is_empty()
+        && b.provider_id.len() <= 255
+        && !b.provider_url.is_empty()
+        && b.provider_url.len() <= 255
+        && !b.artist_name.is_empty()
+        && b.artist_name.len() <= 255
+        && !b.track_name.is_empty()
+        && b.track_name.len() <= 255
+        && !b.preview_url.is_empty()
+        && b.preview_url.len() <= 2048
+        && !b.artwork_url.is_empty()
+        && b.artwork_url.len() <= 255;
     if !ok {
         return err(StatusCode::UNPROCESSABLE_ENTITY, "validation_failed");
     }
@@ -480,10 +496,7 @@ pub async fn search_tracks(
     }
 
     let is_mod = state.auth.is_public_moderator(user.id()).await;
-    let (results, errors) = state
-        .providers
-        .search(&term, &providers, is_mod)
-        .await;
+    let (results, errors) = state.providers.search(&term, &providers, is_mod).await;
 
     let mut tracks = Vec::with_capacity(results.len());
     for t in &results {
@@ -525,7 +538,9 @@ async fn editable_track(
         .await
         .map_err(|_| err(StatusCode::INTERNAL_SERVER_ERROR, "db_error"))?
         .ok_or_else(|| err(StatusCode::NOT_FOUND, "track_not_found"))?;
-    editable(&state.playlists, playlist_id, user).await.map(|_| playlist_id)
+    editable(&state.playlists, playlist_id, user)
+        .await
+        .map(|_| playlist_id)
 }
 
 #[derive(Deserialize)]
@@ -557,7 +572,11 @@ pub(crate) fn validate_answer(
         .filter(|a| !a.is_empty() && seen.insert(a.clone()))
         .take(20)
         .collect();
-    Ok(if aliases.is_empty() { None } else { Some(aliases) })
+    Ok(if aliases.is_empty() {
+        None
+    } else {
+        Some(aliases)
+    })
 }
 
 pub async fn store_answer(
@@ -751,11 +770,7 @@ pub async fn import_provider_playlist(
             .await
             .unwrap_or_default();
         for tid in ids {
-            if let Ok(Some(_)) = state
-                .playlists
-                .duplicate_track(id, user.id(), tid)
-                .await
-            {
+            if let Ok(Some(_)) = state.playlists.duplicate_track(id, user.id(), tid).await {
                 imported += 1;
             }
         }
@@ -768,11 +783,10 @@ pub async fn import_provider_playlist(
             Ok(t) => t,
             Err(e) => {
                 return (
-                    StatusCode::from_u16(e.status_code)
-                        .unwrap_or(StatusCode::BAD_GATEWAY),
+                    StatusCode::from_u16(e.status_code).unwrap_or(StatusCode::BAD_GATEWAY),
                     Json(json!({ "error": e.message })),
                 )
-                    .into_response()
+                    .into_response();
             }
         };
         for t in tracks {
@@ -841,7 +855,10 @@ pub async fn attach_playlist_moderator(
         return e;
     }
     if !state.rooms.user_exists(body.user_id).await.unwrap_or(false) {
-        return err(StatusCode::UNPROCESSABLE_ENTITY, "The selected user id is invalid.");
+        return err(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "The selected user id is invalid.",
+        );
     }
     match state.playlists.attach_moderator(id, body.user_id).await {
         Ok(()) => Json(json!({"ok": true})).into_response(),
@@ -902,11 +919,24 @@ pub async fn export(
     let mut out = String::from("\u{feff}");
     let mut headings: Vec<String> = types.iter().map(|(_, n)| n.clone()).collect();
     headings.extend(
-        ["Origine", "Lien", "Difficulté", "Vote +", "Vote -", "Ajouté le"]
-            .iter()
-            .map(|s| s.to_string()),
+        [
+            "Origine",
+            "Lien",
+            "Difficulté",
+            "Vote +",
+            "Vote -",
+            "Ajouté le",
+        ]
+        .iter()
+        .map(|s| s.to_string()),
     );
-    out.push_str(&headings.iter().map(|h| csv_escape(h)).collect::<Vec<_>>().join(";"));
+    out.push_str(
+        &headings
+            .iter()
+            .map(|h| csv_escape(h))
+            .collect::<Vec<_>>()
+            .join(";"),
+    );
     out.push('\n');
 
     for t in &tracks {
@@ -937,7 +967,10 @@ pub async fn export(
     let filename = format!("{}.csv", blindall_core::sanitize::str_slug(&p.name, '-'));
     (
         [
-            (axum::http::header::CONTENT_TYPE, "text/csv; charset=utf-8".to_string()),
+            (
+                axum::http::header::CONTENT_TYPE,
+                "text/csv; charset=utf-8".to_string(),
+            ),
             (
                 axum::http::header::CONTENT_DISPOSITION,
                 format!("attachment; filename=\"{filename}\""),

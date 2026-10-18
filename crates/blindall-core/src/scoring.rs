@@ -161,8 +161,8 @@ pub fn check<B: ScoreBackend>(req: &CheckRequest, backend: &mut B) -> CheckOutco
 
     if !good.is_empty() {
         let total_score = backend.get_user_score(req.user_id);
-        let found_all = backend.count_found_for_user(req.user_id, req.track_id)
-            == req.total_track_answers;
+        let found_all =
+            backend.count_found_for_user(req.user_id, req.track_id) == req.total_track_answers;
         return CheckOutcome::Good {
             answers: good,
             total_score,
@@ -184,9 +184,9 @@ mod tests {
     use std::collections::{HashMap, HashSet};
 
     struct MemBackend {
-        found: HashMap<(i64, i64), HashSet<i64>>,   // (user,track) -> answer ids
+        found: HashMap<(i64, i64), HashSet<i64>>, // (user,track) -> answer ids
         answer_players: HashMap<i64, HashSet<i64>>, // answer_id -> user ids
-        totals: HashMap<i64, f64>,                  // user -> total
+        totals: HashMap<i64, f64>,                // user -> total
         stale_reads: bool,
     }
 
@@ -300,7 +300,9 @@ mod tests {
     fn finding_everything_sets_found_all() {
         let mut b = MemBackend::new();
         match check(&req("billie jean michael jackson", 10.0), &mut b) {
-            CheckOutcome::Good { answers, found_all, .. } => {
+            CheckOutcome::Good {
+                answers, found_all, ..
+            } => {
                 assert_eq!(answers.len(), 2);
                 assert!(found_all);
             }
@@ -320,7 +322,10 @@ mod tests {
         let mut b = MemBackend::new();
         check(&req("billie jean", 4.0), &mut b);
         b.stale_reads = true;
-        assert_eq!(check(&req("billie jean", 6.0), &mut b), CheckOutcome::AlreadyFound);
+        assert_eq!(
+            check(&req("billie jean", 6.0), &mut b),
+            CheckOutcome::AlreadyFound
+        );
     }
 
     #[test]
@@ -365,8 +370,14 @@ mod tests {
     #[test]
     fn invalid_time_rejected() {
         let mut b = MemBackend::new();
-        assert_eq!(check(&req("billie jean", 39.0), &mut b), CheckOutcome::InvalidTime);
-        assert_eq!(check(&req("billie jean", -1.0), &mut b), CheckOutcome::InvalidTime);
+        assert_eq!(
+            check(&req("billie jean", 39.0), &mut b),
+            CheckOutcome::InvalidTime
+        );
+        assert_eq!(
+            check(&req("billie jean", -1.0), &mut b),
+            CheckOutcome::InvalidTime
+        );
         assert!(matches!(
             check(&req("billie jean", 38.0), &mut b),
             CheckOutcome::Good { .. }

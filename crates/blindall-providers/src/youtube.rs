@@ -167,8 +167,7 @@ impl YouTubeScrapeClient {
     }
 
     fn mark_rate_limited(&self) {
-        *self.rate_limited_until.lock().unwrap() =
-            Some(Instant::now() + RATE_LIMIT_COOLDOWN);
+        *self.rate_limited_until.lock().unwrap() = Some(Instant::now() + RATE_LIMIT_COOLDOWN);
     }
 
     fn increment_failures(&self) {
@@ -374,7 +373,10 @@ mod tests {
         assert_eq!(tracks[0].provider_id, "abc123");
         assert_eq!(tracks[0].artist_name.as_deref(), Some("Artist"));
         assert_eq!(tracks[0].track_name, "Song");
-        assert_eq!(tracks[0].artwork_url.as_deref(), Some("https://i.ytimg.com/t.jpg"));
+        assert_eq!(
+            tracks[0].artwork_url.as_deref(),
+            Some("https://i.ytimg.com/t.jpg")
+        );
         assert_eq!(tracks[1].artist_name.as_deref(), Some("ChanB"));
         assert_eq!(tracks[1].track_name, "NoSeparator");
     }

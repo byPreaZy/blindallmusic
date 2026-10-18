@@ -1,7 +1,7 @@
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde::Deserialize;
 use serde_json::json;
 
@@ -73,7 +73,12 @@ pub async fn create_user(
     }
     match state
         .admin
-        .create_user(name, &body.email, body.password.as_deref(), body.is_administrator)
+        .create_user(
+            name,
+            &body.email,
+            body.password.as_deref(),
+            body.is_administrator,
+        )
         .await
     {
         Ok(id) => (StatusCode::CREATED, Json(json!({"id": id}))).into_response(),
@@ -201,7 +206,10 @@ pub async fn force_clear_rounds(
     }
 }
 
-pub async fn clear_cache(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
+pub async fn clear_cache(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
     if !user.is_administrator {
         return forbidden();
     }
@@ -226,11 +234,7 @@ pub async fn clear_cache(State(state): State<AppState>, CurrentUser(user): Curre
     }
     let mut deleted = 0u64;
     for chunk in keys.chunks(5_000) {
-        deleted += state
-            .redis
-            .del::<u64, _>(chunk.to_vec())
-            .await
-            .unwrap_or(0);
+        deleted += state.redis.del::<u64, _>(chunk.to_vec()).await.unwrap_or(0);
     }
     Json(json!({"deleted_keys": deleted})).into_response()
 }
@@ -248,7 +252,11 @@ pub async fn regenerate_top_10(
             let key = format!("{}weekly-top-10-users", state.cache_prefix);
             let serialized = blindall_core::phpser::to_php(&json!(list));
             let n = list.len();
-            if let Err(e) = state.redis.set::<(), _, _>(&key, serialized, None, None, false).await {
+            if let Err(e) = state
+                .redis
+                .set::<(), _, _>(&key, serialized, None, None, false)
+                .await
+            {
                 tracing::warn!(error = %e, "weekly-top-10 write failed");
                 return StatusCode::INTERNAL_SERVER_ERROR.into_response();
             }
@@ -362,7 +370,11 @@ pub async fn create_answer_type(
     }
     match state
         .admin
-        .answer_type_create(body.name.trim(), body.pronoun.as_deref(), body.svg_icon.as_deref())
+        .answer_type_create(
+            body.name.trim(),
+            body.pronoun.as_deref(),
+            body.svg_icon.as_deref(),
+        )
         .await
     {
         Ok(id) => (StatusCode::CREATED, Json(json!({"id": id}))).into_response(),
@@ -381,7 +393,12 @@ pub async fn update_answer_type(
     }
     match state
         .admin
-        .answer_type_update(id, body.name.trim(), body.pronoun.as_deref(), body.svg_icon.as_deref())
+        .answer_type_update(
+            id,
+            body.name.trim(),
+            body.pronoun.as_deref(),
+            body.svg_icon.as_deref(),
+        )
         .await
     {
         Ok(true) => Json(json!({"ok": true})).into_response(),
@@ -433,11 +450,7 @@ pub async fn create_page(
     if body.title.trim().is_empty() || body.title.len() > 50 || body.content.is_empty() {
         return err("title", "validation");
     }
-    match state
-        .admin
-        .page_title_taken(body.title.trim())
-        .await
-    {
+    match state.admin.page_title_taken(body.title.trim()).await {
         Ok(true) => return err("title", "The title has already been taken."),
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         _ => {}
@@ -471,7 +484,12 @@ pub async fn update_page(
     };
     match state
         .admin
-        .create_page(body.title.trim(), &body.content, original_id, body.parent_id)
+        .create_page(
+            body.title.trim(),
+            &body.content,
+            original_id,
+            body.parent_id,
+        )
         .await
     {
         Ok(rev_id) => Json(json!({"id": rev_id})).into_response(),
@@ -632,11 +650,19 @@ pub async fn update_playlist(
     }
     let name = body.name.trim();
     if name.is_empty() || name.chars().count() > 50 {
-        return err("name", "The name field is required and must not exceed 50 characters.");
+        return err(
+            "name",
+            "The name field is required and must not exceed 50 characters.",
+        );
     }
     match state
         .admin
-        .admin_update_playlist(id, name, body.description.as_deref(), body.is_public.unwrap_or(false))
+        .admin_update_playlist(
+            id,
+            name,
+            body.description.as_deref(),
+            body.is_public.unwrap_or(false),
+        )
         .await
     {
         Ok(true) => Json(json!({"ok": true})).into_response(),
@@ -655,7 +681,10 @@ pub async fn create_playlist(
     }
     let name = body.name.trim();
     if name.is_empty() || name.chars().count() > 50 {
-        return err("name", "The name field is required and must not exceed 50 characters.");
+        return err(
+            "name",
+            "The name field is required and must not exceed 50 characters.",
+        );
     }
     if state.admin.playlist_name_taken(name).await.unwrap_or(false) {
         return err("name", "The name has already been taken.");
@@ -704,7 +733,10 @@ pub async fn rooms(
         )
         .await
     {
-        Ok(p) => Json(json!({"rooms": p.to_json(), "filters": {"search": q.search, "trashed": q.trashed}})).into_response(),
+        Ok(p) => Json(
+            json!({"rooms": p.to_json(), "filters": {"search": q.search, "trashed": q.trashed}}),
+        )
+        .into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
@@ -739,9 +771,17 @@ pub async fn update_room(
     }
     let name = body.name.trim();
     if name.is_empty() || name.chars().count() > 30 {
-        return err("name", "The name field is required and must not exceed 30 characters.");
+        return err(
+            "name",
+            "The name field is required and must not exceed 30 characters.",
+        );
     }
-    if !state.rooms.category_exists(body.category_id.unwrap_or(1)).await.unwrap_or(false) {
+    if !state
+        .rooms
+        .category_exists(body.category_id.unwrap_or(1))
+        .await
+        .unwrap_or(false)
+    {
         return err("category_id", "The selected category id is invalid.");
     }
     match state
@@ -782,14 +822,20 @@ pub async fn create_room(
     }
     let name = body.name.trim();
     if name.is_empty() || name.chars().count() > 30 {
-        return err("name", "The name field is required and must not exceed 30 characters.");
+        return err(
+            "name",
+            "The name field is required and must not exceed 30 characters.",
+        );
     }
     if state.rooms.name_taken(name, None).await.unwrap_or(false) {
         return err("name", "The name has already been taken.");
     }
     if let Some(url) = body.discord_webhook_url.as_deref() {
         if !(url.starts_with("https://") || url.starts_with("http://")) {
-            return err("discord_webhook_url", "The discord webhook url field must be a valid URL.");
+            return err(
+                "discord_webhook_url",
+                "The discord webhook url field must be a valid URL.",
+            );
         }
     }
     match state
@@ -866,7 +912,10 @@ pub async fn teams(
         )
         .await
     {
-        Ok(p) => Json(json!({"teams": p.to_json(), "filters": {"search": q.search, "trashed": q.trashed}})).into_response(),
+        Ok(p) => Json(
+            json!({"teams": p.to_json(), "filters": {"search": q.search, "trashed": q.trashed}}),
+        )
+        .into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
@@ -888,7 +937,10 @@ pub async fn update_team(
     }
     let name = body.name.trim();
     if name.is_empty() || name.chars().count() > 50 {
-        return err("name", "The name field is required and must not exceed 50 characters.");
+        return err(
+            "name",
+            "The name field is required and must not exceed 50 characters.",
+        );
     }
     if !state.rooms.user_exists(body.user_id).await.unwrap_or(false) {
         return err("user_id", "The selected user id is invalid.");
@@ -932,7 +984,10 @@ pub async fn restore_team(
 
 // ---- answer types ------------------------------------------------------------
 
-pub async fn answer_types(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
+pub async fn answer_types(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
     if !user.is_administrator {
         return forbidden();
     }

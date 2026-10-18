@@ -9,7 +9,16 @@ async fn register_returns_token_and_user_shape() {
     let token = body["token"].as_str().expect("token string");
     assert!(token.contains('|'), "sanctum token format id|plain");
     let user = &body["user"];
-    for key in ["id", "name", "photo_path", "elo", "is_guest", "is_administrator", "is_public_moderator", "team_id"] {
+    for key in [
+        "id",
+        "name",
+        "photo_path",
+        "elo",
+        "is_guest",
+        "is_administrator",
+        "is_public_moderator",
+        "team_id",
+    ] {
         assert!(user.get(key).is_some(), "user.{key} missing");
     }
     assert_eq!(user["elo"], 1500, "default elo");
@@ -63,7 +72,11 @@ async fn register_rejects_duplicate_name_and_email() {
 #[tokio::test]
 async fn guest_creates_guest_user_and_token() {
     let c = Client::guest().await;
-    assert!(c.name.starts_with("Guest-"), "guest name pattern: {}", c.name);
+    assert!(
+        c.name.starts_with("Guest-"),
+        "guest name pattern: {}",
+        c.name
+    );
     let me = c.get("/api/v1/auth/me").await.expect_ok("me");
     assert_eq!(me.json("/is_guest"), true);
     assert_eq!(me.json("/elo"), 1500);

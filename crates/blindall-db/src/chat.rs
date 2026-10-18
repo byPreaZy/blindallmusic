@@ -1,5 +1,5 @@
-use sqlx::postgres::PgPool;
 use sqlx::Row;
+use sqlx::postgres::PgPool;
 
 #[derive(Clone)]
 pub struct ChatRepo {

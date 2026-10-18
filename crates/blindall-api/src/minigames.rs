@@ -1,9 +1,9 @@
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -71,7 +71,11 @@ pub async fn index(State(state): State<AppState>, CurrentUser(user): CurrentUser
 
 pub async fn games_list(state: &AppState, user_id: Option<i64>) -> Vec<Value> {
     let totals = match user_id {
-        Some(id) => state.minigames.totals_for_user(id).await.unwrap_or_default(),
+        Some(id) => state
+            .minigames
+            .totals_for_user(id)
+            .await
+            .unwrap_or_default(),
         None => vec![],
     };
     let score = |t: &str| {
@@ -175,7 +179,8 @@ pub async fn check(
                 .ok()
                 .flatten();
             let is_correct = if game == TYPE_QUIZ {
-                raw.as_deref().is_some_and(|t| t.trim() == body.chosen_value.trim())
+                raw.as_deref()
+                    .is_some_and(|t| t.trim() == body.chosen_value.trim())
             } else {
                 let given = blindall_core::sanitize::sanitize_string(body.chosen_value.trim());
                 let correct = raw.as_deref().map(blindall_core::sanitize::sanitize_string);
@@ -186,7 +191,17 @@ pub async fn check(
                             == blindall_core::sanitize::str_slug(c, '-')
                 })
             };
-            (is_correct, raw.map(|v| if game == TYPE_QUIZ { v } else { blindall_core::sanitize::sanitize_string(&v) }), json!({"track_id": track_id}))
+            (
+                is_correct,
+                raw.map(|v| {
+                    if game == TYPE_QUIZ {
+                        v
+                    } else {
+                        blindall_core::sanitize::sanitize_string(&v)
+                    }
+                }),
+                json!({"track_id": track_id}),
+            )
         }
         TYPE_WHO_SANG | TYPE_ALBUM_COVER => {
             let Some(track_id) = body.track_id else {

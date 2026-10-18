@@ -1,6 +1,6 @@
 use serde::Serialize;
-use sqlx::postgres::PgPool;
 use sqlx::Row;
+use sqlx::postgres::PgPool;
 
 #[derive(Clone)]
 pub struct RoomRepo {
@@ -113,13 +113,19 @@ impl RoomRepo {
             .map(|o| o.map(Self::map))
     }
 
-    pub async fn name_taken(&self, name: &str, ignore_id: Option<i64>) -> Result<bool, sqlx::Error> {
+    pub async fn name_taken(
+        &self,
+        name: &str,
+        ignore_id: Option<i64>,
+    ) -> Result<bool, sqlx::Error> {
         let exists: i64 = if let Some(id) = ignore_id {
-            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM rooms WHERE name = $1 AND id != $2)::int::bigint")
-                .bind(name)
-                .bind(id)
-                .fetch_one(&self.pool)
-                .await?
+            sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM rooms WHERE name = $1 AND id != $2)::int::bigint",
+            )
+            .bind(name)
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await?
         } else {
             sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM rooms WHERE name = $1)::int::bigint")
                 .bind(name)
@@ -143,14 +149,21 @@ impl RoomRepo {
     }
 
     async fn slug_exists(&self, slug: &str) -> Result<bool, sqlx::Error> {
-        sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM rooms WHERE slug = $1)::int::bigint")
-            .bind(slug)
-            .fetch_one(&self.pool)
-            .await
-            .map(|v| v == 1)
+        sqlx::query_scalar::<_, i64>(
+            "SELECT EXISTS(SELECT 1 FROM rooms WHERE slug = $1)::int::bigint",
+        )
+        .bind(slug)
+        .fetch_one(&self.pool)
+        .await
+        .map(|v| v == 1)
     }
 
-    pub async fn create(&self, user_id: i64, name: &str, category_id: i64) -> Result<i64, sqlx::Error> {
+    pub async fn create(
+        &self,
+        user_id: i64,
+        name: &str,
+        category_id: i64,
+    ) -> Result<i64, sqlx::Error> {
         let slug = self.unique_slug(name).await?;
         let now = chrono::Utc::now();
         let res = sqlx::query_scalar::<_, i64>(
@@ -468,12 +481,10 @@ impl RoomRepo {
         &self,
         category_id: i64,
     ) -> Result<Option<(String, String)>, sqlx::Error> {
-        sqlx::query_as::<_, (String, String)>(
-            "SELECT name, slug FROM categories WHERE id = $1",
-        )
-        .bind(category_id)
-        .fetch_optional(&self.pool)
-        .await
+        sqlx::query_as::<_, (String, String)>("SELECT name, slug FROM categories WHERE id = $1")
+            .bind(category_id)
+            .fetch_optional(&self.pool)
+            .await
     }
 
     pub async fn official_similar_rooms(
@@ -537,7 +548,10 @@ impl RoomRepo {
         Ok(rows
             .into_iter()
             .map(|r| {
-                let category = r.try_get::<Option<String>, _>("category_name").ok().flatten();
+                let category = r
+                    .try_get::<Option<String>, _>("category_name")
+                    .ok()
+                    .flatten();
                 let rounds_count = r.try_get::<i64, _>("rounds_count").unwrap_or(0);
                 (Self::map(r), category, rounds_count)
             })
@@ -547,17 +561,21 @@ impl RoomRepo {
     // ---- playlists pivot ---------------------------------------------------
 
     pub async fn playlist_exists(&self, playlist_id: i64) -> Result<bool, sqlx::Error> {
-        Ok(
-            sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM playlists WHERE id = $1)::int::bigint")
-                .bind(playlist_id)
-                .fetch_one(&self.pool)
-                .await?
-                == 1,
+        Ok(sqlx::query_scalar::<_, i64>(
+            "SELECT EXISTS(SELECT 1 FROM playlists WHERE id = $1)::int::bigint",
         )
+        .bind(playlist_id)
+        .fetch_one(&self.pool)
+        .await?
+            == 1)
     }
 
     /// Returns true when the link was newly created (false if already attached).
-    pub async fn attach_playlist(&self, room_id: i64, playlist_id: i64) -> Result<bool, sqlx::Error> {
+    pub async fn attach_playlist(
+        &self,
+        room_id: i64,
+        playlist_id: i64,
+    ) -> Result<bool, sqlx::Error> {
         let res = sqlx::query(
             "INSERT INTO playlist_room (playlist_id, room_id, created_at, updated_at) \
              SELECT $1, $2, $3, $4 \
@@ -645,10 +663,12 @@ impl RoomRepo {
     // ---- misc ----------------------------------------------------------------
 
     pub async fn category_exists(&self, id: i64) -> Result<bool, sqlx::Error> {
-        Ok(sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM categories WHERE id = $1)::int::bigint")
-            .bind(id)
-            .fetch_one(&self.pool)
-            .await?
+        Ok(sqlx::query_scalar::<_, i64>(
+            "SELECT EXISTS(SELECT 1 FROM categories WHERE id = $1)::int::bigint",
+        )
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?
             == 1)
     }
 
@@ -670,10 +690,7 @@ impl RoomRepo {
             .map(|o| o.map(|r| (r.get("id"), r.get("name"), r.get("slug"))))
     }
 
-    pub async fn public_for_category(
-        &self,
-        category_id: i64,
-    ) -> Result<Vec<RoomRow>, sqlx::Error> {
+    pub async fn public_for_category(&self, category_id: i64) -> Result<Vec<RoomRow>, sqlx::Error> {
         sqlx::query(&format!(
             "SELECT {} FROM rooms WHERE category_id = $1 AND is_public = true \
              AND is_active = true \
@@ -687,10 +704,12 @@ impl RoomRepo {
     }
 
     pub async fn user_exists(&self, id: i64) -> Result<bool, sqlx::Error> {
-        Ok(sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND deleted_at IS NULL)::int::bigint")
-            .bind(id)
-            .fetch_one(&self.pool)
-            .await?
+        Ok(sqlx::query_scalar::<_, i64>(
+            "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND deleted_at IS NULL)::int::bigint",
+        )
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?
             == 1)
     }
 
@@ -756,32 +775,32 @@ impl RoomRepo {
         )
         .bind(&ids)
         .fetch_all(&self.pool)
-            .await?
-            .iter()
-            .map(|r| {
-                let level = r.try_get::<i64, _>("level").ok();
-                let photo_path: Option<String> = r.get("photo_path");
-                (
-                    r.get("id"),
-                    serde_json::json!({
-                        "id": r.get::<i64, _>("id"),
-                        "name": r.get::<String, _>("name"),
-                        "photo": photo_path,
-                        "elo": r.try_get::<i64, _>("elo").unwrap_or(1500),
-                        "is_guest": r.get::<bool, _>("is_guest"),
-                        "role": if r.get::<bool, _>("is_administrator") { "admin" }
-                            else if r.get::<bool, _>("is_moderator") { "moderator" } else { "" },
-                        "custom_tag": r.get::<Option<String>, _>("custom_tag").unwrap_or_default(),
-                        "user_level": level.map(|lv| serde_json::json!({
-                            "level": lv,
-                            "total_xp": r.get::<i64, _>("total_xp"),
-                            "current_xp": r.get::<i64, _>("current_xp"),
-                            "xp_for_next_level": r.get::<i64, _>("xp_for_next_level"),
-                        })),
-                    }),
-                )
-            })
-            .collect();
+        .await?
+        .iter()
+        .map(|r| {
+            let level = r.try_get::<i64, _>("level").ok();
+            let photo_path: Option<String> = r.get("photo_path");
+            (
+                r.get("id"),
+                serde_json::json!({
+                    "id": r.get::<i64, _>("id"),
+                    "name": r.get::<String, _>("name"),
+                    "photo": photo_path,
+                    "elo": r.try_get::<i64, _>("elo").unwrap_or(1500),
+                    "is_guest": r.get::<bool, _>("is_guest"),
+                    "role": if r.get::<bool, _>("is_administrator") { "admin" }
+                        else if r.get::<bool, _>("is_moderator") { "moderator" } else { "" },
+                    "custom_tag": r.get::<Option<String>, _>("custom_tag").unwrap_or_default(),
+                    "user_level": level.map(|lv| serde_json::json!({
+                        "level": lv,
+                        "total_xp": r.get::<i64, _>("total_xp"),
+                        "current_xp": r.get::<i64, _>("current_xp"),
+                        "xp_for_next_level": r.get::<i64, _>("xp_for_next_level"),
+                    })),
+                }),
+            )
+        })
+        .collect();
 
         let stats_q = format!(
             "SELECT user_id, COUNT(*) AS rounds_played, \
@@ -791,7 +810,11 @@ impl RoomRepo {
              MAX(win_streak) AS best_win_streak \
              FROM round_standings WHERE room_id = $1 AND user_id = ANY($2) {} \
              GROUP BY user_id",
-            if since_days.is_some() { "AND created_at >= $3" } else { "" }
+            if since_days.is_some() {
+                "AND created_at >= $3"
+            } else {
+                ""
+            }
         );
         let mut stats_q = sqlx::query(&stats_q).bind(room_id).bind(&ids);
         if let Some(days) = since_days {
@@ -874,17 +897,16 @@ impl RoomRepo {
         let find_rank = |key: &str| -> Option<(f64, i64)> {
             boards.get(key)?.as_array()?.iter().find_map(|e| {
                 if e.get("user_id")?.as_i64()? == user_id {
-                    Some((
-                        e.get("total")?.as_f64()?,
-                        e.get("rank")?.as_i64()?,
-                    ))
+                    Some((e.get("total")?.as_f64()?, e.get("rank")?.as_i64()?))
                 } else {
                     None
                 }
             })
         };
         let week = match find_rank("week") {
-            Some((total, rank)) => serde_json::json!({"user_id": user_id, "total": total, "rank": rank}),
+            Some((total, rank)) => {
+                serde_json::json!({"user_id": user_id, "total": total, "rank": rank})
+            }
             None => {
                 let total: f64 = sqlx::query_scalar(
                     "SELECT COALESCE(SUM(total_score), 0) FROM round_standings \
@@ -903,7 +925,9 @@ impl RoomRepo {
             }
         };
         let lifetime = match find_rank("lifetime") {
-            Some((total, rank)) => serde_json::json!({"user_id": user_id, "total": total, "rank": rank}),
+            Some((total, rank)) => {
+                serde_json::json!({"user_id": user_id, "total": total, "rank": rank})
+            }
             None => {
                 let total: f64 = sqlx::query_scalar(
                     "SELECT COALESCE(SUM(score), 0) FROM total_scores \

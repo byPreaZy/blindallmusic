@@ -1,5 +1,5 @@
-use sqlx::postgres::PgPool;
 use sqlx::Row;
+use sqlx::postgres::PgPool;
 
 #[derive(Clone)]
 pub struct TeamRepo {
@@ -39,18 +39,29 @@ impl TeamRepo {
             .map(|o| o.map(Self::map))
     }
 
-    pub async fn name_taken(&self, name: &str, ignore_id: Option<i64>) -> Result<bool, sqlx::Error> {
-        let exists: i64 = match ignore_id {
-            Some(id) => sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM teams WHERE name = $1 AND id != $2)::int::bigint")
+    pub async fn name_taken(
+        &self,
+        name: &str,
+        ignore_id: Option<i64>,
+    ) -> Result<bool, sqlx::Error> {
+        let exists: i64 =
+            match ignore_id {
+                Some(id) => sqlx::query_scalar(
+                    "SELECT EXISTS(SELECT 1 FROM teams WHERE name = $1 AND id != $2)::int::bigint",
+                )
                 .bind(name)
                 .bind(id)
                 .fetch_one(&self.pool)
                 .await?,
-            None => sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM teams WHERE name = $1)::int::bigint")
-                .bind(name)
-                .fetch_one(&self.pool)
-                .await?,
-        };
+                None => {
+                    sqlx::query_scalar(
+                        "SELECT EXISTS(SELECT 1 FROM teams WHERE name = $1)::int::bigint",
+                    )
+                    .bind(name)
+                    .fetch_one(&self.pool)
+                    .await?
+                }
+            };
         Ok(exists == 1)
     }
 
@@ -133,17 +144,12 @@ impl TeamRepo {
         Ok(id)
     }
 
-    pub async fn set_photo(
-        &self,
-        id: i64,
-        path: &str,
-    ) -> Result<Option<String>, sqlx::Error> {
-        let prev: Option<String> =
-            sqlx::query_scalar("SELECT photo_path FROM teams WHERE id = $1")
-                .bind(id)
-                .fetch_optional(&self.pool)
-                .await?
-                .flatten();
+    pub async fn set_photo(&self, id: i64, path: &str) -> Result<Option<String>, sqlx::Error> {
+        let prev: Option<String> = sqlx::query_scalar("SELECT photo_path FROM teams WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?
+            .flatten();
         sqlx::query("UPDATE teams SET photo_path = $1 WHERE id = $2")
             .bind(path)
             .bind(id)
@@ -153,12 +159,11 @@ impl TeamRepo {
     }
 
     pub async fn clear_photo(&self, id: i64) -> Result<Option<String>, sqlx::Error> {
-        let prev: Option<String> =
-            sqlx::query_scalar("SELECT photo_path FROM teams WHERE id = $1")
-                .bind(id)
-                .fetch_optional(&self.pool)
-                .await?
-                .flatten();
+        let prev: Option<String> = sqlx::query_scalar("SELECT photo_path FROM teams WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?
+            .flatten();
         sqlx::query("UPDATE teams SET photo_path = NULL WHERE id = $1")
             .bind(id)
             .execute(&self.pool)

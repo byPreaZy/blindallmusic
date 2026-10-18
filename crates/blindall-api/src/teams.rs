@@ -1,14 +1,18 @@
 use crate::auth::{CurrentUser, OptionalUser};
 use crate::state::AppState;
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde::Deserialize;
 use serde_json::json;
 
 fn forbidden() -> Response {
-    (StatusCode::FORBIDDEN, Json(json!({"error": "unauthorized"}))).into_response()
+    (
+        StatusCode::FORBIDDEN,
+        Json(json!({"error": "unauthorized"})),
+    )
+        .into_response()
 }
 
 fn validation(field: &str, msg: &str) -> Response {
@@ -20,7 +24,9 @@ fn validation(field: &str, msg: &str) -> Response {
 }
 
 fn alpha_dash(s: &str) -> bool {
-    !s.is_empty() && s.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == ' ')
+    !s.is_empty()
+        && s.chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == ' ')
 }
 
 #[derive(Deserialize)]
@@ -34,7 +40,11 @@ pub async fn index(
     OptionalUser(user): OptionalUser,
     Query(q): Query<ListQuery>,
 ) -> Response {
-    match state.teams.list(q.search.as_deref(), q.page.unwrap_or(1)).await {
+    match state
+        .teams
+        .list(q.search.as_deref(), q.page.unwrap_or(1))
+        .await
+    {
         Ok((teams, total)) => {
             let teams: Vec<serde_json::Value> = teams
                 .into_iter()
@@ -50,11 +60,8 @@ pub async fn index(
                 .collect();
             let viewer = match user {
                 Some(u) => {
-                    let (pending, declined) = state
-                        .teams
-                        .team_request_ids(u.id)
-                        .await
-                        .unwrap_or_default();
+                    let (pending, declined) =
+                        state.teams.team_request_ids(u.id).await.unwrap_or_default();
                     json!({
                         "team_id": u.team_id,
                         "is_guest": u.is_guest,
@@ -112,9 +119,16 @@ pub async fn store(
     }
     let name = body.name.trim();
     if name.is_empty() || name.chars().count() > 30 || !alpha_dash(name) {
-        return validation("name", "The name field is required, must not exceed 30 characters and may only contain letters, numbers, spaces, dashes and underscores.");
+        return validation(
+            "name",
+            "The name field is required, must not exceed 30 characters and may only contain letters, numbers, spaces, dashes and underscores.",
+        );
     }
-    let mods = state.auth.reserved_moderator_names().await.unwrap_or_default();
+    let mods = state
+        .auth
+        .reserved_moderator_names()
+        .await
+        .unwrap_or_default();
     if crate::auth_session::validate_name(name, &mods).is_err() {
         return validation("name", "validation.reserved");
     }
@@ -144,11 +158,7 @@ pub async fn show(
                     m["photo"] = json!(crate::profiles::photo_url(&state, &path, &name));
                 }
             }
-            let owner_name = state
-                .auth
-                .find_name(team.user_id)
-                .await
-                .unwrap_or_default();
+            let owner_name = state.auth.find_name(team.user_id).await.unwrap_or_default();
             let path = team.photo_path.clone().unwrap_or_default();
             v["team"] = json!({
                 "id": team.id,
@@ -161,11 +171,8 @@ pub async fn show(
             });
             let viewer = match &user {
                 Some(u) => {
-                    let (pending, declined) = state
-                        .teams
-                        .team_request_ids(u.id)
-                        .await
-                        .unwrap_or_default();
+                    let (pending, declined) =
+                        state.teams.team_request_ids(u.id).await.unwrap_or_default();
                     json!({
                         "id": u.id,
                         "logged_in": true,
@@ -216,15 +223,27 @@ pub async fn update(
     }
     let name = body.name.trim();
     if name.is_empty() || name.chars().count() > 30 || !alpha_dash(name) {
-        return validation("name", "The name field is required, must not exceed 30 characters and may only contain letters, numbers, spaces, dashes and underscores.");
+        return validation(
+            "name",
+            "The name field is required, must not exceed 30 characters and may only contain letters, numbers, spaces, dashes and underscores.",
+        );
     }
-    let mods = state.auth.reserved_moderator_names().await.unwrap_or_default();
+    let mods = state
+        .auth
+        .reserved_moderator_names()
+        .await
+        .unwrap_or_default();
     if !name.eq_ignore_ascii_case(&team.name)
         && crate::auth_session::validate_name(name, &mods).is_err()
     {
         return validation("name", "validation.reserved");
     }
-    if state.teams.name_taken(name, Some(id)).await.unwrap_or(false) {
+    if state
+        .teams
+        .name_taken(name, Some(id))
+        .await
+        .unwrap_or(false)
+    {
         return validation("name", "The name has already been taken.");
     }
     match state.teams.rename(id, name).await {
@@ -400,9 +419,16 @@ pub async fn request_join(
     if team.deleted_at.is_some() {
         return StatusCode::NOT_FOUND.into_response();
     }
-    let pending = state.teams.pending_requests_count(user.id).await.unwrap_or(0);
+    let pending = state
+        .teams
+        .pending_requests_count(user.id)
+        .await
+        .unwrap_or(0);
     if pending > 2 {
-        return validation("team", "You cannot do more than 3 requests at the same time");
+        return validation(
+            "team",
+            "You cannot do more than 3 requests at the same time",
+        );
     }
     let members = state.teams.member_ids(id).await.unwrap_or_default();
     if blindall_db::TEAM_SEATS <= members.len() as i64 {
@@ -493,7 +519,11 @@ pub async fn accept_request(
             });
             if let Ok(nid) = state
                 .notifications
-                .notify(requester_id, "App\\Notifications\\TeamRequestApproved", data.clone())
+                .notify(
+                    requester_id,
+                    "App\\Notifications\\TeamRequestApproved",
+                    data.clone(),
+                )
                 .await
             {
                 crate::users::push_notification(
@@ -546,7 +576,11 @@ pub async fn decline_request(
             });
             if let Ok(nid) = state
                 .notifications
-                .notify(requester_id, "App\\Notifications\\TeamRequestRejected", data.clone())
+                .notify(
+                    requester_id,
+                    "App\\Notifications\\TeamRequestRejected",
+                    data.clone(),
+                )
                 .await
             {
                 crate::users::push_notification(

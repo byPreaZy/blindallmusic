@@ -1,6 +1,6 @@
 use blindall_game::GameStore;
 use blindall_realtime::ws::{AuthzError, ChannelAuthorizer};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 pub struct RoomChannelAuthorizer {
     pub app: crate::state::AppState,
@@ -8,11 +8,7 @@ pub struct RoomChannelAuthorizer {
 
 #[async_trait::async_trait]
 impl ChannelAuthorizer for RoomChannelAuthorizer {
-    async fn authorize(
-        &self,
-        user_id: i64,
-        channel: &str,
-    ) -> Result<Option<Value>, AuthzError> {
+    async fn authorize(&self, user_id: i64, channel: &str) -> Result<Option<Value>, AuthzError> {
         let deny = |code: &'static str| Err(AuthzError { code });
 
         if let Some(rest) = channel.strip_prefix("room.public:") {
@@ -34,7 +30,8 @@ impl ChannelAuthorizer for RoomChannelAuthorizer {
                     let Some(p) = info else {
                         return Ok(None);
                     };
-                    let score_total = match self.app
+                    let score_total = match self
+                        .app
                         .manager
                         .snapshot(room_id)
                         .await
@@ -42,7 +39,8 @@ impl ChannelAuthorizer for RoomChannelAuthorizer {
                         .flatten()
                         .and_then(|s| s.round.filter(|r| r.finished_at.is_none()))
                     {
-                        Some(r) => self.app
+                        Some(r) => self
+                            .app
                             .scores
                             .user_score(r.id, user_id)
                             .await
@@ -50,7 +48,8 @@ impl ChannelAuthorizer for RoomChannelAuthorizer {
                         None => 0.0,
                     };
                     let perks: Vec<String> = if !p.is_guest
-                        && self.app
+                        && self
+                            .app
                             .donations_repo
                             .user_is_supporter(
                                 user_id,
@@ -64,7 +63,10 @@ impl ChannelAuthorizer for RoomChannelAuthorizer {
                         vec![]
                     };
                     Ok(Some(crate::rooms::player_info_json(
-                        &self.app, &p, score_total, &perks,
+                        &self.app,
+                        &p,
+                        score_total,
+                        &perks,
                     )))
                 }
                 _ => deny("room_not_found"),

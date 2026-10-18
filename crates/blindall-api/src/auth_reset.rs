@@ -1,7 +1,7 @@
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use blindall_db::password_reset::hmac_sha256_hex;
 use serde::Deserialize;
 use serde_json::json;
@@ -22,9 +22,10 @@ pub async fn forgot_password(
     if !validator::ValidateEmail::validate_email(&email) {
         return err("email", "The email field must be a valid email address.");
     }
-    if let Some(_) = state
-        .reset_rate
-        .retry_after(&format!("reset|{}", email.to_lowercase()), 3, 3600)
+    if let Some(_) =
+        state
+            .reset_rate
+            .retry_after(&format!("reset|{}", email.to_lowercase()), 3, 3600)
     {
         return err("email", "passwords.throttled");
     }
@@ -80,17 +81,19 @@ pub async fn reset_password(
     Json(body): Json<ResetBody>,
 ) -> Response {
     if body.password.len() < 8 {
-        return err("password", "The password field must be at least 8 characters.");
+        return err(
+            "password",
+            "The password field must be at least 8 characters.",
+        );
     }
     if body.password != body.password_confirmation {
-        return err("password", "The password field confirmation does not match.");
+        return err(
+            "password",
+            "The password field confirmation does not match.",
+        );
     }
     let email = body.email.trim();
-    match state
-        .password_resets
-        .token_valid(email, &body.token)
-        .await
-    {
+    match state.password_resets.token_valid(email, &body.token).await {
         Ok(false) | Err(_) => return err("email", "passwords.token"),
         Ok(true) => {}
     }

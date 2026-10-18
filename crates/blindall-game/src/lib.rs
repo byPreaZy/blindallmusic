@@ -8,6 +8,4 @@ pub mod testkit;
 
 pub use actor::{RoomActor, RoomCommand, RoomSnapshot};
 pub use manager::GameManager;
-pub use store::{
-    GameStore, GameTrack, PlayerInfo, Result, RoomConfig, RoundRow, StoreError,
-};
+pub use store::{GameStore, GameTrack, PlayerInfo, Result, RoomConfig, RoundRow, StoreError};

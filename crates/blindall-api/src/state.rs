@@ -1,8 +1,10 @@
-use blindall_db::{AuthRepo, ChatRepo, DbGameStore, PlaylistRepo, ProfileRepo, RoomRepo, TeamRepo, VoteRepo};
+use blindall_db::{
+    AuthRepo, ChatRepo, DbGameStore, PlaylistRepo, ProfileRepo, RoomRepo, TeamRepo, VoteRepo,
+};
 use blindall_game::GameManager;
 use blindall_providers::SharedProviders;
-use blindall_redis::{RoomPresenceStore, RoundScoreStore};
 use blindall_realtime::Hub;
+use blindall_redis::{RoomPresenceStore, RoundScoreStore};
 use std::sync::Arc;
 
 #[derive(Clone)]

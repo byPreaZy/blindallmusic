@@ -1,5 +1,5 @@
 use chrono::{DateTime, Datelike, Duration, TimeZone, Utc};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sqlx::{PgPool, Row};
 
 const PODIUM_SIZE: i64 = 50;
@@ -154,7 +154,10 @@ impl SeasonRepo {
                     .map(|r| {
                         (
                             r.get::<i64, _>("id"),
-                            (r.get::<String, _>("name"), r.get::<Option<String>, _>("photo_path")),
+                            (
+                                r.get::<String, _>("name"),
+                                r.get::<Option<String>, _>("photo_path"),
+                            ),
                         )
                     })
                     .collect()
@@ -226,12 +229,11 @@ impl SeasonRepo {
 
     /// Live standings inside the season window (public rooms only).
     pub async fn leaderboard(&self, season_id: i64, page: i64) -> Result<Value, sqlx::Error> {
-        let s = sqlx::query(
-            "SELECT id, name, starts_at, ends_at, podium FROM seasons WHERE id = $1",
-        )
-        .bind(season_id)
-        .fetch_optional(&self.pool)
-        .await?;
+        let s =
+            sqlx::query("SELECT id, name, starts_at, ends_at, podium FROM seasons WHERE id = $1")
+                .bind(season_id)
+                .fetch_optional(&self.pool)
+                .await?;
         let Some(s) = s else {
             return Ok(Value::Null);
         };

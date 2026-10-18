@@ -17,7 +17,8 @@ async fn wait_round(c: &Client, room_id: i64) -> (i64, i64) {
             .get(&format!("/api/v1/rooms/{room_id}/joined"))
             .await
             .expect_ok("joined");
-        if let (Some(rid), Some(tid)) = (r.json("/round/id").as_i64(), r.json("/track/id").as_i64()) {
+        if let (Some(rid), Some(tid)) = (r.json("/round/id").as_i64(), r.json("/track/id").as_i64())
+        {
             return (rid, tid);
         }
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
@@ -67,8 +68,12 @@ async fn ban_soft_deletes_all_user_messages() {
 
     let r1 = create_room(&user).await;
     let r2 = create_room(&user).await;
-    post_message(&user, r1, "Spam message one").await.expect_ok("msg1");
-    post_message(&user, r2, "Spam message two").await.expect_ok("msg2");
+    post_message(&user, r1, "Spam message one")
+        .await
+        .expect_ok("msg1");
+    post_message(&user, r2, "Spam message two")
+        .await
+        .expect_ok("msg2");
     assert_eq!(message_ids(&user, r1).await.len(), 1);
     assert_eq!(message_ids(&user, r2).await.len(), 1);
 
@@ -109,7 +114,12 @@ async fn cross_room_autoban_soft_deletes_existing_messages() {
     );
 
     let follow = post_message(&user, r1, "not spam anymore").await;
-    assert_eq!(follow.status, StatusCode::FORBIDDEN, "banned → 403: {}", follow.text);
+    assert_eq!(
+        follow.status,
+        StatusCode::FORBIDDEN,
+        "banned → 403: {}",
+        follow.text
+    );
     assert!(message_ids(&user, r1).await.is_empty());
     assert!(message_ids(&user, r2).await.is_empty());
 }
@@ -172,7 +182,10 @@ async fn played_tracks_listed_for_mid_round_joiner() {
         }
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
     }
-    assert!(!played.is_empty(), "track 1 should be in playedTracks by now");
+    assert!(
+        !played.is_empty(),
+        "track 1 should be in playedTracks by now"
+    );
 
     let first = &played[0];
     assert!(first["id"].as_i64().unwrap() > 0);
@@ -231,9 +244,7 @@ async fn message_reactions_toggle_and_supporter_gate() {
         json!({"emoji": "👍"}),
     )
     .await;
-    let idx2 = user
-        .get(&format!("/api/v1/messages/{mid}/reactions"))
-        .await;
+    let idx2 = user.get(&format!("/api/v1/messages/{mid}/reactions")).await;
     assert!(idx2.json("/userReaction").is_null(), "toggled off");
 
     let locked = user
@@ -242,7 +253,12 @@ async fn message_reactions_toggle_and_supporter_gate() {
             json!({"emoji": "💎"}),
         )
         .await;
-    assert_eq!(locked.status, StatusCode::UNPROCESSABLE_ENTITY, "{}", locked.text);
+    assert_eq!(
+        locked.status,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "{}",
+        locked.text
+    );
 
     let bad = user
         .post(
@@ -316,7 +332,9 @@ async fn outsider_cannot_join_check_or_read_scores() {
 
     let (round, track) = wait_round(&owner, room_id).await;
 
-    let sc = outsider.get(&format!("/api/v1/rounds/{round}/scores")).await;
+    let sc = outsider
+        .get(&format!("/api/v1/rounds/{round}/scores"))
+        .await;
     assert_eq!(sc.status, StatusCode::FORBIDDEN);
     let ck = outsider
         .post(
@@ -335,7 +353,9 @@ async fn outsider_cannot_join_check_or_read_scores() {
         .get(&format!("/api/v1/rooms/{room_id}/joined"))
         .await;
     assert_eq!(j2.status, StatusCode::OK, "post-show joined: {}", j2.text);
-    let sc2 = outsider.get(&format!("/api/v1/rounds/{round}/scores")).await;
+    let sc2 = outsider
+        .get(&format!("/api/v1/rounds/{round}/scores"))
+        .await;
     assert_eq!(sc2.status, StatusCode::OK);
 }
 
@@ -361,18 +381,14 @@ async fn password_room_requires_password() {
         .get(&format!("/api/v1/rooms/{room_id}?password=nope"))
         .await;
     assert_eq!(wrong.status, StatusCode::FORBIDDEN);
-    let j = user
-        .get(&format!("/api/v1/rooms/{room_id}/joined"))
-        .await;
+    let j = user.get(&format!("/api/v1/rooms/{room_id}/joined")).await;
     assert_eq!(j.status, StatusCode::FORBIDDEN);
 
     let ok = user
         .get(&format!("/api/v1/rooms/{room_id}?password=s3cret"))
         .await;
     assert_eq!(ok.status, StatusCode::OK, "{}", ok.text);
-    let j2 = user
-        .get(&format!("/api/v1/rooms/{room_id}/joined"))
-        .await;
+    let j2 = user.get(&format!("/api/v1/rooms/{room_id}/joined")).await;
     assert_eq!(j2.status, StatusCode::OK);
 }
 
@@ -444,18 +460,23 @@ async fn track_delete_process_deleted_track_parity() {
         .get("/api/v1/users/notifications")
         .await
         .expect_ok("notifications");
-    let found = notifs.json("/notifications").as_array().unwrap().iter().any(|n| {
-        n["type"] == "App\\Notifications\\TrackDeleted"
-            && n["data"]["playlist"]["id"] == pl_id
-            && n["data"]["message"]
-                .as_str()
-                .unwrap_or("")
-                .contains("E2E Song")
-            && n["data"]["message"]
-                .as_str()
-                .unwrap_or("")
-                .contains(&format!("supprimé par {}", owner.name))
-    });
+    let found = notifs
+        .json("/notifications")
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|n| {
+            n["type"] == "App\\Notifications\\TrackDeleted"
+                && n["data"]["playlist"]["id"] == pl_id
+                && n["data"]["message"]
+                    .as_str()
+                    .unwrap_or("")
+                    .contains("E2E Song")
+                && n["data"]["message"]
+                    .as_str()
+                    .unwrap_or("")
+                    .contains(&format!("supprimé par {}", owner.name))
+        });
     assert!(found, "TrackDeleted notif missing: {}", notifs.text);
 }
 
@@ -509,8 +530,7 @@ async fn playlist_clear_process_deleted_track_per_track() {
         .unwrap()
         .iter()
         .filter(|n| {
-            n["type"] == "App\\Notifications\\TrackDeleted"
-                && n["data"]["playlist"]["id"] == pl_id
+            n["type"] == "App\\Notifications\\TrackDeleted" && n["data"]["playlist"]["id"] == pl_id
         })
         .count();
     assert_eq!(count, 2, "one TrackDeleted per track: {}", notifs.text);
@@ -554,10 +574,14 @@ async fn track_delete_public_playlist_sends_no_notification() {
         .get("/api/v1/users/notifications")
         .await
         .expect_ok("notifications");
-    let found = notifs.json("/notifications").as_array().unwrap().iter().any(|n| {
-        n["type"] == "App\\Notifications\\TrackDeleted"
-            && n["data"]["playlist"]["id"] == pl_id
-    });
+    let found = notifs
+        .json("/notifications")
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|n| {
+            n["type"] == "App\\Notifications\\TrackDeleted" && n["data"]["playlist"]["id"] == pl_id
+        });
     assert!(!found, "public playlist must not notify: {}", notifs.text);
 }
 
@@ -594,7 +618,11 @@ async fn rooms_mine_filters_and_extras() {
         .await
         .expect_ok("search hit");
     assert!(
-        hit.json("/rooms").as_array().unwrap().iter().any(|r| r["id"] == room_id),
+        hit.json("/rooms")
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["id"] == room_id),
         "search must match by name: {}",
         hit.text
     );
@@ -603,7 +631,11 @@ async fn rooms_mine_filters_and_extras() {
         .await
         .expect_ok("search miss");
     assert!(
-        miss.json("/rooms").as_array().unwrap().iter().all(|r| r["id"] != room_id),
+        miss.json("/rooms")
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|r| r["id"] != room_id),
         "absent term must filter the room out"
     );
 
@@ -612,7 +644,12 @@ async fn rooms_mine_filters_and_extras() {
         .await
         .expect_ok("trashed only");
     assert!(
-        trashed.json("/rooms").as_array().unwrap().iter().all(|r| r["id"] != room_id),
+        trashed
+            .json("/rooms")
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|r| r["id"] != room_id),
         "non-deleted room must not appear in trashed=only"
     );
 
@@ -620,9 +657,17 @@ async fn rooms_mine_filters_and_extras() {
         .delete(&format!("/api/v1/rooms/{room_id}"))
         .await
         .expect_ok("delete room");
-    let active = owner.get("/api/v1/rooms/mine").await.expect_ok("mine post-delete");
+    let active = owner
+        .get("/api/v1/rooms/mine")
+        .await
+        .expect_ok("mine post-delete");
     assert!(
-        active.json("/rooms").as_array().unwrap().iter().all(|r| r["id"] != room_id),
+        active
+            .json("/rooms")
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|r| r["id"] != room_id),
         "deleted room must be hidden by default"
     );
     let only = owner
@@ -630,7 +675,11 @@ async fn rooms_mine_filters_and_extras() {
         .await
         .expect_ok("trashed only post-delete");
     assert!(
-        only.json("/rooms").as_array().unwrap().iter().all(|r| r["id"] != room_id),
+        only.json("/rooms")
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|r| r["id"] != room_id),
         "moderator link is gone on delete, trashed=only stays empty"
     );
 }

@@ -1,5 +1,5 @@
-use sqlx::postgres::PgPool;
 use sqlx::Row;
+use sqlx::postgres::PgPool;
 
 #[derive(Clone)]
 pub struct LevelRepo {
@@ -111,10 +111,7 @@ impl LevelRepo {
         self.calculate_level_data(user_id).await.map(Some)
     }
 
-    pub async fn snapshot(
-        &self,
-        user_id: i64,
-    ) -> Result<Option<serde_json::Value>, sqlx::Error> {
+    pub async fn snapshot(&self, user_id: i64) -> Result<Option<serde_json::Value>, sqlx::Error> {
         let row = sqlx::query(
             "SELECT l.level, l.total_xp, l.current_xp, l.xp_for_next_level, \
              l.score_public_rooms, l.minigame_scores_total, l.months_seniority, \

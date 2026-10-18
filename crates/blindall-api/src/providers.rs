@@ -3,7 +3,7 @@ use crate::state::AppState;
 use axum::extract::{Query, State};
 use axum::response::Json;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 #[derive(Deserialize)]
 pub struct SearchParams {

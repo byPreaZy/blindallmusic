@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use sqlx::postgres::PgPool;
 use sqlx::Row;
+use sqlx::postgres::PgPool;
 
 #[derive(Clone)]
 pub struct PlaylistRepo {
@@ -180,7 +180,11 @@ impl PlaylistRepo {
         Ok(id)
     }
 
-    pub async fn attach_moderator(&self, playlist_id: i64, user_id: i64) -> Result<(), sqlx::Error> {
+    pub async fn attach_moderator(
+        &self,
+        playlist_id: i64,
+        user_id: i64,
+    ) -> Result<(), sqlx::Error> {
         sqlx::query(
             "INSERT INTO moderables (user_id, moderable_type, moderable_id, \
              created_at, updated_at) VALUES ($1, 'App\\Models\\Playlist', $2, $3, $4)",
@@ -194,7 +198,11 @@ impl PlaylistRepo {
         Ok(())
     }
 
-    pub async fn detach_moderator(&self, playlist_id: i64, user_id: i64) -> Result<(), sqlx::Error> {
+    pub async fn detach_moderator(
+        &self,
+        playlist_id: i64,
+        user_id: i64,
+    ) -> Result<(), sqlx::Error> {
         sqlx::query(
             "DELETE FROM moderables WHERE user_id = $1 AND moderable_id = $2 \
              AND moderable_type = 'App\\Models\\Playlist'",
@@ -206,10 +214,7 @@ impl PlaylistRepo {
         Ok(())
     }
 
-    pub async fn export_tracks(
-        &self,
-        playlist_id: i64,
-    ) -> Result<Vec<PlaylistTrack>, sqlx::Error> {
+    pub async fn export_tracks(&self, playlist_id: i64) -> Result<Vec<PlaylistTrack>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT t.id, t.provider, t.provider_id, t.provider_url, t.preview_url, \
              t.artwork_url, t.dificulty, t.hint, t.created_at, \
@@ -319,12 +324,11 @@ impl PlaylistRepo {
         page: i64,
         per_page: i64,
     ) -> Result<(Vec<PlaylistTrack>, i64), sqlx::Error> {
-        let total = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM tracks WHERE playlist_id = $1",
-        )
-        .bind(playlist_id)
-        .fetch_one(&self.pool)
-        .await?;
+        let total =
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM tracks WHERE playlist_id = $1")
+                .bind(playlist_id)
+                .fetch_one(&self.pool)
+                .await?;
 
         let rows = sqlx::query(
             "SELECT t.id, t.provider, t.provider_id, t.provider_url, t.preview_url, \
@@ -516,8 +520,7 @@ impl PlaylistRepo {
             }
         };
 
-        let (clean_title, feats, medley) =
-            blindall_core::sanitize::clean_import_title(track_name);
+        let (clean_title, feats, medley) = blindall_core::sanitize::clean_import_title(track_name);
         let title = if clean_title.is_empty() {
             track_name
         } else {
@@ -558,7 +561,11 @@ impl PlaylistRepo {
                     .bind(track_id)
                     .bind(type_id)
                     .bind(value)
-                    .bind(if type_id == 2 { &aliases } else { &empty_aliases })
+                    .bind(if type_id == 2 {
+                        &aliases
+                    } else {
+                        &empty_aliases
+                    })
                     .bind(now)
                     .bind(now)
                     .execute(&mut *tx)
@@ -701,12 +708,10 @@ impl PlaylistRepo {
     }
 
     pub async fn track_count(&self, playlist_id: i64) -> Result<i64, sqlx::Error> {
-        sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM tracks WHERE playlist_id = $1",
-        )
-        .bind(playlist_id)
-        .fetch_one(&self.pool)
-        .await
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM tracks WHERE playlist_id = $1")
+            .bind(playlist_id)
+            .fetch_one(&self.pool)
+            .await
     }
 
     pub async fn track_playlist_id(&self, track_id: i64) -> Result<Option<i64>, sqlx::Error> {
@@ -855,12 +860,10 @@ impl PlaylistRepo {
     }
 
     pub async fn room_ids_for_playlist(&self, playlist_id: i64) -> Vec<i64> {
-        sqlx::query_scalar::<_, i64>(
-            "SELECT room_id FROM playlist_room WHERE playlist_id = $1",
-        )
-        .bind(playlist_id)
-        .fetch_all(&self.pool)
-        .await
-        .unwrap_or_default()
+        sqlx::query_scalar::<_, i64>("SELECT room_id FROM playlist_room WHERE playlist_id = $1")
+            .bind(playlist_id)
+            .fetch_all(&self.pool)
+            .await
+            .unwrap_or_default()
     }
 }

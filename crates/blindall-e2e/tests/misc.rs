@@ -23,12 +23,17 @@ async fn faq_vote_flow() {
     let id = r.json("/data/0/id").as_i64().unwrap();
     let before = r.json("/data/0/upvotes").as_i64().unwrap_or(0);
 
-    let r = Client::anon().post_empty(&format!("/api/v1/faqs/{id}/vote/up")).await;
+    let r = Client::anon()
+        .post_empty(&format!("/api/v1/faqs/{id}/vote/up"))
+        .await;
     assert_eq!(r.status, StatusCode::UNAUTHORIZED);
     let g = Client::guest().await;
     let r = g.post_empty(&format!("/api/v1/faqs/{id}/vote/up")).await;
-    assert!(matches!(r.status, StatusCode::FORBIDDEN | StatusCode::UNAUTHORIZED),
-        "guest: {}", r.status);
+    assert!(
+        matches!(r.status, StatusCode::FORBIDDEN | StatusCode::UNAUTHORIZED),
+        "guest: {}",
+        r.status
+    );
 
     let (u, _) = Client::register("fq").await;
     let r = u.post_empty(&format!("/api/v1/faqs/{id}/vote/up")).await;
@@ -66,7 +71,10 @@ async fn donations_public_endpoints() {
         let r = c.get(ep).await;
         assert!(r.status.is_success(), "{ep}: {} {}", r.status, r.text);
     }
-    let r = c.get("/api/v1/donations/progress").await.expect_ok("progress");
+    let r = c
+        .get("/api/v1/donations/progress")
+        .await
+        .expect_ok("progress");
     let t = &r.text;
     assert!(t.contains("goal") || t.contains("percent"), "{t}");
 }
@@ -74,10 +82,16 @@ async fn donations_public_endpoints() {
 #[tokio::test]
 async fn stripe_webhook_rejects_bad_signature() {
     let r = Client::anon()
-        .post("/api/v1/stripe/webhook", json!({"type": "checkout.session.completed"}))
+        .post(
+            "/api/v1/stripe/webhook",
+            json!({"type": "checkout.session.completed"}),
+        )
         .await;
     assert!(
-        matches!(r.status, StatusCode::BAD_REQUEST | StatusCode::UNAUTHORIZED | StatusCode::UNPROCESSABLE_ENTITY),
+        matches!(
+            r.status,
+            StatusCode::BAD_REQUEST | StatusCode::UNAUTHORIZED | StatusCode::UNPROCESSABLE_ENTITY
+        ),
         "unsigned webhook must fail: {} {}",
         r.status,
         r.text
@@ -94,7 +108,11 @@ async fn seo_endpoints() {
         assert!(r.status.is_success(), "{ep}: {}", r.status);
     }
     let r = c.get("/robots.txt").await;
-    assert!(r.text.contains("User-agent") || r.text.contains("Sitemap"), "{}", r.text);
+    assert!(
+        r.text.contains("User-agent") || r.text.contains("Sitemap"),
+        "{}",
+        r.text
+    );
 }
 
 // ---- minigames -----------------------------------------------------------------
@@ -110,22 +128,35 @@ async fn minigames_games_list_shape() {
     let (u, _) = Client::register("mg").await;
     let r = u.get("/api/v1/minigames").await.expect_ok("minigames");
     let games = r.json("/games").as_array().cloned().unwrap_or_default();
-    assert!(games.len() >= 4, "quiz/who_sang/album_cover/first_letter/anagram: {}", r.text);
+    assert!(
+        games.len() >= 4,
+        "quiz/who_sang/album_cover/first_letter/anagram: {}",
+        r.text
+    );
 }
 
 #[tokio::test]
 async fn minigames_next_unknown_game() {
     let (u, _) = Client::register("mg").await;
     let r = u.post_empty("/api/v1/minigames/not-a-game/next").await;
-    assert!(matches!(r.status, StatusCode::NOT_FOUND | StatusCode::UNPROCESSABLE_ENTITY | StatusCode::BAD_REQUEST),
-        "{} {}", r.status, r.text);
+    assert!(
+        matches!(
+            r.status,
+            StatusCode::NOT_FOUND | StatusCode::UNPROCESSABLE_ENTITY | StatusCode::BAD_REQUEST
+        ),
+        "{} {}",
+        r.status,
+        r.text
+    );
 }
 
 // ---- providers -----------------------------------------------------------------
 
 #[tokio::test]
 async fn providers_search_requires_auth() {
-    let r = Client::anon().get("/api/v1/providers/search?q=test&provider=deezer").await;
+    let r = Client::anon()
+        .get("/api/v1/providers/search?q=test&provider=deezer")
+        .await;
     assert_eq!(r.status, StatusCode::UNAUTHORIZED);
 }
 
@@ -142,13 +173,24 @@ async fn providers_local_search_shape() {
 #[tokio::test]
 async fn banned_user_endpoint() {
     let r = Client::anon().get("/api/v1/user/banned").await;
-    assert!(r.status.is_success() || r.status == StatusCode::FORBIDDEN, "{} {}", r.status, r.text);
+    assert!(
+        r.status.is_success() || r.status == StatusCode::FORBIDDEN,
+        "{} {}",
+        r.status,
+        r.text
+    );
 }
 
 #[tokio::test]
 async fn local_tracks_store_is_public_moderator_only() {
     let r = Client::anon().post_empty("/api/v1/local-tracks").await;
-    assert_eq!(r.status, StatusCode::UNAUTHORIZED, "{} {}", r.status, r.text);
+    assert_eq!(
+        r.status,
+        StatusCode::UNAUTHORIZED,
+        "{} {}",
+        r.status,
+        r.text
+    );
     let (u, _) = Client::register("lt").await;
     let r = u.post_empty("/api/v1/local-tracks").await;
     assert_eq!(r.status, StatusCode::FORBIDDEN, "{} {}", r.status, r.text);

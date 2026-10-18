@@ -1,10 +1,10 @@
 use crate::auth::CurrentUser;
 use crate::state::AppState;
 use axum::{
+    Json,
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -16,7 +16,11 @@ pub struct ListQuery {
 }
 
 pub async fn index(State(state): State<AppState>, Query(q): Query<ListQuery>) -> Response {
-    match state.faqs.list(q.search.as_deref(), q.page.unwrap_or(1), 6).await {
+    match state
+        .faqs
+        .list(q.search.as_deref(), q.page.unwrap_or(1), 6)
+        .await
+    {
         Ok((faqs, total)) => Json(json!({
             "data": faqs,
             "total": total,

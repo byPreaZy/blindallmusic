@@ -1,7 +1,7 @@
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
-use sqlx::postgres::PgPool;
 use sqlx::Row;
+use sqlx::postgres::PgPool;
 
 const EXPIRE_MINUTES: i64 = 60;
 
@@ -35,12 +35,11 @@ impl PasswordResetRepo {
     }
 
     pub async fn token_valid(&self, email: &str, token: &str) -> Result<bool, sqlx::Error> {
-        let row = sqlx::query(
-            "SELECT token, created_at FROM password_reset_tokens WHERE email = $1",
-        )
-        .bind(email)
-        .fetch_optional(&self.pool)
-        .await?;
+        let row =
+            sqlx::query("SELECT token, created_at FROM password_reset_tokens WHERE email = $1")
+                .bind(email)
+                .fetch_optional(&self.pool)
+                .await?;
         let Some(row) = row else { return Ok(false) };
         let stored: String = row.get("token");
         if stored != hmac_sha256_hex(&self.app_key, token) {
@@ -51,14 +50,13 @@ impl PasswordResetRepo {
     }
 
     pub async fn reset(&self, email: &str, password_hash: &str) -> Result<bool, sqlx::Error> {
-        let res = sqlx::query(
-            "UPDATE users SET password = $1, remember_token = $2 WHERE email = $3",
-        )
-        .bind(password_hash)
-        .bind(random_token(60))
-        .bind(email)
-        .execute(&self.pool)
-        .await?;
+        let res =
+            sqlx::query("UPDATE users SET password = $1, remember_token = $2 WHERE email = $3")
+                .bind(password_hash)
+                .bind(random_token(60))
+                .bind(email)
+                .execute(&self.pool)
+                .await?;
         if res.rows_affected() == 0 {
             return Ok(false);
         }
@@ -80,8 +78,8 @@ pub fn random_token(len: usize) -> String {
 }
 
 pub fn hmac_sha256_hex(key: &str, msg: &str) -> String {
-    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key.as_bytes())
-        .expect("hmac accepts any key length");
+    let mut mac =
+        <Hmac<Sha256> as Mac>::new_from_slice(key.as_bytes()).expect("hmac accepts any key length");
     mac.update(msg.as_bytes());
     hex::encode(mac.finalize().into_bytes())
 }

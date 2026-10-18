@@ -5,7 +5,7 @@
 //! work offline and never break when the third-party service is down.
 
 use axum::extract::Query;
-use axum::http::{header, StatusCode};
+use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 use std::collections::hash_map::DefaultHasher;

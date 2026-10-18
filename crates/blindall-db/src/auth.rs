@@ -1,6 +1,6 @@
 use crate::entities::User;
-use sqlx::postgres::PgPool;
 use sqlx::Row;
+use sqlx::postgres::PgPool;
 
 #[derive(Clone)]
 pub struct AuthRepo {
@@ -145,18 +145,22 @@ impl AuthRepo {
     }
 
     pub async fn name_taken(&self, name: &str) -> Result<bool, sqlx::Error> {
-        Ok(sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM users WHERE name = $1)::int::bigint")
-            .bind(name)
-            .fetch_one(&self.pool)
-            .await?
+        Ok(sqlx::query_scalar::<_, i64>(
+            "SELECT EXISTS(SELECT 1 FROM users WHERE name = $1)::int::bigint",
+        )
+        .bind(name)
+        .fetch_one(&self.pool)
+        .await?
             == 1)
     }
 
     pub async fn email_taken(&self, email: &str) -> Result<bool, sqlx::Error> {
-        Ok(sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)::int::bigint")
-            .bind(email)
-            .fetch_one(&self.pool)
-            .await?
+        Ok(sqlx::query_scalar::<_, i64>(
+            "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)::int::bigint",
+        )
+        .bind(email)
+        .fetch_one(&self.pool)
+        .await?
             == 1)
     }
 
@@ -226,10 +230,7 @@ impl AuthRepo {
         Ok(())
     }
 
-    pub async fn custom_tag_of(
-        &self,
-        user_id: i64,
-    ) -> Result<Option<String>, sqlx::Error> {
+    pub async fn custom_tag_of(&self, user_id: i64) -> Result<Option<String>, sqlx::Error> {
         sqlx::query_scalar("SELECT custom_tag FROM users WHERE id = $1")
             .bind(user_id)
             .fetch_optional(&self.pool)
@@ -393,15 +394,17 @@ impl AuthRepo {
         .bind(provider_id)
         .fetch_optional(&self.pool)
         .await
-        .map(|o| o.map(|r| User {
-            id: r.get("id"),
-            name: r.get("name"),
-            photo_path: r.get("photo_path"),
-            elo: r.get("elo"),
-            is_guest: r.get("is_guest"),
-            is_administrator: r.get("is_administrator"),
-            team_id: r.get("team_id"),
-        }))
+        .map(|o| {
+            o.map(|r| User {
+                id: r.get("id"),
+                name: r.get("name"),
+                photo_path: r.get("photo_path"),
+                elo: r.get("elo"),
+                is_guest: r.get("is_guest"),
+                is_administrator: r.get("is_administrator"),
+                team_id: r.get("team_id"),
+            })
+        })
     }
 
     pub async fn link_provider(
@@ -530,7 +533,9 @@ impl AuthRepo {
             use rand::Rng;
             const CH: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
             let mut rng = rand::rng();
-            (0..40).map(|_| CH[rng.random_range(0..CH.len())] as char).collect()
+            (0..40)
+                .map(|_| CH[rng.random_range(0..CH.len())] as char)
+                .collect()
         };
         let hash = format!("{:x}", sha2_digest(plain.as_bytes()));
         let now = chrono::Utc::now();

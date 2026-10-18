@@ -30,11 +30,13 @@ async fn answer(c: &Client, round: i64, track: i64, text: &str) -> common::Resp 
 #[tokio::test]
 async fn joined_autostarts_round_and_returns_track() {
     let (owner, _) = Client::register("gp").await;
-    let (room_id, _pl, track_id) =
-        game_fixture(&owner, &[]).await;
+    let (room_id, _pl, track_id) = game_fixture(&owner, &[]).await;
     let (round, track) = wait_round(&owner, room_id).await;
     assert!(round > 0);
-    assert_eq!(track, track_id, "single-track playlist → deterministic pick");
+    assert_eq!(
+        track, track_id,
+        "single-track playlist → deterministic pick"
+    );
 }
 
 #[tokio::test]
@@ -48,7 +50,11 @@ async fn joined_hides_current_track_answers() {
         .get(&format!("/api/v1/rooms/{room_id}/joined"))
         .await
         .expect_ok("joined");
-    let played = j.json("/playedTracks").as_array().cloned().unwrap_or_default();
+    let played = j
+        .json("/playedTracks")
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     assert!(
         played.is_empty(),
         "playing track must not be in playedTracks: {played:?}"
@@ -67,8 +73,7 @@ async fn joined_hides_current_track_answers() {
 #[tokio::test]
 async fn correct_answer_scores_and_message() {
     let (owner, _) = Client::register("ga").await;
-    let (room_id, _pl, _track_id) =
-        game_fixture(&owner, &[]).await;
+    let (room_id, _pl, _track_id) = game_fixture(&owner, &[]).await;
     let (round, track) = wait_round(&owner, room_id).await;
 
     let r = answer(&owner, round, track, "E2E Song").await;
@@ -83,14 +88,19 @@ async fn correct_answer_scores_and_message() {
     assert_eq!(r.json("/total_score").as_f64().unwrap(), 1.5);
     assert_eq!(r.json("/message/type"), "good");
     assert!(r.json("/message/body").as_str().unwrap().len() > 3);
-    assert!(r.json("/words").as_array().unwrap().iter().any(|w| w == "e2e" || w == "song" || w == "E2E"));
+    assert!(
+        r.json("/words")
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|w| w == "e2e" || w == "song" || w == "E2E")
+    );
 }
 
 #[tokio::test]
 async fn wrong_answer_returns_bad_message_zero_score() {
     let (owner, _) = Client::register("gw").await;
-    let (room_id, _pl, _t) =
-        game_fixture(&owner, &[]).await;
+    let (room_id, _pl, _t) = game_fixture(&owner, &[]).await;
     let (round, track) = wait_round(&owner, room_id).await;
 
     let r = answer(&owner, round, track, "completely wrong guess").await;
@@ -103,18 +113,20 @@ async fn wrong_answer_returns_bad_message_zero_score() {
 #[tokio::test]
 async fn answer_matching_is_case_insensitive() {
     let (owner, _) = Client::register("gc").await;
-    let (room_id, _pl, _t) =
-        game_fixture(&owner, &[]).await;
+    let (room_id, _pl, _t) = game_fixture(&owner, &[]).await;
     let (round, track) = wait_round(&owner, room_id).await;
     let r = answer(&owner, round, track, "e2e song").await;
-    assert_eq!(r.json("/good_answers").as_array().unwrap().len(), 1, "lowercase must match");
+    assert_eq!(
+        r.json("/good_answers").as_array().unwrap().len(),
+        1,
+        "lowercase must match"
+    );
 }
 
 #[tokio::test]
 async fn track_mismatch_returns_409() {
     let (owner, _) = Client::register("gm").await;
-    let (room_id, _pl, _t) =
-        game_fixture(&owner, &[]).await;
+    let (room_id, _pl, _t) = game_fixture(&owner, &[]).await;
     let (round, track) = wait_round(&owner, room_id).await;
     let r = answer(&owner, round, track + 9999, "x").await;
     assert_eq!(r.status, StatusCode::CONFLICT, "{}", r.text);
@@ -123,8 +135,7 @@ async fn track_mismatch_returns_409() {
 #[tokio::test]
 async fn same_answer_twice_not_double_scored() {
     let (owner, _) = Client::register("gd").await;
-    let (room_id, _pl, _t) =
-        game_fixture(&owner, &[]).await;
+    let (room_id, _pl, _t) = game_fixture(&owner, &[]).await;
     let (round, track) = wait_round(&owner, room_id).await;
 
     let first = answer(&owner, round, track, "E2E Song").await;
@@ -132,28 +143,38 @@ async fn same_answer_twice_not_double_scored() {
     let second = answer(&owner, round, track, "E2E Song").await;
     let good = second.json("/good_answers").as_array().unwrap().len();
     let score = second.json("/total_score").as_f64().unwrap_or(0.0);
-    assert!(good == 0 || score == 0.0, "dup answer must not re-score: {}", second.text);
+    assert!(
+        good == 0 || score == 0.0,
+        "dup answer must not re-score: {}",
+        second.text
+    );
 }
 
 #[tokio::test]
 async fn both_answer_types_scored_independently() {
     let (owner, _) = Client::register("gb").await;
-    let (room_id, _pl, _t) =
-        game_fixture(&owner, &[]).await;
+    let (room_id, _pl, _t) = game_fixture(&owner, &[]).await;
     let (round, track) = wait_round(&owner, room_id).await;
 
-    answer(&owner, round, track, "E2E Artist").await.expect_ok("artist");
-    let r = answer(&owner, round, track, "E2E Song").await.expect_ok("title");
+    answer(&owner, round, track, "E2E Artist")
+        .await
+        .expect_ok("artist");
+    let r = answer(&owner, round, track, "E2E Song")
+        .await
+        .expect_ok("title");
     assert_eq!(r.json("/total_score").as_f64().unwrap(), 3.0, "cumulative");
 }
 
 #[tokio::test]
 async fn extra_answer_types_are_asked_and_scored() {
     let (owner, _) = Client::register("gx").await;
-    let (room_id, _pl, track_id) = game_fixture(&owner, &[
-        ("Mulan", 6, 0.5),   // Movie
-        ("Pitbull", 5, 0.5), // Featuring
-    ])
+    let (room_id, _pl, track_id) = game_fixture(
+        &owner,
+        &[
+            ("Mulan", 6, 0.5),   // Movie
+            ("Pitbull", 5, 0.5), // Featuring
+        ],
+    )
     .await;
     let (round, track) = wait_round(&owner, room_id).await;
     assert_eq!(track, track_id);
@@ -180,7 +201,11 @@ async fn extra_answer_types_are_asked_and_scored() {
         ("E2E Song", "Title"),
     ] {
         let r = answer(&owner, round, track, text).await;
-        let good = r.json("/good_answers").as_array().cloned().unwrap_or_default();
+        let good = r
+            .json("/good_answers")
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
         assert!(
             good.iter().any(|a| a["name"] == want),
             "{text} should find {want}: {}",
@@ -222,7 +247,11 @@ async fn answer_aliases_and_paren_titles_match() {
     assert_eq!(track, track_id);
 
     let r = answer(&owner, round, track, "pocahontas").await;
-    let good = r.json("/good_answers").as_array().cloned().unwrap_or_default();
+    let good = r
+        .json("/good_answers")
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     assert!(
         good.iter().any(|a| a["name"] == "Movie"),
         "alias must match: {}",
@@ -237,9 +266,14 @@ async fn answer_aliases_and_paren_titles_match() {
         r.text
     );
     let r = answer(&owner, round, track, "second song").await;
-    let good = r.json("/good_answers").as_array().cloned().unwrap_or_default();
+    let good = r
+        .json("/good_answers")
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     assert!(
-        good.iter().any(|a| a["name"] == "Title" && a["value"] == "Second Song (feat. DJ Y)"),
+        good.iter()
+            .any(|a| a["name"] == "Title" && a["value"] == "Second Song (feat. DJ Y)"),
         "paren-stripped title must match: {}",
         r.text
     );
@@ -248,8 +282,7 @@ async fn answer_aliases_and_paren_titles_match() {
 #[tokio::test]
 async fn round_scores_endpoint_lists_scorers() {
     let (owner, _) = Client::register("gs").await;
-    let (room_id, _pl, _t) =
-        game_fixture(&owner, &[]).await;
+    let (room_id, _pl, _t) = game_fixture(&owner, &[]).await;
     let (round, track) = wait_round(&owner, room_id).await;
     answer(&owner, round, track, "E2E Song").await;
 
@@ -259,7 +292,8 @@ async fn round_scores_endpoint_lists_scorers() {
         .expect_ok("scores");
     let list = s.json("/scores").as_array().cloned().unwrap_or_default();
     assert!(
-        list.iter().any(|e| e["user_id"] == owner.user_id && e["score"].as_f64().unwrap() > 0.0),
+        list.iter()
+            .any(|e| e["user_id"] == owner.user_id && e["score"].as_f64().unwrap() > 0.0),
         "owner must appear in round scores: {list:?}"
     );
 }
@@ -270,20 +304,29 @@ async fn upvote_downvote_toggle_and_reasons() {
     let (_room_id, _pl, track_id) = game_fixture(&owner, &[]).await;
 
     let up = owner
-        .post(&format!("/api/v1/rooms/6/tracks/{track_id}/upvote"), json!({}))
+        .post(
+            &format!("/api/v1/rooms/6/tracks/{track_id}/upvote"),
+            json!({}),
+        )
         .await;
     assert!(up.ok(), "upvote: {}", up.text);
     assert_eq!(up.json("/user_voted_up"), true, "{:?}", up.body);
     assert_eq!(up.json("/upvotes").as_i64().unwrap_or(0), 1);
 
     let off = owner
-        .post(&format!("/api/v1/rooms/6/tracks/{track_id}/upvote"), json!({}))
+        .post(
+            &format!("/api/v1/rooms/6/tracks/{track_id}/upvote"),
+            json!({}),
+        )
         .await;
     assert_eq!(off.json("/user_voted_up"), false);
     assert_eq!(off.json("/upvotes").as_i64().unwrap_or(9), 0);
 
     let no_reason = owner
-        .post(&format!("/api/v1/rooms/6/tracks/{track_id}/downvote"), json!({}))
+        .post(
+            &format!("/api/v1/rooms/6/tracks/{track_id}/downvote"),
+            json!({}),
+        )
         .await;
     assert_eq!(no_reason.status, StatusCode::UNPROCESSABLE_ENTITY);
 
@@ -305,7 +348,10 @@ async fn upvote_downvote_toggle_and_reasons() {
     assert_eq!(ok.json("/user_voted_down"), true);
 
     let cancel = owner
-        .post(&format!("/api/v1/rooms/6/tracks/{track_id}/downvote"), json!({}))
+        .post(
+            &format!("/api/v1/rooms/6/tracks/{track_id}/downvote"),
+            json!({}),
+        )
         .await;
     assert_eq!(cancel.json("/user_voted_down"), false);
 }

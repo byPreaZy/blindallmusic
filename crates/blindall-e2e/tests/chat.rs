@@ -5,7 +5,10 @@ use serde_json::json;
 
 async fn room_for(owner: &Client) -> i64 {
     let r = owner
-        .post("/api/v1/rooms", json!({"name": uniq_name("ch"), "category_id": 4}))
+        .post(
+            "/api/v1/rooms",
+            json!({"name": uniq_name("ch"), "category_id": 4}),
+        )
         .await;
     assert_eq!(r.status, StatusCode::CREATED, "room: {}", r.text);
     r.json("/room/id").as_i64().unwrap()
@@ -113,19 +116,19 @@ async fn chat_delete_own_message() {
         .await
         .expect_ok("history");
     let id = r.json("/messages/0/id").as_i64().unwrap();
-    let r = owner
-        .delete(&format!("/api/v1/messages/{id}"))
-        .await;
+    let r = owner.delete(&format!("/api/v1/messages/{id}")).await;
     assert_eq!(r.status, StatusCode::NO_CONTENT, "delete: {}", r.text);
     let r = owner
         .get(&format!("/api/v1/rooms/{room_id}/messages"))
         .await
         .expect_ok("history");
-    assert!(r.json("/messages")
-        .as_array()
-        .unwrap()
-        .iter()
-        .all(|m| m["body"] != "to delete"));
+    assert!(
+        r.json("/messages")
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|m| m["body"] != "to delete")
+    );
 }
 
 #[tokio::test]
@@ -151,7 +154,11 @@ async fn chat_cannot_delete_others_message() {
         .await
         .expect_ok("history");
     assert!(
-        r.json("/messages").as_array().unwrap().iter().any(|m| m["body"] == "mine"),
+        r.json("/messages")
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["body"] == "mine"),
         "message must survive unauthorized delete: {}",
         r.text
     );
@@ -174,10 +181,7 @@ async fn chat_report_flow() {
         .expect_ok("history");
     let id = r.json("/messages/0/id").as_i64().unwrap();
     let r = reporter
-        .post(
-            &format!("/api/v1/messages/{id}/report"),
-            json!({}),
-        )
+        .post(&format!("/api/v1/messages/{id}/report"), json!({}))
         .await;
     assert!(
         r.status.is_success() || r.status == StatusCode::NO_CONTENT,

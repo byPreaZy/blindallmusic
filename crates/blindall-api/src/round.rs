@@ -1,13 +1,13 @@
 use crate::auth::CurrentUser;
 use crate::state::AppState;
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::Json;
 use blindall_core::messages;
 use blindall_core::scoring::CheckOutcome;
 use blindall_game::{GameStore, RoomCommand};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 #[derive(Debug, Deserialize)]
 pub struct CheckBody {
@@ -218,15 +218,21 @@ pub async fn start(
     user: CurrentUser,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     if user.0.is_guest {
-        return Err((StatusCode::FORBIDDEN, Json(json!({"message": "guest_forbidden"}))));
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(json!({"message": "guest_forbidden"})),
+        ));
     }
     require_room_control(&state, id, &user.0).await?;
 
     state
         .manager
-        .send(id, RoomCommand::Start {
-            user_id: Some(user.id()),
-        })
+        .send(
+            id,
+            RoomCommand::Start {
+                user_id: Some(user.id()),
+            },
+        )
         .await
         .map_err(|_| err(StatusCode::SERVICE_UNAVAILABLE, "room_unavailable"))?;
     Ok(Json(json!({"success": true})))
@@ -259,7 +265,10 @@ pub async fn pause(
     CurrentUser(user): CurrentUser,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     if user.is_guest {
-        return Err((StatusCode::FORBIDDEN, Json(json!({"message": "guest_forbidden"}))));
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(json!({"message": "guest_forbidden"})),
+        ));
     }
 
     require_room_control(&state, id, &user).await?;
@@ -277,7 +286,10 @@ pub async fn resume(
     CurrentUser(user): CurrentUser,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     if user.is_guest {
-        return Err((StatusCode::FORBIDDEN, Json(json!({"message": "guest_forbidden"}))));
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(json!({"message": "guest_forbidden"})),
+        ));
     }
 
     require_room_control(&state, id, &user).await?;
@@ -295,7 +307,10 @@ pub async fn stop(
     CurrentUser(user): CurrentUser,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     if user.is_guest {
-        return Err((StatusCode::FORBIDDEN, Json(json!({"message": "guest_forbidden"}))));
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(json!({"message": "guest_forbidden"})),
+        ));
     }
 
     require_room_control(&state, id, &user).await?;

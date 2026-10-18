@@ -1,7 +1,7 @@
 use blindall_game::store::PreviewResolver;
 use serde::Serialize;
-use sqlx::postgres::PgPool;
 use sqlx::Row;
+use sqlx::postgres::PgPool;
 use std::sync::Arc;
 
 pub const ANSWER_TYPE_ARTIST: i64 = 1;
@@ -51,10 +51,16 @@ impl MinigameRepo {
         } else {
             ANSWER_TYPE_TITLE
         };
-        let Some(track) = self.pick_random_track(answer_type_id, require_artwork).await? else {
+        let Some(track) = self
+            .pick_random_track(answer_type_id, require_artwork)
+            .await?
+        else {
             return Ok(None);
         };
-        let correct = self.answer_of(track.id, answer_type_id).await?.unwrap_or_default();
+        let correct = self
+            .answer_of(track.id, answer_type_id)
+            .await?
+            .unwrap_or_default();
         let mut choices = self
             .wrong_choices(track.id, answer_type_id, &correct, 3)
             .await?;
@@ -71,7 +77,10 @@ impl MinigameRepo {
         let Some(track) = self.pick_random_track(ANSWER_TYPE_TITLE, false).await? else {
             return Ok(None);
         };
-        let raw = self.answer_of(track.id, ANSWER_TYPE_TITLE).await?.unwrap_or_default();
+        let raw = self
+            .answer_of(track.id, ANSWER_TYPE_TITLE)
+            .await?
+            .unwrap_or_default();
         Ok(Some(TitleQuestion {
             track,
             correct_value: blindall_core::sanitize::sanitize_string(&raw),
@@ -121,7 +130,6 @@ impl MinigameRepo {
         .bind(chrono::Utc::now())
         .fetch_one(&self.pool)
         .await
-        
     }
 
     pub async fn totals_for_user(&self, user_id: i64) -> Result<Vec<(String, i64)>, sqlx::Error> {
@@ -145,12 +153,11 @@ impl MinigameRepo {
         page: i64,
         per_page: i64,
     ) -> Result<serde_json::Value, sqlx::Error> {
-        let total: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM minigame_scores WHERE user_id = $1",
-        )
-        .bind(user_id)
-        .fetch_one(&self.pool)
-        .await?;
+        let total: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM minigame_scores WHERE user_id = $1")
+                .bind(user_id)
+                .fetch_one(&self.pool)
+                .await?;
         let rows = sqlx::query(
             "SELECT id, game_type, score, created_at FROM minigame_scores \
              WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
@@ -224,9 +231,7 @@ impl MinigameRepo {
         };
         let mut found = None;
         for rid in random_ids {
-            found = self
-                .pick_one(answer_type_id, require_artwork, rid)
-                .await?;
+            found = self.pick_one(answer_type_id, require_artwork, rid).await?;
             if found.is_some() {
                 break;
             }
@@ -239,7 +244,11 @@ impl MinigameRepo {
         };
         let audio = self
             .resolver
-            .resolve(&provider, &provider_id.unwrap_or_default(), &preview_url.unwrap_or_default())
+            .resolve(
+                &provider,
+                &provider_id.unwrap_or_default(),
+                &preview_url.unwrap_or_default(),
+            )
             .await;
         Ok(Some(MinigameTrack {
             id,
@@ -264,7 +273,11 @@ impl MinigameRepo {
              AND (t.preview_url IS NOT NULL \
                   OR t.provider IN ('spotify','itunes','deezer','audius')) \
              {} AND t.id >= $2 ORDER BY t.id LIMIT 1",
-            if require_artwork { "AND t.artwork_url IS NOT NULL" } else { "" }
+            if require_artwork {
+                "AND t.artwork_url IS NOT NULL"
+            } else {
+                ""
+            }
         );
         sqlx::query(&sql)
             .bind(answer_type_id)
@@ -338,7 +351,6 @@ impl MinigameRepo {
         }
         Ok(out)
     }
-
 }
 
 fn shuffle<T>(v: &mut [T]) {

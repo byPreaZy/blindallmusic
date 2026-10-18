@@ -1,5 +1,5 @@
+use serde_json::{Value, json};
 use sqlx::{PgPool, Row};
-use serde_json::{json, Value};
 
 #[derive(Clone)]
 pub struct NotificationRepo {

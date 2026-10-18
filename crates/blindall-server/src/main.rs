@@ -1,8 +1,8 @@
-use blindall_api::{router, AppState};
+use blindall_api::{AppState, router};
 use blindall_db::{AuthRepo, DbGameStore};
 use blindall_game::GameManager;
-use blindall_redis::{RoomPresenceStore, RoundScoreStore};
 use blindall_realtime::Hub;
+use blindall_redis::{RoomPresenceStore, RoundScoreStore};
 use fred::prelude::*;
 use std::sync::Arc;
 
@@ -19,8 +19,7 @@ async fn main() -> anyhow::Result<()> {
 
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://postgres:postgres@127.0.0.1:5432/postgres".into());
-    let redis_url = std::env::var("REDIS_URL")
-        .unwrap_or_else(|_| "redis://127.0.0.1:6379".into());
+    let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".into());
     let bind = std::env::var("BIND").unwrap_or_else(|_| "0.0.0.0:8080".into());
 
     let pool = blindall_db::connect(&database_url).await?;
@@ -50,12 +49,12 @@ async fn main() -> anyhow::Result<()> {
     let scores = Arc::new(RoundScoreStore::new(redis.clone()));
     let presence = Arc::new(RoomPresenceStore::new(redis.clone()));
     let hub = Hub::new();
-    let cache_prefix = std::env::var("CACHE_PREFIX")
-        .unwrap_or_else(|_| "blindall_cache_".into());
-    let audius_app_name = std::env::var("AUDIUS_APP_NAME")
-        .unwrap_or_else(|_| "blindall".into());
+    let cache_prefix = std::env::var("CACHE_PREFIX").unwrap_or_else(|_| "blindall_cache_".into());
+    let audius_app_name = std::env::var("AUDIUS_APP_NAME").unwrap_or_else(|_| "blindall".into());
     let resolver = Arc::new(blindall_providers::ProviderResolver::new(
-        redis.clone(), &cache_prefix, &audius_app_name,
+        redis.clone(),
+        &cache_prefix,
+        &audius_app_name,
     ));
     let providers = std::sync::Arc::new(blindall_providers::MusicProviders::new(
         blindall_providers::ProvidersConfig {
@@ -77,8 +76,7 @@ async fn main() -> anyhow::Result<()> {
         std::env::var("STORAGE_ROOT")
             .unwrap_or_else(|_| "storage/app".into())
             .into(),
-        std::env::var("STORAGE_PUBLIC_PREFIX")
-            .unwrap_or_else(|_| "/storage".into()),
+        std::env::var("STORAGE_PUBLIC_PREFIX").unwrap_or_else(|_| "/storage".into()),
     );
     let photo_prefix = storage.url("").trim_end_matches('/').to_string();
     let manager = GameManager::new(
@@ -139,14 +137,11 @@ async fn main() -> anyhow::Result<()> {
                 .unwrap_or(587),
             username: std::env::var("MAIL_USERNAME").unwrap_or_default(),
             password: std::env::var("MAIL_PASSWORD").unwrap_or_default(),
-            encryption: std::env::var("MAIL_ENCRYPTION")
-                .unwrap_or_else(|_| "tls".into()),
+            encryption: std::env::var("MAIL_ENCRYPTION").unwrap_or_else(|_| "tls".into()),
             from_email: std::env::var("MAIL_FROM_ADDRESS")
                 .unwrap_or_else(|_| "no-reply@blindallmusic.com".into()),
-            from_name: std::env::var("MAIL_FROM_NAME")
-                .unwrap_or_else(|_| "Blind'All Music".into()),
-            app_url: std::env::var("APP_URL")
-                .unwrap_or_else(|_| "http://localhost:8080".into()),
+            from_name: std::env::var("MAIL_FROM_NAME").unwrap_or_else(|_| "Blind'All Music".into()),
+            app_url: std::env::var("APP_URL").unwrap_or_else(|_| "http://localhost:8080".into()),
         },
         app_key,
         minigames: blindall_db::MinigameRepo::new(pool.clone(), resolver),
@@ -164,8 +159,18 @@ async fn main() -> anyhow::Result<()> {
         oauth: {
             let mut providers = std::collections::HashMap::new();
             for (name, id_vars, secret_vars, redirect_var) in [
-                ("google", &["GOOGLE_CLIENT_ID"][..], &["GOOGLE_CLIENT_SECRET"][..], "GOOGLE_REDIRECT_URI"),
-                ("discord", &["DISCORD_APP_ID"][..], &["DISCORD_APP_SECRET"][..], "DISCORD_REDIRECT_URI"),
+                (
+                    "google",
+                    &["GOOGLE_CLIENT_ID"][..],
+                    &["GOOGLE_CLIENT_SECRET"][..],
+                    "GOOGLE_REDIRECT_URI",
+                ),
+                (
+                    "discord",
+                    &["DISCORD_APP_ID"][..],
+                    &["DISCORD_APP_SECRET"][..],
+                    "DISCORD_REDIRECT_URI",
+                ),
             ] {
                 let env_first = |names: &[&str]| {
                     names
@@ -195,8 +200,7 @@ async fn main() -> anyhow::Result<()> {
             .into(),
         storage_prefix: std::env::var("STORAGE_PUBLIC_PREFIX")
             .unwrap_or_else(|_| "/storage".into()),
-        app_url: std::env::var("APP_URL")
-            .unwrap_or_else(|_| "http://localhost:8080".into()),
+        app_url: std::env::var("APP_URL").unwrap_or_else(|_| "http://localhost:8080".into()),
         seo: blindall_db::SeoRepo::new(pool.clone()),
         home: blindall_db::HomeRepo::new(pool.clone()),
         hidden_category_ids: std::env::var("HIDDEN_CATEGORY_IDS")
@@ -213,8 +217,7 @@ async fn main() -> anyhow::Result<()> {
             if let Ok(v) = std::env::var("STRIPE_DONATION_URL") {
                 cfg.stripe_payment_url = v;
             }
-            cfg.stripe_webhook_secret =
-                std::env::var("STRIPE_WEBHOOK_SECRET").unwrap_or_default();
+            cfg.stripe_webhook_secret = std::env::var("STRIPE_WEBHOOK_SECRET").unwrap_or_default();
             cfg
         },
         adsense_client: std::env::var("ADSENSE_CLIENT_ID").unwrap_or_default(),
@@ -223,9 +226,9 @@ async fn main() -> anyhow::Result<()> {
             .unwrap_or_else(|_| "web/dist".into())
             .into(),
         chat_reaction_emojis: [
-            "👍", "😂", "❤️", "🔥", "😮", "😢", "👏", "😡", "🎉", "😎",
-            "🤔", "🙌", "💯", "🎵", "🥁", "🎸", "🎤", "🎻", "🎺", "🎷",
-            "🎶", "😊", "😃", "😞", "😉", "😛", "😲", "😘", "😕", "🤑",
+            "👍", "😂", "❤️", "🔥", "😮", "😢", "👏", "😡", "🎉", "😎", "🤔", "🙌", "💯", "🎵",
+            "🥁", "🎸", "🎤", "🎻", "🎺", "🎷", "🎶", "😊", "😃", "😞", "😉", "😛", "😲", "😘",
+            "😕", "🤑",
         ]
         .iter()
         .map(|s| s.to_string())

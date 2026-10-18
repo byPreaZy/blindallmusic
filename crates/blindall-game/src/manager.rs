@@ -4,7 +4,7 @@ use crate::store::{PresenceStore, ScoreStore};
 use blindall_realtime::Hub;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 
 #[derive(Clone)]
 pub struct GameManager {

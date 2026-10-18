@@ -1,9 +1,9 @@
 use crate::state::AppState;
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -40,21 +40,85 @@ pub async fn page(
 fn format_long_date(dt: chrono::DateTime<chrono::Utc>, locale: &str) -> String {
     use chrono::Datelike;
     const DAYS: [[&str; 7]; 3] = [
-        ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-        ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"],
-        ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"],
+        [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+        ],
+        [
+            "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche",
+        ],
+        [
+            "lunes",
+            "martes",
+            "miércoles",
+            "jueves",
+            "viernes",
+            "sábado",
+            "domingo",
+        ],
     ];
     const MONTHS: [[&str; 12]; 3] = [
-        ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
-        ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"],
-        ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"],
+        [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ],
+        [
+            "janvier",
+            "février",
+            "mars",
+            "avril",
+            "mai",
+            "juin",
+            "juillet",
+            "août",
+            "septembre",
+            "octobre",
+            "novembre",
+            "décembre",
+        ],
+        [
+            "enero",
+            "febrero",
+            "marzo",
+            "abril",
+            "mayo",
+            "junio",
+            "julio",
+            "agosto",
+            "septiembre",
+            "octubre",
+            "noviembre",
+            "diciembre",
+        ],
     ];
-    let idx = match locale { "fr" => 1, "es" => 2, _ => 0 };
+    let idx = match locale {
+        "fr" => 1,
+        "es" => 2,
+        _ => 0,
+    };
     let wd = dt.weekday().num_days_from_monday() as usize;
     let mo = dt.month0() as usize;
     format!(
         "{} {} {} {} {}",
-        DAYS[idx][wd], dt.day(), MONTHS[idx][mo], dt.year(),
+        DAYS[idx][wd],
+        dt.day(),
+        MONTHS[idx][mo],
+        dt.year(),
         dt.format("%H:%M:%S")
     )
 }

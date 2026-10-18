@@ -112,7 +112,10 @@ pub fn update_elos_for_round(
         .iter()
         .filter(|p| {
             let input = players.get(&p.user_id);
-            let pct = participation_pct(input.map(|i| i.tracks_played).unwrap_or(0), total_tracks_in_round);
+            let pct = participation_pct(
+                input.map(|i| i.tracks_played).unwrap_or(0),
+                total_tracks_in_round,
+            );
             pct >= MIN_TRACKS_PLAYED_PERCENTAGE && !input.map(|i| i.is_guest).unwrap_or(false)
         })
         .map(|p| p.user_id)

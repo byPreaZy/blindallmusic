@@ -7,8 +7,7 @@ use std::sync::Arc;
 
 #[async_trait::async_trait]
 pub trait ChannelAuthorizer: Send + Sync {
-    async fn authorize(&self, user_id: i64, channel: &str)
-        -> Result<Option<Value>, AuthzError>;
+    async fn authorize(&self, user_id: i64, channel: &str) -> Result<Option<Value>, AuthzError>;
 }
 
 #[derive(Debug)]
@@ -16,12 +15,7 @@ pub struct AuthzError {
     pub code: &'static str,
 }
 
-pub async fn serve<A: ChannelAuthorizer>(
-    socket: WebSocket,
-    hub: Hub,
-    authz: Arc<A>,
-    user_id: i64,
-) {
+pub async fn serve<A: ChannelAuthorizer>(socket: WebSocket, hub: Hub, authz: Arc<A>, user_id: i64) {
     let (mut ws_tx, mut ws_rx) = socket.split();
     let (mut conn, mut outbound) = hub.connect(user_id);
     let conn_id = conn.id;

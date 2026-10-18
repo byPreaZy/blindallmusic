@@ -36,9 +36,7 @@ async fn track(owner: &Client, playlist_id: i64) -> i64 {
 async fn playlist_store_validation() {
     let (owner, _) = Client::register("pl").await;
     for name in ["", &"x".repeat(51)] {
-        let r = owner
-            .post("/api/v1/playlists", json!({"name": name}))
-            .await;
+        let r = owner.post("/api/v1/playlists", json!({"name": name})).await;
         assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY, "name={name}");
     }
     let r = owner
@@ -54,7 +52,8 @@ async fn playlist_index_lists_mine() {
     let name = uniq_name("mine");
     owner.post("/api/v1/playlists", json!({"name": name})).await;
     let r = owner.get("/api/v1/playlists").await.expect_ok("index");
-    let found = r.json("/playlists")
+    let found = r
+        .json("/playlists")
         .as_array()
         .unwrap()
         .iter()
@@ -70,9 +69,19 @@ async fn playlist_show_shape_and_auth() {
         .get(&format!("/api/v1/playlists/{id}"))
         .await
         .expect_ok("show");
-    for k in ["id", "name", "user_id", "moderators", "total_tracks", "difficulties"] {
-        assert!(r.body["playlist"].get(k).is_some(),
-            "missing playlist.{k}: {}", r.text);
+    for k in [
+        "id",
+        "name",
+        "user_id",
+        "moderators",
+        "total_tracks",
+        "difficulties",
+    ] {
+        assert!(
+            r.body["playlist"].get(k).is_some(),
+            "missing playlist.{k}: {}",
+            r.text
+        );
     }
     assert!(r.body.get("can_edit").is_some() && r.body.get("owned").is_some());
     let r = owner
@@ -127,11 +136,12 @@ async fn track_store_autocreates_artist_and_title_answers() {
         .get(&format!("/api/v1/playlists/{pl}/tracks"))
         .await
         .expect_ok("tracks");
-    assert!(r.text.contains("E2E Artist") && r.text.contains("E2E Song"), "{}", r.text);
-    let r = owner
-        .get("/api/v1/answer-types")
-        .await
-        .expect_ok("types");
+    assert!(
+        r.text.contains("E2E Artist") && r.text.contains("E2E Song"),
+        "{}",
+        r.text
+    );
+    let r = owner.get("/api/v1/answer-types").await.expect_ok("types");
     assert!(r.json("/answer_types").as_array().unwrap().len() >= 2);
 }
 
@@ -228,7 +238,10 @@ async fn answer_crud_and_validation() {
         )
         .await;
     assert!(r.ok(), "create answer: {}", r.text);
-    let aid = r.json("/id").as_i64().unwrap_or_else(|| r.json("/answer/id").as_i64().unwrap());
+    let aid = r
+        .json("/id")
+        .as_i64()
+        .unwrap_or_else(|| r.json("/answer/id").as_i64().unwrap());
 
     let r = owner
         .put(
@@ -329,7 +342,11 @@ async fn playlist_export_csv() {
         .get(&format!("/api/v1/playlists/{pl}/export"))
         .await
         .expect_ok("export");
-    assert!(r.text.contains("E2E") || r.text.contains(';'), "csv: {}", &r.text[..r.text.len().min(300)]);
+    assert!(
+        r.text.contains("E2E") || r.text.contains(';'),
+        "csv: {}",
+        &r.text[..r.text.len().min(300)]
+    );
 }
 
 // ---- answer types -----------------------------------------------------------
@@ -340,8 +357,15 @@ async fn answer_types_list() {
         .get("/api/v1/answer-types")
         .await
         .expect_ok("types");
-    let types = r.json("/answer_types").as_array().cloned().unwrap_or_default();
-    let names: Vec<String> = types.iter().filter_map(|t| t["name"].as_str().map(String::from)).collect();
+    let types = r
+        .json("/answer_types")
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let names: Vec<String> = types
+        .iter()
+        .filter_map(|t| t["name"].as_str().map(String::from))
+        .collect();
     assert!(names.iter().any(|n| n.contains("Artist")), "{names:?}");
     assert!(names.iter().any(|n| n.contains("Title")), "{names:?}");
 }

@@ -55,7 +55,10 @@ impl ItunesClient {
 fn format_track(t: &Value) -> ProviderTrack {
     ProviderTrack {
         provider: "itunes".to_string(),
-        provider_id: t["trackId"].as_i64().map(|i| i.to_string()).unwrap_or_default(),
+        provider_id: t["trackId"]
+            .as_i64()
+            .map(|i| i.to_string())
+            .unwrap_or_default(),
         provider_url: t["trackViewUrl"].as_str().map(str::to_string),
         provider_popularity: 0,
         artist_name: t["artistName"].as_str().map(str::to_string),

@@ -1,6 +1,6 @@
-use serde_json::{json, Value};
-use sqlx::postgres::PgPool;
+use serde_json::{Value, json};
 use sqlx::Row;
+use sqlx::postgres::PgPool;
 use std::collections::HashMap;
 
 #[derive(Clone)]
@@ -71,10 +71,7 @@ impl HomeRepo {
         }
     }
 
-    pub async fn catalog_rooms(
-        &self,
-        is_public: bool,
-    ) -> Result<Vec<CatalogRoom>, sqlx::Error> {
+    pub async fn catalog_rooms(&self, is_public: bool) -> Result<Vec<CatalogRoom>, sqlx::Error> {
         sqlx::query(&format!(
             "SELECT {} FROM rooms r {} WHERE r.is_public = $1 \
              AND r.is_active = true \
@@ -89,10 +86,7 @@ impl HomeRepo {
         .map(|rows| rows.into_iter().map(Self::map).collect())
     }
 
-    pub async fn bookmarked_rooms(
-        &self,
-        user_id: i64,
-    ) -> Result<Vec<CatalogRoom>, sqlx::Error> {
+    pub async fn bookmarked_rooms(&self, user_id: i64) -> Result<Vec<CatalogRoom>, sqlx::Error> {
         sqlx::query(&format!(
             "SELECT {} FROM rooms r {} \
              JOIN bookmarks b ON b.bookmarkable_id = r.id \
@@ -208,15 +202,13 @@ impl HomeRepo {
         .await?
         {
             let room_id: i64 = r.get("room_id");
-            out.entry(room_id).or_insert_with(|| r.get::<i64, _>("current"));
+            out.entry(room_id)
+                .or_insert_with(|| r.get::<i64, _>("current"));
         }
         Ok(out)
     }
 
-    pub async fn tracks_counts(
-        &self,
-        room_ids: &[i64],
-    ) -> Result<HashMap<i64, i64>, sqlx::Error> {
+    pub async fn tracks_counts(&self, room_ids: &[i64]) -> Result<HashMap<i64, i64>, sqlx::Error> {
         if room_ids.is_empty() {
             return Ok(HashMap::new());
         }

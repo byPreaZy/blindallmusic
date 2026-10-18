@@ -1,9 +1,9 @@
 pub mod admin;
 pub mod auth;
-pub mod avatar;
 pub mod auth_reset;
 pub mod auth_session;
 pub mod authz;
+pub mod avatar;
 pub mod category_content;
 pub mod chat;
 pub mod content;
@@ -27,25 +27,28 @@ pub mod seasons;
 pub mod seo;
 pub mod state;
 pub mod storage;
-pub mod users;
 pub mod teams;
+pub mod users;
 pub mod ws;
 
 pub use state::AppState;
 
+use axum::Json;
+use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
-use axum::Json;
-use axum::Router;
 use tower_http::services::{ServeDir, ServeFile};
 
 const PHOTO_UPLOAD_LIMIT: usize = 12 * 1024 * 1024;
 const TRACK_UPLOAD_LIMIT: usize = 16 * 1024 * 1024;
 
 async fn api_not_found() -> impl IntoResponse {
-    (StatusCode::NOT_FOUND, Json(serde_json::json!({"message": "Not Found"})))
+    (
+        StatusCode::NOT_FOUND,
+        Json(serde_json::json!({"message": "Not Found"})),
+    )
 }
 
 async fn html_no_cache(
@@ -91,8 +94,14 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/auth/email/verify/{id}/{hash}",
             get(auth_reset::verify_email),
         )
-        .route("/api/v1/auth/oauth/{provider}/redirect", get(oauth::redirect))
-        .route("/api/v1/auth/oauth/{provider}/callback", get(oauth::callback))
+        .route(
+            "/api/v1/auth/oauth/{provider}/redirect",
+            get(oauth::redirect),
+        )
+        .route(
+            "/api/v1/auth/oauth/{provider}/callback",
+            get(oauth::callback),
+        )
         .route("/auth/redirect/{provider}", get(oauth::redirect_compat))
         .route("/callback/{provider}", get(oauth::callback_compat))
         .route("/api/v1/home", get(home::index))
@@ -101,12 +110,13 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/categories", get(rooms::categories))
         .route(
             "/api/v1/rooms/{id}",
-            get(rooms::show)
-                .put(rooms::update)
-                .delete(rooms::destroy),
+            get(rooms::show).put(rooms::update).delete(rooms::destroy),
         )
         .route("/api/v1/rooms/{id}/edit", get(rooms::edit))
-        .route("/api/v1/rooms/{id}/restore", axum::routing::put(rooms::restore))
+        .route(
+            "/api/v1/rooms/{id}/restore",
+            axum::routing::put(rooms::restore),
+        )
         .route(
             "/api/v1/rooms/{id}/options",
             axum::routing::put(rooms::update_options),
@@ -165,7 +175,10 @@ pub fn router(state: AppState) -> Router {
             axum::routing::put(rooms::mod_track_update_answer)
                 .delete(rooms::mod_track_delete_answer),
         )
-        .route("/api/v1/rooms/{id}/user-count", post(rooms::update_user_count))
+        .route(
+            "/api/v1/rooms/{id}/user-count",
+            post(rooms::update_user_count),
+        )
         .route("/api/v1/rooms/{id}/alert", post(rooms::alert))
         .route("/api/v1/rooms/{id}/suggestion", post(rooms::suggestion))
         .route("/api/v1/ws-ticket", post(crate::auth_session::ws_ticket))
@@ -178,10 +191,7 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/rooms/{id}/presence-left",
             post(rooms::presence_left),
         )
-        .route(
-            "/api/v1/rooms/{id}/public-state",
-            get(rooms::public_state),
-        )
+        .route("/api/v1/rooms/{id}/public-state", get(rooms::public_state))
         .route(
             "/api/v1/rooms/{id}/messages",
             get(chat::history).post(chat::store),
@@ -192,7 +202,10 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/v1/chat/config", get(chat::config))
         .route("/api/v1/messages/{id}/report", post(chat::report))
-        .route("/api/v1/messages/{id}/restore", axum::routing::put(chat::restore))
+        .route(
+            "/api/v1/messages/{id}/restore",
+            axum::routing::put(chat::restore),
+        )
         .route("/api/v1/minigames", get(minigames::index))
         .route(
             "/api/v1/minigames/{game}/leaderboard",
@@ -230,15 +243,12 @@ pub fn router(state: AppState) -> Router {
             post(moderation::unban),
         )
         .route("/api/v1/moderation/users", get(moderation::users))
-        .route("/api/v1/moderation/users/{user}", get(moderation::user_show))
         .route(
-            "/api/v1/moderation/users/{user}/ban",
-            post(moderation::ban),
+            "/api/v1/moderation/users/{user}",
+            get(moderation::user_show),
         )
-        .route(
-            "/api/v1/moderation/moderators",
-            get(moderation::moderators),
-        )
+        .route("/api/v1/moderation/users/{user}/ban", post(moderation::ban))
+        .route("/api/v1/moderation/moderators", get(moderation::moderators))
         .route(
             "/api/v1/moderation/moderators/rooms/{room}/users/{user}",
             axum::routing::delete(moderation::detach_room_moderator),
@@ -247,7 +257,10 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/moderation/moderators/playlists/{playlist}/users/{user}",
             axum::routing::delete(moderation::detach_playlist_moderator),
         )
-        .route("/api/v1/admin/users", get(admin::users).post(admin::create_user))
+        .route(
+            "/api/v1/admin/users",
+            get(admin::users).post(admin::create_user),
+        )
         .route(
             "/api/v1/admin/users/{user}",
             axum::routing::put(admin::update_user).delete(admin::delete_user),
@@ -278,7 +291,10 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/admin/playlists/{id}",
             axum::routing::put(admin::update_playlist).delete(admin::destroy_playlist),
         )
-        .route("/api/v1/admin/rooms", get(admin::rooms).post(admin::create_room))
+        .route(
+            "/api/v1/admin/rooms",
+            get(admin::rooms).post(admin::create_room),
+        )
         .route(
             "/api/v1/admin/rooms/{id}",
             axum::routing::put(admin::update_room).delete(admin::destroy_room),
@@ -312,7 +328,10 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/admin/answer-types/{id}",
             axum::routing::put(admin::update_answer_type).delete(admin::delete_answer_type),
         )
-        .route("/api/v1/admin/pages", get(admin::pages).post(admin::create_page))
+        .route(
+            "/api/v1/admin/pages",
+            get(admin::pages).post(admin::create_page),
+        )
         .route(
             "/api/v1/admin/pages/{id}",
             axum::routing::put(admin::update_page).delete(admin::delete_page),
@@ -326,10 +345,7 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/providers/local/search/track",
             get(local_tracks::search),
         )
-        .route(
-            "/api/v1/moderation/tracks",
-            get(local_tracks::index),
-        )
+        .route("/api/v1/moderation/tracks", get(local_tracks::index))
         .route(
             "/api/v1/moderation/tracks/{id}",
             axum::routing::put(local_tracks::update).delete(local_tracks::destroy),
@@ -356,13 +372,15 @@ pub fn router(state: AppState) -> Router {
         .route("/sitemap.xml", get(seo::sitemap))
         .route(
             "/contact",
-            post(content::contact)
-                .get_service(ServeFile::new(state.spa_dir.join("index.html"))),
+            post(content::contact).get_service(ServeFile::new(state.spa_dir.join("index.html"))),
         )
         .route("/stripe/webhook", post(donations::stripe_webhook))
         .route("/api/v1/faqs", get(faqs::index))
         .route("/api/v1/faqs/{id}/vote/{direction}", post(faqs::vote))
-        .route("/api/v1/admin/faqs", get(admin::faqs).post(admin::create_faq))
+        .route(
+            "/api/v1/admin/faqs",
+            get(admin::faqs).post(admin::create_faq),
+        )
         .route(
             "/api/v1/admin/faqs/{id}",
             axum::routing::put(admin::update_faq).delete(admin::delete_faq),
@@ -386,11 +404,11 @@ pub fn router(state: AppState) -> Router {
             post(teams::update_photo).layer(DefaultBodyLimit::max(PHOTO_UPLOAD_LIMIT)),
         )
         .route("/api/v1/teams/{id}/request", post(teams::request_join))
-        .route("/api/v1/teams/{id}/request/cancel", post(teams::cancel_request))
         .route(
-            "/api/v1/teams/{id}/owner/{uid}",
-            post(teams::switch_owner),
+            "/api/v1/teams/{id}/request/cancel",
+            post(teams::cancel_request),
         )
+        .route("/api/v1/teams/{id}/owner/{uid}", post(teams::switch_owner))
         .route(
             "/api/v1/teams/{id}/members/{uid}/remove",
             post(teams::remove_member),
@@ -415,7 +433,10 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/profile/{user}/score-evolution",
             get(profiles::score_evolution),
         )
-        .route("/api/v1/profile/{user}/highlights", get(profiles::highlights))
+        .route(
+            "/api/v1/profile/{user}/highlights",
+            get(profiles::highlights),
+        )
         .route(
             "/api/v1/profile/likes/{track}",
             axum::routing::delete(profiles::unlike_track),
@@ -431,8 +452,14 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/users/notifications/{id}/done",
             post(users::notification_done),
         )
-        .route("/api/v1/users/{id}", post(users::update).delete(users::destroy))
-        .route("/api/v1/users/{id}/password", axum::routing::put(users::update_password))
+        .route(
+            "/api/v1/users/{id}",
+            post(users::update).delete(users::destroy),
+        )
+        .route(
+            "/api/v1/users/{id}/password",
+            axum::routing::put(users::update_password),
+        )
         .route(
             "/api/v1/users/{id}/donation-preferences",
             axum::routing::patch(users::update_donation_preferences),
@@ -491,28 +518,20 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/playlists/{id}/tracks/search",
             get(playlists::search_tracks),
         )
-        .route(
-            "/api/v1/playlists/{id}/export",
-            get(playlists::export),
-        )
+        .route("/api/v1/playlists/{id}/export", get(playlists::export))
         .route(
             "/api/v1/playlists/{id}/moderators",
-            post(playlists::attach_playlist_moderator)
-                .delete(playlists::detach_playlist_moderator),
+            post(playlists::attach_playlist_moderator).delete(playlists::detach_playlist_moderator),
         )
         .route(
             "/api/v1/categories/{slug}/landing",
             get(rooms::category_landing),
         )
         .route("/api/v1/answer-types", get(playlists::answer_types))
-        .route(
-            "/api/v1/tracks/{id}/answers",
-            post(playlists::store_answer),
-        )
+        .route("/api/v1/tracks/{id}/answers", post(playlists::store_answer))
         .route(
             "/api/v1/tracks/{id}/answers/{aid}",
-            axum::routing::put(playlists::update_answer)
-                .delete(playlists::delete_answer),
+            axum::routing::put(playlists::update_answer).delete(playlists::delete_answer),
         )
         .route("/ws", get(ws::handler))
         .route("/healthz", get(|| async { "ok" }))

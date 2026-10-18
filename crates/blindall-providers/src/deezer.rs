@@ -37,7 +37,11 @@ impl DeezerClient {
         let status = resp.status().as_u16();
         if !resp.status().is_success() {
             let body = resp.text().await.unwrap_or_default();
-            return Err(ProviderError::new("deezer", format!("Deezer : {body}"), status));
+            return Err(ProviderError::new(
+                "deezer",
+                format!("Deezer : {body}"),
+                status,
+            ));
         }
         let j = resp.json::<Value>().await.unwrap_or_default();
         let tracks = j["data"]
@@ -66,7 +70,10 @@ impl DeezerClient {
         if status >= 400 || j["error"].is_object() {
             return Err(ProviderError::new(
                 "deezer",
-                format!("Deezer : {}", j["error"]["message"].as_str().unwrap_or("unknown error")),
+                format!(
+                    "Deezer : {}",
+                    j["error"]["message"].as_str().unwrap_or("unknown error")
+                ),
                 if status == 0 { 404 } else { status },
             ));
         }
@@ -79,7 +86,10 @@ impl DeezerClient {
         }))
     }
 
-    pub async fn playlist_tracks(&self, playlist_id: &str) -> Result<Vec<ProviderTrack>, ProviderError> {
+    pub async fn playlist_tracks(
+        &self,
+        playlist_id: &str,
+    ) -> Result<Vec<ProviderTrack>, ProviderError> {
         let mut url = format!(
             "https://api.deezer.com/playlist/{}/tracks?limit=100",
             urlencoded(playlist_id.trim())
@@ -93,13 +103,20 @@ impl DeezerClient {
             })?;
             if !resp.status().is_success() {
                 let body = resp.text().await.unwrap_or_default();
-                return Err(ProviderError::new("deezer", format!("Deezer : {body}"), 502));
+                return Err(ProviderError::new(
+                    "deezer",
+                    format!("Deezer : {body}"),
+                    502,
+                ));
             }
             let j = resp.json::<Value>().await.unwrap_or_default();
             if let Some(err) = j["error"].as_object() {
                 return Err(ProviderError::new(
                     "deezer",
-                    format!("Deezer : {}", err["message"].as_str().unwrap_or("unknown error")),
+                    format!(
+                        "Deezer : {}",
+                        err["message"].as_str().unwrap_or("unknown error")
+                    ),
                     404,
                 ));
             }

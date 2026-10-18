@@ -1,11 +1,11 @@
 use crate::auth::CurrentUser;
 use crate::state::AppState;
 use axum::{
+    Json,
     body::Body,
     extract::{FromRequest, Path, Query, State},
-    http::{header, HeaderValue, StatusCode},
+    http::{HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
-    Json,
 };
 use blindall_game::store::GameStore;
 use serde::Deserialize;
@@ -87,7 +87,12 @@ pub async fn store(
         .name_taken(&artist_name, &track_name, None)
         .await
     {
-        Ok(true) => return err("track_name", "Cette chanson existe déjà dans la base de Blind'All Music."),
+        Ok(true) => {
+            return err(
+                "track_name",
+                "Cette chanson existe déjà dans la base de Blind'All Music.",
+            );
+        }
         Ok(false) => {}
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
@@ -111,7 +116,13 @@ pub async fn store(
     }
     match state
         .local_tracks
-        .create(&artist_name, &track_name, &audio_path, &artwork_path, user.id)
+        .create(
+            &artist_name,
+            &track_name,
+            &audio_path,
+            &artwork_path,
+            user.id,
+        )
         .await
     {
         Ok(id) => (StatusCode::CREATED, Json(json!({"id": id}))).into_response(),
@@ -159,33 +170,31 @@ pub struct SearchQuery {
     term: Option<String>,
 }
 
-pub async fn search(
-    State(state): State<AppState>,
-    Query(q): Query<SearchQuery>,
-) -> Response {
+pub async fn search(State(state): State<AppState>, Query(q): Query<SearchQuery>) -> Response {
     let Some(term) = q.term.filter(|t| !t.is_empty()) else {
         return Json(json!([])).into_response();
     };
     match state.local_tracks.search(&term).await {
         Ok(rows) => {
             let app_url = state.app_url.trim_end_matches('/');
-            Json(json!(rows
-                .iter()
-                .map(|(id, artist, track, artwork_path)| {
-                    let url = format!("{app_url}/api/v1/local-tracks/{id}/audio");
-                    json!({
-                        "provider": "local",
-                        "provider_id": id,
-                        "provider_url": url,
-                        "provider_popularity": 0,
-                        "artist_name": artist,
-                        "track_name": track,
-                        "album_name": null,
-                        "preview_url": url,
-                        "artwork_url": state.storage.url(artwork_path),
+            Json(json!(
+                rows.iter()
+                    .map(|(id, artist, track, artwork_path)| {
+                        let url = format!("{app_url}/api/v1/local-tracks/{id}/audio");
+                        json!({
+                            "provider": "local",
+                            "provider_id": id,
+                            "provider_url": url,
+                            "provider_popularity": 0,
+                            "artist_name": artist,
+                            "track_name": track,
+                            "album_name": null,
+                            "preview_url": url,
+                            "artwork_url": state.storage.url(artwork_path),
+                        })
                     })
-                })
-                .collect::<Vec<_>>()))
+                    .collect::<Vec<_>>()
+            ))
             .into_response()
         }
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),

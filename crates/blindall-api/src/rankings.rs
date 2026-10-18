@@ -1,11 +1,11 @@
 use crate::auth::{CurrentUser, OptionalUser};
 use crate::state::AppState;
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -78,7 +78,9 @@ pub async fn players(
         Ok(v) => v,
         Err(_) => return db_error(),
     };
-    let cache_room = room_id.map(|r| r.to_string()).unwrap_or_else(|| "all".into());
+    let cache_room = room_id
+        .map(|r| r.to_string())
+        .unwrap_or_else(|| "all".into());
     let lb_key = format!("global_leaderboard:v3:{sort}:room:{cache_room}:page:{page}");
     let mut leaderboard = state.rankings_cache.get(&lb_key);
     if leaderboard.is_none() {
@@ -97,8 +99,10 @@ pub async fn players(
     let rooms = state.rankings.official_rooms().await.unwrap_or_default();
     let mut user_context = Value::Null;
     if let Some(u) = user {
-        let ctx_key =
-            format!("global_leaderboard:v3:user:{}:sort:{sort}:room:{cache_room}:context", u.id);
+        let ctx_key = format!(
+            "global_leaderboard:v3:user:{}:sort:{sort}:room:{cache_room}:context",
+            u.id
+        );
         let mut ctx = state.rankings_cache.get(&ctx_key);
         if ctx.is_none() {
             match state.rankings.user_context(u.id, sort, room_id).await {

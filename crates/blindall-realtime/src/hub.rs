@@ -1,9 +1,9 @@
 use crate::protocol::{PresenceKind, ServerOp};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use std::sync::atomic::{AtomicU64, Ordering};
+use tokio::sync::{RwLock, mpsc};
 
 pub type ConnId = u64;
 const OUTBOUND_CAP: usize = 512;
@@ -100,13 +100,11 @@ impl Hub {
 
         {
             let mut channels = self.channels.write().await;
-            let state = channels
-                .entry(channel.to_string())
-                .or_insert(ChannelState {
-                    conns: HashMap::new(),
-                    members: HashMap::new(),
-                    seq: 0,
-                });
+            let state = channels.entry(channel.to_string()).or_insert(ChannelState {
+                conns: HashMap::new(),
+                members: HashMap::new(),
+                seq: 0,
+            });
 
             state
                 .conns
@@ -223,7 +221,8 @@ impl Hub {
     }
 
     async fn broadcast_presence(&self, channel: &str, kind: PresenceKind, users: Vec<Value>) {
-        self.broadcast_presence_except(channel, kind, users, None).await;
+        self.broadcast_presence_except(channel, kind, users, None)
+            .await;
     }
 
     async fn broadcast_presence_except(

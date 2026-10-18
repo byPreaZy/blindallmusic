@@ -1,13 +1,13 @@
 use crate::auth::CurrentUser;
 use crate::state::AppState;
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 fn err(field: &str, msg: &str) -> Response {
     (
@@ -89,7 +89,11 @@ pub async fn update(
     if email.is_empty() || email.len() > 255 || !email.contains('@') {
         return err("email", "validation");
     }
-    let moderator_names = state.auth.reserved_moderator_names().await.unwrap_or_default();
+    let moderator_names = state
+        .auth
+        .reserved_moderator_names()
+        .await
+        .unwrap_or_default();
     if let Err(msg) = crate::auth_session::validate_name(name, &moderator_names) {
         return err("name", msg);
     }
@@ -357,12 +361,12 @@ pub async fn notifications(
         return r;
     }
 
-    let list = state.notifications.unread(user.id, 50).await.unwrap_or_default();
-    let count = state
+    let list = state
         .notifications
-        .unread_count(user.id)
+        .unread(user.id, 50)
         .await
-        .unwrap_or(0);
+        .unwrap_or_default();
+    let count = state.notifications.unread_count(user.id).await.unwrap_or(0);
     Json(json!({"notifications": list, "unread_count": count})).into_response()
 }
 

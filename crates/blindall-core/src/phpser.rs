@@ -36,7 +36,10 @@ pub fn to_php(v: &Value) -> String {
 }
 
 pub fn from_php(input: &str) -> Option<Value> {
-    let mut p = Parser { s: input.as_bytes(), i: 0 };
+    let mut p = Parser {
+        s: input.as_bytes(),
+        i: 0,
+    };
     let v = p.value()?;
     (p.i == input.len()).then_some(v)
 }
@@ -115,7 +118,9 @@ impl<'a> Parser<'a> {
         while self.i < self.s.len() && self.s[self.i] != b {
             self.i += 1;
         }
-        let out = std::str::from_utf8(&self.s[start..self.i]).ok()?.to_string();
+        let out = std::str::from_utf8(&self.s[start..self.i])
+            .ok()?
+            .to_string();
         self.i += 1;
         Some(out)
     }
@@ -137,10 +142,7 @@ mod tests {
     #[test]
     fn list_and_assoc() {
         assert_eq!(to_php(&json!([1, "a"])), "a:2:{i:0;i:1;i:1;s:1:\"a\";}");
-        assert_eq!(
-            to_php(&json!({"user_id": 7})),
-            "a:1:{s:7:\"user_id\";i:7;}"
-        );
+        assert_eq!(to_php(&json!({"user_id": 7})), "a:1:{s:7:\"user_id\";i:7;}");
     }
 
     #[test]

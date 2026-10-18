@@ -1,6 +1,6 @@
-use serde_json::{json, Value};
-use sqlx::postgres::PgPool;
+use serde_json::{Value, json};
 use sqlx::Row;
+use sqlx::postgres::PgPool;
 
 #[derive(Clone)]
 pub struct FaqRepo {

@@ -48,10 +48,7 @@ impl AudiusService {
             .send()
             .await;
         let tracks = match resp {
-            Ok(r) if r.status().is_success() => r
-                .json::<Value>()
-                .await
-                .unwrap_or_default()["data"]
+            Ok(r) if r.status().is_success() => r.json::<Value>().await.unwrap_or_default()["data"]
                 .as_array()
                 .map(|a| {
                     a.iter()
@@ -95,12 +92,7 @@ impl AudiusService {
         if let Some(h) = self.host.read().ok()?.clone() {
             return Some(h);
         }
-        let resp = self
-            .http
-            .get("https://api.audius.co")
-            .send()
-            .await
-            .ok()?;
+        let resp = self.http.get("https://api.audius.co").send().await.ok()?;
         let data = resp.json::<serde_json::Value>().await.ok()?;
         let mut hosts: Vec<String> = data["data"]
             .as_array()?
@@ -116,12 +108,7 @@ impl AudiusService {
 
         let mut picked = hosts.first().cloned();
         for h in &hosts {
-            if let Ok(r) = self
-                .http
-                .get(format!("{h}/v1/health_check"))
-                .send()
-                .await
-            {
+            if let Ok(r) = self.http.get(format!("{h}/v1/health_check")).send().await {
                 if r.status().is_success() {
                     picked = Some(h.clone());
                     break;

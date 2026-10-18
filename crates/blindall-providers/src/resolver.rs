@@ -80,7 +80,13 @@ impl ProviderResolver {
         if let Some(url) = &result {
             let _ = self
                 .redis
-                .set::<(), _, _>(&key, Self::php_ser(url), Some(Expiration::EX(DEEZER_CACHE_TTL)), None, false)
+                .set::<(), _, _>(
+                    &key,
+                    Self::php_ser(url),
+                    Some(Expiration::EX(DEEZER_CACHE_TTL)),
+                    None,
+                    false,
+                )
                 .await;
         }
         result

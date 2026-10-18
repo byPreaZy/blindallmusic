@@ -1,9 +1,9 @@
 use crate::events;
 use crate::store::{GameStore, RoomConfig, StoreError};
+use crate::store::{PresenceStore, ScoreStore};
 use blindall_core::elo::{self, EloPlayerInput};
 use blindall_core::metrics;
 use blindall_core::types::{PodiumEntry, Standing, TrackHistoryEntry};
-use crate::store::{PresenceStore, ScoreStore};
 use blindall_realtime::Hub;
 use chrono::Utc;
 use serde_json::json;
@@ -20,7 +20,17 @@ pub fn spawn(
     photo_prefix: String,
 ) {
     tokio::spawn(async move {
-        if let Err(e) = finalize(round_id, &room, &*store, &scores, &hub, &presence, &photo_prefix).await {
+        if let Err(e) = finalize(
+            round_id,
+            &room,
+            &*store,
+            &scores,
+            &hub,
+            &presence,
+            &photo_prefix,
+        )
+        .await
+        {
             tracing::error!(round_id, error = %e, "round finalization failed");
         }
     });
@@ -93,11 +103,18 @@ async fn finalize(
             team_id: users.get(&uid).and_then(|p| p.team_id),
         })
         .collect();
-    podium.sort_by(|a, b| b.total.partial_cmp(&a.total).unwrap_or(std::cmp::Ordering::Equal));
+    podium.sort_by(|a, b| {
+        b.total
+            .partial_cmp(&a.total)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     calculate_track_positions(&mut tracks_history);
 
-    let round_row = store.round_row(round_id).await?.ok_or(StoreError::NotFound("round"))?;
+    let round_row = store
+        .round_row(round_id)
+        .await?
+        .ok_or(StoreError::NotFound("round"))?;
     if round_row.finished_at.is_none() {
         tracing::warn!(round_id, "finalization skipped : round not finished");
         return Ok(());
@@ -137,10 +154,8 @@ async fn finalize(
                 is_guest: info.is_guest,
                 team_id: info.team_id,
                 tracks_played,
-                placement_rounds_played: store
-                    .placement_rounds_played(uid)
-                    .await
-                    .unwrap_or(0) as usize,
+                placement_rounds_played: store.placement_rounds_played(uid).await.unwrap_or(0)
+                    as usize,
                 win_streak,
                 tracks_history: history,
                 average_response_time: m.average_response_time,
@@ -179,13 +194,8 @@ async fn finalize(
         if room.is_public {
             match store.recalc_user_level(*uid).await {
                 Ok(Some(payload)) => {
-                    hub.broadcast(
-                        &format!("user:{}", uid),
-                        "UserLevelUpdated",
-                        payload,
-                        None,
-                    )
-                    .await;
+                    hub.broadcast(&format!("user:{}", uid), "UserLevelUpdated", payload, None)
+                        .await;
                 }
                 Ok(None) => {}
                 Err(e) => tracing::warn!(user_id = uid, error = %e, "level recalc failed"),
@@ -237,9 +247,7 @@ async fn finalize(
     )
     .await;
 
-    let count = presence
-        .member_count(room.id, Utc::now().timestamp())
-        .await;
+    let count = presence.member_count(room.id, Utc::now().timestamp()).await;
     hub.broadcast(
         &events::public_channel(room.id),
         "RoomPublicState",
@@ -338,7 +346,11 @@ fn teams_podium_json(
         }
     }
     let mut v: Vec<_> = totals.into_iter().collect();
-    v.sort_by(|a, b| b.1 .0.partial_cmp(&a.1 .0).unwrap_or(std::cmp::Ordering::Equal));
+    v.sort_by(|a, b| {
+        b.1.0
+            .partial_cmp(&a.1.0)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     serde_json::Value::Array(
         v.into_iter()
             .map(|(team_id, (total, name, photo_path))| {

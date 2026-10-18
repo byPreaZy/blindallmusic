@@ -12,22 +12,30 @@ async fn team_create_and_show() {
     let r = u.post("/api/v1/teams", json!({"name": name})).await;
     assert!(r.ok(), "create: {}", r.text);
     let id = r.json("/team_id").as_i64().unwrap();
-    let r = u.get(&format!("/api/v1/teams/{id}")).await.expect_ok("show");
+    let r = u
+        .get(&format!("/api/v1/teams/{id}"))
+        .await
+        .expect_ok("show");
     assert_eq!(r.json("/team/name").as_str().unwrap(), name);
 }
 
 #[tokio::test]
 async fn team_guest_cannot_create() {
     let g = Client::guest().await;
-    let r = g.post("/api/v1/teams", json!({"name": uniq_name("t")})).await;
+    let r = g
+        .post("/api/v1/teams", json!({"name": uniq_name("t")}))
+        .await;
     assert_eq!(r.status, StatusCode::FORBIDDEN);
 }
 
 #[tokio::test]
 async fn team_one_per_user() {
     let (u, _) = Client::register("tm").await;
-    u.post("/api/v1/teams", json!({"name": uniq_name("t1")})).await;
-    let r = u.post("/api/v1/teams", json!({"name": uniq_name("t2")})).await;
+    u.post("/api/v1/teams", json!({"name": uniq_name("t1")}))
+        .await;
+    let r = u
+        .post("/api/v1/teams", json!({"name": uniq_name("t2")}))
+        .await;
     assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY, "{}", r.text);
     assert!(r.json("/errors/team").is_array());
 }
@@ -36,9 +44,13 @@ async fn team_one_per_user() {
 async fn team_request_join_flow() {
     let (owner, _) = Client::register("tm").await;
     let (member, _) = Client::register("tm").await;
-    let r = owner.post("/api/v1/teams", json!({"name": uniq_name("t")})).await;
+    let r = owner
+        .post("/api/v1/teams", json!({"name": uniq_name("t")}))
+        .await;
     let id = r.json("/team_id").as_i64().unwrap();
-    let r = member.post_empty(&format!("/api/v1/teams/{id}/request")).await;
+    let r = member
+        .post_empty(&format!("/api/v1/teams/{id}/request"))
+        .await;
     assert!(r.ok(), "request: {}", r.text);
     let r = member
         .post_empty(&format!("/api/v1/teams/{id}/request/cancel"))
@@ -50,20 +62,33 @@ async fn team_request_join_flow() {
 async fn team_leave() {
     let (owner, _) = Client::register("tm").await;
     let (member, _) = Client::register("tm").await;
-    let r = owner.post("/api/v1/teams", json!({"name": uniq_name("t")})).await;
+    let r = owner
+        .post("/api/v1/teams", json!({"name": uniq_name("t")}))
+        .await;
     let id = r.json("/team_id").as_i64().unwrap();
     let r = owner.post_empty(&format!("/api/v1/teams/{id}/leave")).await;
     assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY, "{}", r.text);
     assert!(r.json("/errors/team").is_array());
-    let r = member.post_empty(&format!("/api/v1/teams/{id}/request")).await;
+    let r = member
+        .post_empty(&format!("/api/v1/teams/{id}/request"))
+        .await;
     assert!(r.ok(), "request: {}", r.text);
-    let show = owner.get(&format!("/api/v1/teams/{id}")).await.expect_ok("show");
-    let req_id = show.json("/team/requests/0/id").as_i64()
+    let show = owner
+        .get(&format!("/api/v1/teams/{id}"))
+        .await
+        .expect_ok("show");
+    let req_id = show
+        .json("/team/requests/0/id")
+        .as_i64()
         .or_else(|| show.json("/requests/0/id").as_i64());
     if let Some(req) = req_id {
-        let r = owner.post_empty(&format!("/api/v1/teams/requests/{req}/accept")).await;
+        let r = owner
+            .post_empty(&format!("/api/v1/teams/requests/{req}/accept"))
+            .await;
         assert!(r.ok(), "accept: {}", r.text);
-        let r = member.post_empty(&format!("/api/v1/teams/{id}/leave")).await;
+        let r = member
+            .post_empty(&format!("/api/v1/teams/{id}/leave"))
+            .await;
         assert!(r.ok(), "member leave: {}", r.text);
     }
 }
@@ -77,9 +102,11 @@ async fn team_index_search() {
         .get(&format!("/api/v1/teams?search={name}"))
         .await
         .expect_ok("index");
-    let found = r.json("/teams").as_array().map(|a| {
-        a.iter().any(|t| t["name"].as_str().unwrap_or("") == name)
-    }).unwrap_or(false);
+    let found = r
+        .json("/teams")
+        .as_array()
+        .map(|a| a.iter().any(|t| t["name"].as_str().unwrap_or("") == name))
+        .unwrap_or(false);
     assert!(found, "{}", r.text);
 }
 
@@ -90,7 +117,14 @@ async fn users_me_shape() {
     let (u, _) = Client::register("um").await;
     let r = u.get("/api/v1/users/me").await.expect_ok("me");
     let acc = &r.body["account"];
-    for k in ["id", "name", "email", "stats", "donation_summary", "is_supporter"] {
+    for k in [
+        "id",
+        "name",
+        "email",
+        "stats",
+        "donation_summary",
+        "is_supporter",
+    ] {
         assert!(acc.get(k).is_some(), "missing account.{k}: {}", r.text);
     }
 }
@@ -166,7 +200,10 @@ async fn users_password_update_flow() {
 #[tokio::test]
 async fn users_notifications_shape() {
     let (u, _) = Client::register("um").await;
-    let r = u.get("/api/v1/users/notifications").await.expect_ok("notifs");
+    let r = u
+        .get("/api/v1/users/notifications")
+        .await
+        .expect_ok("notifs");
     assert!(r.body.is_object(), "{}", r.text);
 }
 
@@ -194,12 +231,22 @@ async fn profile_404_unknown() {
 #[tokio::test]
 async fn profile_scores_and_likes() {
     let (u, _) = Client::register("pf").await;
-    for ep in ["scores", "likes", "bookmarks", "highlights", "score-evolution"] {
+    for ep in [
+        "scores",
+        "likes",
+        "bookmarks",
+        "highlights",
+        "score-evolution",
+    ] {
         let r = Client::anon()
             .get(&format!("/api/v1/profile/{}/{ep}", u.user_id))
             .await;
-        assert!(r.status.is_success() || r.status == StatusCode::NOT_FOUND,
-            "{ep}: {} {}", r.status, r.text);
+        assert!(
+            r.status.is_success() || r.status == StatusCode::NOT_FOUND,
+            "{ep}: {} {}",
+            r.status,
+            r.text
+        );
     }
 }
 
@@ -207,7 +254,10 @@ async fn profile_scores_and_likes() {
 
 #[tokio::test]
 async fn rankings_players_shape() {
-    let r = Client::anon().get("/api/v1/rankings?sort=elo").await.expect_ok("rankings");
+    let r = Client::anon()
+        .get("/api/v1/rankings?sort=elo")
+        .await
+        .expect_ok("rankings");
     let lb = &r.body["leaderboard"];
     assert!(lb["data"].is_array(), "leaderboard.data");
     assert!(lb["current_page"].is_number(), "paginator");

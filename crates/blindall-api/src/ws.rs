@@ -26,11 +26,7 @@ pub async fn handler(
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let authz = Arc::new(RoomChannelAuthorizer {
-        app: state.clone(),
-    });
+    let authz = Arc::new(RoomChannelAuthorizer { app: state.clone() });
     let hub = state.hub.clone();
-    Ok(ws.on_upgrade(move |socket| {
-        blindall_realtime::ws::serve(socket, hub, authz, user_id)
-    }))
+    Ok(ws.on_upgrade(move |socket| blindall_realtime::ws::serve(socket, hub, authz, user_id)))
 }

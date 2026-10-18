@@ -1,6 +1,11 @@
 use crate::types::{ProviderError, ProviderTrack, ProvidersConfig};
-use crate::{audius::AudiusService, deezer::DeezerClient, itunes::ItunesClient,
-            spotify::SpotifyClient, youtube::{YouTubeApiClient, YouTubeScrapeClient}};
+use crate::{
+    audius::AudiusService,
+    deezer::DeezerClient,
+    itunes::ItunesClient,
+    spotify::SpotifyClient,
+    youtube::{YouTubeApiClient, YouTubeScrapeClient},
+};
 use fred::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -63,8 +68,11 @@ impl MusicProviders {
             }
         }
 
-        let mut futs: Vec<std::pin::Pin<Box<dyn std::future::Future<Output = crate::types::ProviderResult> + Send>>> =
-            Vec::new();
+        let mut futs: Vec<
+            std::pin::Pin<
+                Box<dyn std::future::Future<Output = crate::types::ProviderResult> + Send>,
+            >,
+        > = Vec::new();
         for p in providers {
             match *p {
                 "itunes" => futs.push(Box::pin(self.itunes.search_track(term))),
@@ -84,9 +92,9 @@ impl MusicProviders {
         for res in futures::future::join_all(futs).await {
             match res {
                 Ok(tracks) => results.extend(
-                    tracks.into_iter().filter(|t| {
-                        !t.provider_id.is_empty() && t.preview_url.is_some()
-                    }),
+                    tracks
+                        .into_iter()
+                        .filter(|t| !t.provider_id.is_empty() && t.preview_url.is_some()),
                 ),
                 Err(e) => errors.push(e),
             }

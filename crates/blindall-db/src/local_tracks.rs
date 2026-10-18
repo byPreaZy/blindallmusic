@@ -1,6 +1,6 @@
-use serde_json::{json, Value};
-use sqlx::postgres::PgPool;
+use serde_json::{Value, json};
 use sqlx::Row;
+use sqlx::postgres::PgPool;
 
 #[derive(Clone)]
 pub struct LocalTrackRepo {
@@ -54,7 +54,6 @@ impl LocalTrackRepo {
         .bind(now)
         .fetch_one(&self.pool)
         .await
-        
     }
 
     pub async fn search(
@@ -166,12 +165,10 @@ impl LocalTrackRepo {
     }
 
     pub async fn linked_track_ids(&self, id: i64) -> Result<Vec<i64>, sqlx::Error> {
-        sqlx::query_scalar(
-            "SELECT id FROM tracks WHERE provider = 'local' AND provider_id = $1",
-        )
-        .bind(id.to_string())
-        .fetch_all(&self.pool)
-        .await
+        sqlx::query_scalar("SELECT id FROM tracks WHERE provider = 'local' AND provider_id = $1")
+            .bind(id.to_string())
+            .fetch_all(&self.pool)
+            .await
     }
 
     pub async fn update(

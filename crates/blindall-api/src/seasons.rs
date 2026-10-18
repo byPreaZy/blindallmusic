@@ -1,11 +1,11 @@
 use crate::auth::OptionalUser;
 use crate::state::AppState;
+use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 fn db_error() -> Response {
     StatusCode::INTERNAL_SERVER_ERROR.into_response()

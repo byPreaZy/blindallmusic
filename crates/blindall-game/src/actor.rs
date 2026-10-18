@@ -2,18 +2,20 @@ use crate::events;
 use crate::finalize;
 use crate::store::{GameStore, GameTrack, PresenceStore, RoomConfig, RoundRow, ScoreStore};
 use blindall_core::scoring::{self, CheckOutcome, CheckRequest};
-use blindall_redis::scores::TrackRecord;
 use blindall_realtime::Hub;
+use blindall_redis::scores::TrackRecord;
 use chrono::Utc;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
-use tokio::time::{sleep_until, Instant, Sleep};
-use std::pin::Pin;
+use tokio::time::{Instant, Sleep, sleep_until};
 
 pub enum RoomCommand {
-    Start { user_id: Option<i64> },
+    Start {
+        user_id: Option<i64>,
+    },
     Pause,
     Resume,
     Stop,
@@ -25,10 +27,19 @@ pub enum RoomCommand {
         current_time: f64,
         reply: oneshot::Sender<CheckOutcome>,
     },
-    TrackListened { user_id: i64, track_id: i64 },
-    UpdateConfig { cfg: RoomConfig },
-    Snapshot { reply: oneshot::Sender<RoomSnapshot> },
-    Recover { round: RoundRow },
+    TrackListened {
+        user_id: i64,
+        track_id: i64,
+    },
+    UpdateConfig {
+        cfg: RoomConfig,
+    },
+    Snapshot {
+        reply: oneshot::Sender<RoomSnapshot>,
+    },
+    Recover {
+        round: RoundRow,
+    },
     Shutdown,
 }
 
@@ -150,7 +161,9 @@ impl RoomActor {
                 current_time,
                 reply,
             } => {
-                let out = self.check_answer(user_id, track_id, text, client_words, current_time).await;
+                let out = self
+                    .check_answer(user_id, track_id, text, client_words, current_time)
+                    .await;
                 let _ = reply.send(out);
             }
             RoomCommand::TrackListened { user_id, track_id } => {
@@ -203,7 +216,11 @@ impl RoomActor {
             if r.tracks.is_empty() && r.finished_at.is_none() {
                 r.id // PHP reuses an empty round row if present
             } else {
-                match self.store.create_round(self.room.id, user_id, &tracks).await {
+                match self
+                    .store
+                    .create_round(self.room.id, user_id, &tracks)
+                    .await
+                {
                     Ok(id) => id,
                     Err(e) => {
                         tracing::error!(room = self.room.id, error = %e, "create_round failed");
@@ -212,7 +229,11 @@ impl RoomActor {
                 }
             }
         } else {
-            match self.store.create_round(self.room.id, user_id, &tracks).await {
+            match self
+                .store
+                .create_round(self.room.id, user_id, &tracks)
+                .await
+            {
                 Ok(id) => id,
                 Err(e) => {
                     tracing::error!(room = self.room.id, error = %e, "create_round failed");
@@ -234,9 +255,11 @@ impl RoomActor {
                 current_track_started_at: None,
             });
             let room_v = self.room_payload().await;
-            self.broadcast("RoundFinished", events::round_finished(
-                self.round.as_ref().unwrap(), &room_v, json!([]), json!([]),
-            )).await;
+            self.broadcast(
+                "RoundFinished",
+                events::round_finished(self.round.as_ref().unwrap(), &room_v, json!([]), json!([])),
+            )
+            .await;
             self.broadcast_public_state().await;
             tracing::warn!(room = self.room.id, "no tracks : round aborted");
             return;
@@ -254,7 +277,11 @@ impl RoomActor {
         });
 
         let room_v = self.room_payload().await;
-        self.broadcast("RoundStarted", events::round_started(self.round.as_ref().unwrap(), &room_v)).await;
+        self.broadcast(
+            "RoundStarted",
+            events::round_started(self.round.as_ref().unwrap(), &room_v),
+        )
+        .await;
         self.broadcast_public_state().await;
 
         self.play_next_track().await;
@@ -371,7 +398,8 @@ impl RoomActor {
         }
         self.phase = Phase::Paused { resume_in };
         self.arm_timer();
-        self.broadcast("TrackPaused", json!({"room_id": self.room.id})).await;
+        self.broadcast("TrackPaused", json!({"room_id": self.room.id}))
+            .await;
     }
 
     async fn resume(&mut self) {
@@ -379,17 +407,22 @@ impl RoomActor {
         self.phase = match self.phase {
             Phase::Paused {
                 resume_in: ResumeKind::Playing { remaining },
-            } => Phase::Playing { ends_at: now + remaining },
+            } => Phase::Playing {
+                ends_at: now + remaining,
+            },
             Phase::Paused {
                 resume_in: ResumeKind::InterTrack { remaining },
-            } => Phase::InterTrack { next_at: now + remaining },
+            } => Phase::InterTrack {
+                next_at: now + remaining,
+            },
             _ => return,
         };
         if let Some(r) = self.round.as_mut() {
             r.is_playing = true;
         }
         self.arm_timer();
-        self.broadcast("TrackResumed", json!({"room_id": self.room.id})).await;
+        self.broadcast("TrackResumed", json!({"room_id": self.room.id}))
+            .await;
     }
 
     async fn stop(&mut self) {
@@ -445,7 +478,11 @@ impl RoomActor {
             }
             Phase::Finalizing { .. } => {
                 if self.room.is_autostart
-                    && self.hub.channel_conn_count(&events::room_channel(self.room.id)).await > 0
+                    && self
+                        .hub
+                        .channel_conn_count(&events::room_channel(self.room.id))
+                        .await
+                        > 0
                 {
                     self.start_round(None).await;
                 } else {
@@ -550,10 +587,22 @@ impl RoomActor {
         .await
         .unwrap_or(CheckOutcome::Bad);
 
-        if let CheckOutcome::Good { answers, total_score, found_all } = &outcome {
+        if let CheckOutcome::Good {
+            answers,
+            total_score,
+            found_all,
+        } = &outcome
+        {
             self.broadcast(
                 "NewScore",
-                events::new_score(room_id, user_id, track_id, answers, *total_score, current_time),
+                events::new_score(
+                    room_id,
+                    user_id,
+                    track_id,
+                    answers,
+                    *total_score,
+                    current_time,
+                ),
             )
             .await;
             if *found_all {
@@ -688,13 +737,11 @@ impl scoring::ScoreBackend for RedisBackend {
         let store = self.store.clone();
         let round_id = self.round_id;
         match answer_id {
-            Some(_) => self.run(async move {
-                store.record_answer(round_id, user_id, &record).await
-            }),
+            Some(_) => {
+                self.run(async move { store.record_answer(round_id, user_id, &record).await })
+            }
             None => {
-                self.run(async move {
-                    store.record_listened(round_id, user_id, &record).await
-                });
+                self.run(async move { store.record_listened(round_id, user_id, &record).await });
                 true
             }
         }

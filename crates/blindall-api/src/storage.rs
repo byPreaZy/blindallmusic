@@ -26,9 +26,12 @@ impl LocalStorage {
 
     fn resolve(&self, path: &str) -> Option<PathBuf> {
         let p = Path::new(path);
-        if p.components()
-            .any(|c| matches!(c, Component::ParentDir | Component::RootDir | Component::Prefix(_)))
-        {
+        if p.components().any(|c| {
+            matches!(
+                c,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        }) {
             return None;
         }
         Some(self.root.join(p))
@@ -99,14 +102,29 @@ impl S3Storage {
             .trim_end_matches('/')
             .to_string();
         let bucket = env_any(&["S3_BUCKET", "OVH_BUCKET", "CONTABO_BUCKET"])?;
-        let access_key = env_any(&["S3_ACCESS_KEY_ID", "OVH_ACCESS_KEY_ID", "CONTABO_ACCESS_KEY_ID"])?;
-        let secret_key =
-            env_any(&["S3_SECRET_ACCESS_KEY", "OVH_SECRET_ACCESS_KEY", "CONTABO_SECRET_ACCESS_KEY"])?;
-        let region =
-            env_any(&["S3_REGION", "OVH_DEFAULT_REGION", "CONTABO_DEFAULT_REGION", "AWS_DEFAULT_REGION"])
-                .unwrap_or_else(|| "us-east-1".into());
-        let path_style = env_any(&["S3_PATH_STYLE", "OVH_USE_PATH_STYLE_ENDPOINT", "CONTABO_USE_PATH_STYLE_ENDPOINT"])
-            .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+        let access_key = env_any(&[
+            "S3_ACCESS_KEY_ID",
+            "OVH_ACCESS_KEY_ID",
+            "CONTABO_ACCESS_KEY_ID",
+        ])?;
+        let secret_key = env_any(&[
+            "S3_SECRET_ACCESS_KEY",
+            "OVH_SECRET_ACCESS_KEY",
+            "CONTABO_SECRET_ACCESS_KEY",
+        ])?;
+        let region = env_any(&[
+            "S3_REGION",
+            "OVH_DEFAULT_REGION",
+            "CONTABO_DEFAULT_REGION",
+            "AWS_DEFAULT_REGION",
+        ])
+        .unwrap_or_else(|| "us-east-1".into());
+        let path_style = env_any(&[
+            "S3_PATH_STYLE",
+            "OVH_USE_PATH_STYLE_ENDPOINT",
+            "CONTABO_USE_PATH_STYLE_ENDPOINT",
+        ])
+        .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
         let host = endpoint
             .strip_prefix("https://")
             .or_else(|| endpoint.strip_prefix("http://"))
@@ -144,14 +162,22 @@ impl S3Storage {
             .to_string();
         let enc_key = uri_encode(key, true);
         if self.path_style {
-            (host, format!("/{}/{}", uri_encode(&self.bucket, false), enc_key))
+            (
+                host,
+                format!("/{}/{}", uri_encode(&self.bucket, false), enc_key),
+            )
         } else {
             (format!("{}.{}", self.bucket, host), format!("/{enc_key}"))
         }
     }
 
     fn sign(&self, method: &str, key: &str, body: &[u8]) -> (String, Vec<(String, String)>) {
-        self.sign_at(method, key, body, &chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string())
+        self.sign_at(
+            method,
+            key,
+            body,
+            &chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string(),
+        )
     }
 
     fn sign_at(
@@ -179,16 +205,14 @@ impl S3Storage {
             }
         }
         headers.sort();
-        let canonical_headers: String =
-            headers.iter().map(|(k, v)| format!("{k}:{v}\n")).collect();
+        let canonical_headers: String = headers.iter().map(|(k, v)| format!("{k}:{v}\n")).collect();
         let signed_headers: String = headers
             .iter()
             .map(|(k, _)| k.as_str())
             .collect::<Vec<_>>()
             .join(";");
-        let canonical = format!(
-            "{method}\n{uri}\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}"
-        );
+        let canonical =
+            format!("{method}\n{uri}\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}");
         let scope = format!("{datestamp}/{}/s3/aws4_request", self.region);
         let to_sign = format!(
             "AWS4-HMAC-SHA256\n{amzdate}\n{scope}\n{}",
@@ -211,7 +235,11 @@ impl S3Storage {
                 self.access_key
             ),
         ));
-        let scheme = if self.endpoint.starts_with("http://") { "http" } else { "https" };
+        let scheme = if self.endpoint.starts_with("http://") {
+            "http"
+        } else {
+            "https"
+        };
         (format!("{scheme}://{host}{uri}"), headers)
     }
 
@@ -251,7 +279,9 @@ fn uri_encode(s: &str, keep_slash: bool) -> String {
 #[async_trait::async_trait]
 impl Storage for S3Storage {
     async fn put(&self, path: &str, bytes: &[u8]) -> Result<(), std::io::Error> {
-        let resp = self.send(reqwest::Method::PUT, path, bytes.to_vec()).await?;
+        let resp = self
+            .send(reqwest::Method::PUT, path, bytes.to_vec())
+            .await?;
         if resp.status().is_success() {
             Ok(())
         } else {
@@ -350,7 +380,9 @@ impl Storage for UpstreamFallback {
                 let inner = self.inner.clone();
                 let path = path.to_string();
                 let data = bytes.clone();
-                tokio::spawn(async move { let _ = inner.put(&path, &data).await; });
+                tokio::spawn(async move {
+                    let _ = inner.put(&path, &data).await;
+                });
                 Ok(bytes)
             }
         }
@@ -388,7 +420,7 @@ pub async fn serve_stored(
     axum::extract::State(state): axum::extract::State<crate::state::AppState>,
     axum::extract::Path(path): axum::extract::Path<String>,
 ) -> axum::response::Response {
-    use axum::http::{header, StatusCode};
+    use axum::http::{StatusCode, header};
     use axum::response::IntoResponse;
     match state.storage.read(&path).await {
         Ok(bytes) => {
@@ -407,7 +439,13 @@ pub async fn serve_stored(
 }
 
 fn mime_for(path: &str) -> String {
-    match path.rsplit('.').next().unwrap_or("").to_ascii_lowercase().as_str() {
+    match path
+        .rsplit('.')
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
         "webp" => "image/webp",
         "png" => "image/png",
         "jpg" | "jpeg" => "image/jpeg",
@@ -433,7 +471,8 @@ pub fn image_to_webp_contain(bytes: &[u8], w: u32, h: u32) -> Result<Vec<u8>, ()
     let img = image::load_from_memory(bytes).map_err(|_| ())?;
     let img = img.thumbnail(w, h);
     let mut out = std::io::Cursor::new(Vec::new());
-    img.write_to(&mut out, image::ImageFormat::WebP).map_err(|_| ())?;
+    img.write_to(&mut out, image::ImageFormat::WebP)
+        .map_err(|_| ())?;
     Ok(out.into_inner())
 }
 
@@ -485,9 +524,11 @@ mod tests {
 
     #[test]
     fn s3_signature_is_stable() {
-        let (url, headers) =
-            s3(false).sign_at("GET", "photos/a.webp", &[], "20240101T000000Z");
-        assert_eq!(url, "https://blindall.s3.gra.io.cloud.ovh.net/photos/a.webp");
+        let (url, headers) = s3(false).sign_at("GET", "photos/a.webp", &[], "20240101T000000Z");
+        assert_eq!(
+            url,
+            "https://blindall.s3.gra.io.cloud.ovh.net/photos/a.webp"
+        );
         let auth = headers
             .iter()
             .find(|(k, _)| k == "authorization")
@@ -506,7 +547,11 @@ mod tests {
     #[test]
     fn s3_put_signs_acl_header() {
         let (_, headers) = s3(false).sign_at("PUT", "x.webp", b"body", "20240101T000000Z");
-        assert!(headers.iter().any(|(k, v)| k == "x-amz-acl" && v == "public-read"));
+        assert!(
+            headers
+                .iter()
+                .any(|(k, v)| k == "x-amz-acl" && v == "public-read")
+        );
         let auth = &headers.last().unwrap().1;
         assert!(auth.contains("x-amz-acl"), "acl must be in SignedHeaders");
     }

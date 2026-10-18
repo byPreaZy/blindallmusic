@@ -1,8 +1,8 @@
 use chrono::{Datelike, Duration, TimeZone};
 use chrono_tz::Europe::Paris;
-use serde_json::{json, Value};
-use sqlx::postgres::PgPool;
+use serde_json::{Value, json};
 use sqlx::Row;
+use sqlx::postgres::PgPool;
 
 #[derive(Clone)]
 pub struct DonationRepo {
@@ -50,11 +50,10 @@ impl DonationRepo {
         month_key: &str,
         goal_cents: i64,
     ) -> Result<i64, sqlx::Error> {
-        let first: Option<String> = sqlx::query_scalar(
-            "SELECT month_key FROM donations ORDER BY month_key LIMIT 1",
-        )
-        .fetch_optional(&self.pool)
-        .await?;
+        let first: Option<String> =
+            sqlx::query_scalar("SELECT month_key FROM donations ORDER BY month_key LIMIT 1")
+                .fetch_optional(&self.pool)
+                .await?;
         let Some(first) = first.filter(|s| !s.is_empty()) else {
             return Ok(0);
         };
@@ -80,7 +79,9 @@ impl DonationRepo {
         goal_cents: i64,
     ) -> Result<Value, sqlx::Error> {
         let raised = self.raised_cents(month_key).await?;
-        let carryover = self.carryover_cents_before_month(month_key, goal_cents).await?;
+        let carryover = self
+            .carryover_cents_before_month(month_key, goal_cents)
+            .await?;
         Ok(progress_json(month_key, raised, carryover, goal_cents))
     }
 
@@ -152,7 +153,11 @@ impl DonationRepo {
         .await
     }
 
-    pub async fn user_is_supporter(&self, user_id: i64, month_key: &str) -> Result<bool, sqlx::Error> {
+    pub async fn user_is_supporter(
+        &self,
+        user_id: i64,
+        month_key: &str,
+    ) -> Result<bool, sqlx::Error> {
         Ok(sqlx::query_scalar::<_, i64>(
             "SELECT EXISTS(SELECT 1 FROM donations \
              WHERE month_key = $1 AND user_id = $2)::int::bigint",
@@ -211,7 +216,9 @@ impl DonationRepo {
         month_key: &str,
         goal_cents: i64,
     ) -> Result<Vec<Value>, sqlx::Error> {
-        let mut running = self.carryover_cents_before_month(month_key, goal_cents).await?;
+        let mut running = self
+            .carryover_cents_before_month(month_key, goal_cents)
+            .await?;
         let rows = sqlx::query(
             "SELECT d.user_id, d.amount_cents, d.donated_at, d.id, \
              u.name, u.photo_path \
@@ -375,7 +382,9 @@ mod tests {
 
     #[test]
     fn month_keys() {
-        let ts = chrono::Utc.with_ymd_and_hms(2025, 1, 31, 23, 30, 0).unwrap();
+        let ts = chrono::Utc
+            .with_ymd_and_hms(2025, 1, 31, 23, 30, 0)
+            .unwrap();
         assert_eq!(month_key(ts), "2025-02");
         assert_eq!(prev_month_key("2025-03"), Some("2025-02".into()));
         assert_eq!(prev_month_key("2025-01"), Some("2024-12".into()));

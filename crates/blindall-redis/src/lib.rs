@@ -2,8 +2,8 @@ pub mod keys;
 pub mod presence;
 pub mod scores;
 
-pub use scores::RoundScoreStore;
 pub use presence::RoomPresenceStore;
+pub use scores::RoundScoreStore;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RedisError {

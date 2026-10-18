@@ -33,7 +33,13 @@ impl VoteRepo {
         Ok(())
     }
 
-    async fn set_vote(&self, user_id: i64, track_id: i64, votes: i64, reason: Option<&str>) -> Result<(), sqlx::Error> {
+    async fn set_vote(
+        &self,
+        user_id: i64,
+        track_id: i64,
+        votes: i64,
+        reason: Option<&str>,
+    ) -> Result<(), sqlx::Error> {
         let now = chrono::Utc::now();
         let updated = sqlx::query(
             "UPDATE votes SET votes = $1, downvote_reason = $2, updated_at = $3 \
@@ -98,7 +104,11 @@ impl VoteRepo {
         }
     }
 
-    pub async fn payload(&self, track_id: i64, user_id: i64) -> Result<serde_json::Value, sqlx::Error> {
+    pub async fn payload(
+        &self,
+        track_id: i64,
+        user_id: i64,
+    ) -> Result<serde_json::Value, sqlx::Error> {
         let up: i64 = sqlx::query_scalar(
             "SELECT CAST(COALESCE(SUM(votes), 0) AS bigint) FROM votes \
              WHERE votable_type = 'App\\Models\\Track' AND votable_id = $1 AND votes > 0",

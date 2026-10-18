@@ -1,7 +1,7 @@
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde::Deserialize;
 use serde_json::json;
 
@@ -38,7 +38,10 @@ fn sensitive(user: &blindall_db::entities::User) -> bool {
 
 // ---- dashboard -------------------------------------------------------------
 
-pub async fn suggestions(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
+pub async fn suggestions(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
     if !require_moderator(&state, &user).await {
         return forbidden();
     }
@@ -130,7 +133,12 @@ pub async fn banned_users(
     }
     match state
         .moderation
-        .banned_users(q.search.as_deref(), q.page(), q.per_page(), sensitive(&user))
+        .banned_users(
+            q.search.as_deref(),
+            q.page(),
+            q.per_page(),
+            sensitive(&user),
+        )
         .await
     {
         Ok(p) => Json(json!({
@@ -173,7 +181,12 @@ pub async fn users(
     }
     match state
         .moderation
-        .users(q.search.as_deref(), q.page(), q.per_page(), sensitive(&user))
+        .users(
+            q.search.as_deref(),
+            q.page(),
+            q.per_page(),
+            sensitive(&user),
+        )
         .await
     {
         Ok(p) => Json(json!({
@@ -193,7 +206,11 @@ pub async fn user_show(
     if !require_moderator(&state, &user).await {
         return forbidden();
     }
-    match state.moderation.user_detail(user_id, sensitive(&user)).await {
+    match state
+        .moderation
+        .user_detail(user_id, sensitive(&user))
+        .await
+    {
         Ok(Some(v)) => Json(json!({
             "user": v,
             "canViewSensitiveData": sensitive(&user),
@@ -231,8 +248,10 @@ pub async fn ban(
     if body.duration.is_some_and(|d| d < 1) {
         return (
             StatusCode::UNPROCESSABLE_ENTITY,
-            Json(json!({"message": "La durée minimale doit être de 1 minute.",
-                        "errors": {"duration": ["La durée minimale doit être de 1 minute."]}})),
+            Json(
+                json!({"message": "La durée minimale doit être de 1 minute.",
+                        "errors": {"duration": ["La durée minimale doit être de 1 minute."]}}),
+            ),
         )
             .into_response();
     }
@@ -242,7 +261,7 @@ pub async fn ban(
                 StatusCode::UNPROCESSABLE_ENTITY,
                 Json(json!({"error": "Moderation cannot ban staff"})),
             )
-                .into_response()
+                .into_response();
         }
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         Ok(false) => {}

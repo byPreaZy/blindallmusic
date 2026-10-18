@@ -52,7 +52,10 @@ pub fn from_tracks_history(
     for (track_id, acc) in &by_track {
         let found = acc.answer_ids.len();
         total_answers += found as i64;
-        let required = required_answers_per_track.get(track_id).copied().unwrap_or(0);
+        let required = required_answers_per_track
+            .get(track_id)
+            .copied()
+            .unwrap_or(0);
         if required == 0 || found < required {
             continue;
         }

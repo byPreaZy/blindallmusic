@@ -61,10 +61,12 @@ async fn sweep_once(pool: &PgPool, manager: &GameManager, storage_root: &Path) {
 
 async fn delete_stored_file(storage_root: &Path, path: &str) {
     let rel = Path::new(path);
-    if rel
-        .components()
-        .any(|c| matches!(c, Component::ParentDir | Component::RootDir | Component::Prefix(_)))
-    {
+    if rel.components().any(|c| {
+        matches!(
+            c,
+            Component::ParentDir | Component::RootDir | Component::Prefix(_)
+        )
+    }) {
         return;
     }
     let _ = tokio::fs::remove_file(storage_root.join(rel)).await;

@@ -57,7 +57,11 @@ pub async fn send_opts(
     reply_to: Option<&str>,
 ) -> anyhow::Result<()> {
     if !cfg.configured() {
-        tracing::warn!(to = to_email, subject, "mail not configured : email skipped");
+        tracing::warn!(
+            to = to_email,
+            subject,
+            "mail not configured : email skipped"
+        );
         return Ok(());
     }
     let from = Mailbox::new(
@@ -77,11 +81,7 @@ pub async fn send_opts(
     Ok(())
 }
 
-pub async fn send_welcome(
-    cfg: &MailConfig,
-    to_email: &str,
-    to_name: &str,
-) -> anyhow::Result<()> {
+pub async fn send_welcome(cfg: &MailConfig, to_email: &str, to_name: &str) -> anyhow::Result<()> {
     let html = format!(
         "<p>Bienvenue {name}</p>\
          <p>Si tu reçois cet e-mail, cela signifie que tu viens de créer un compte sur blindallmusic.com.</p>\
@@ -92,5 +92,12 @@ pub async fn send_welcome(
         name = to_name,
         url = cfg.app_url.trim_end_matches('/'),
     );
-    send(cfg, to_email, to_name, "Bienvenue sur Blind'All Music", &html).await
+    send(
+        cfg,
+        to_email,
+        to_name,
+        "Bienvenue sur Blind'All Music",
+        &html,
+    )
+    .await
 }
