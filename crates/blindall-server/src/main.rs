@@ -97,6 +97,10 @@ async fn main() -> anyhow::Result<()> {
         std::env::var("STORAGE_ROOT")
             .unwrap_or_else(|_| "storage/app".into())
             .into(),
+        std::sync::Arc::new(blindall_api::levels::LevelDispatcher::new(
+            blindall_db::LevelRepo::new(pool.clone()),
+            hub.clone(),
+        )),
     );
 
     let state = AppState {

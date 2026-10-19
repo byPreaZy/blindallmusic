@@ -58,11 +58,23 @@ impl LevelRepo {
             LevelTrigger::Login => self.update_login(user_id).await?,
             LevelTrigger::Score => {
                 sqlx::query(
-                    "UPDATE user_levels SET score_public_rooms = COALESCE(( \
+                    "UPDATE user_levels SET \
+                     score_public_rooms = COALESCE(( \
                      SELECT SUM(ts.score) FROM total_scores ts \
                      JOIN rooms r ON r.id = ts.room_id AND r.is_public = true \
                      WHERE ts.totalscorable_type = 'App\\Models\\User' \
-                     AND ts.totalscorable_id = $1), 0) \
+                     AND ts.totalscorable_id = $1), 0), \
+                     rounds_played_count = COALESCE(( \
+                     SELECT COUNT(*) FROM round_standings WHERE user_id = $1), 0), \
+                     unique_rooms_played_count = COALESCE(( \
+                     SELECT COUNT(DISTINCT room_id) FROM round_standings \
+                     WHERE user_id = $1), 0), \
+                     best_round_score = COALESCE(( \
+                     SELECT MAX(total_score) FROM round_standings \
+                     WHERE user_id = $1), 0), \
+                     correct_answers_count = COALESCE(( \
+                     SELECT COUNT(*) FROM scores WHERE user_id = $1 \
+                     AND score > 0), 0) \
                      WHERE user_id = $2",
                 )
                 .bind(user_id)

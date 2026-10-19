@@ -527,28 +527,41 @@ pub fn DailyPage() -> impl IntoView {
     let result = RwSignal::new(Option::<Value>::None);
     let checking = RwSignal::new(false);
     let wrong = RwSignal::new(false);
+    let daily_type = RwSignal::new("quiz");
 
-    leptos::task::spawn_local(async move {
-        match api::get::<Value>("/api/v1/daily-challenge?type=quiz").await {
-            Ok(v) => {
-                idx.set(v["answered"].as_i64().unwrap_or(0) as usize);
-                score.set(v["score"].as_i64().unwrap_or(0));
-                total.set(v["total"].as_i64().unwrap_or(0));
-                data.set(Some(v));
+    let load = move |ty: &'static str| {
+        daily_type.set(ty);
+        loading.set(true);
+        data.set(None);
+        result.set(None);
+        wrong.set(false);
+        idx.set(0);
+        score.set(0);
+        total.set(0);
+        leptos::task::spawn_local(async move {
+            match api::get::<Value>(&format!("/api/v1/daily-challenge?type={ty}")).await {
+                Ok(v) => {
+                    idx.set(v["answered"].as_i64().unwrap_or(0) as usize);
+                    score.set(v["score"].as_i64().unwrap_or(0));
+                    total.set(v["total"].as_i64().unwrap_or(0));
+                    data.set(Some(v));
+                }
+                Err(e) => error.set(Some(e.message)),
             }
-            Err(e) => error.set(Some(e.message)),
-        }
-        loading.set(false);
-    });
+            loading.set(false);
+        });
+    };
+    load("quiz");
 
     let submit = move |value: String| {
         if checking.get() || result.get().is_some() {
             return;
         }
         let i = idx.get();
+        let gt = daily_type.get();
         checking.set(true);
         leptos::task::spawn_local(async move {
-            let body = json!({"game_type": "quiz", "idx": i, "value": value});
+            let body = json!({"game_type": gt, "idx": i, "value": value});
             match api::post::<Value, _>("/api/v1/daily-challenge/answer", &body).await {
                 Ok(d) => {
                     wrong.set(!d["correct"].as_bool().unwrap_or(false));
@@ -573,6 +586,25 @@ pub fn DailyPage() -> impl IntoView {
             <A href="/duels" attr:class="mb-6 inline-block text-sm text-white/60 hover:text-white">
                 "← " {t("Back")}
             </A>
+            <div class="mb-5 flex flex-wrap gap-2">
+                {["quiz", "who_sang", "album_cover", "first_letter", "anagram"].into_iter().map(|ty| {
+                    view! {
+                        <button type="button"
+                            class=move || if daily_type.get() == ty {
+                                "rounded-full border border-amber-500/50 bg-amber-500/20 px-3 py-1 text-xs font-semibold text-amber-300"
+                            } else {
+                                "rounded-full border border-white/10 px-3 py-1 text-xs text-white/50 transition hover:border-white/30 hover:text-white"
+                            }
+                            on:click=move |_| {
+                                if daily_type.get() != ty {
+                                    load(ty);
+                                }
+                            }>
+                            {game_name(ty)}
+                        </button>
+                    }
+                }).collect::<Vec<_>>()}
+            </div>
             <Show when=move || loading.get()>
                 <div class="py-24 text-center text-white/50">{t("Loading")}"…"</div>
             </Show>

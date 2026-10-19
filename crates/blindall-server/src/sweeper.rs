@@ -1,20 +1,32 @@
+use blindall_api::levels::LevelDispatcher;
 use blindall_game::GameManager;
 use sqlx::PgPool;
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 
 const SWEEP_INTERVAL: std::time::Duration = std::time::Duration::from_secs(3600);
 
-pub fn spawn(pool: PgPool, manager: GameManager, storage_root: PathBuf) {
+pub fn spawn(
+    pool: PgPool,
+    manager: GameManager,
+    storage_root: PathBuf,
+    levels: Arc<LevelDispatcher>,
+) {
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(SWEEP_INTERVAL);
         loop {
             tick.tick().await;
-            sweep_once(&pool, &manager, &storage_root).await;
+            sweep_once(&pool, &manager, &storage_root, &levels).await;
         }
     });
 }
 
-async fn sweep_once(pool: &PgPool, manager: &GameManager, storage_root: &Path) {
+async fn sweep_once(
+    pool: &PgPool,
+    manager: &GameManager,
+    storage_root: &Path,
+    levels: &LevelDispatcher,
+) {
     let live = manager.live_room_ids().await;
     match blindall_db::maintenance::reset_stuck_rounds(pool, &live).await {
         Ok(n) if n > 0 => tracing::info!(rooms = n, "sweeper: reset stuck rounds"),
@@ -56,6 +68,17 @@ async fn sweep_once(pool: &PgPool, manager: &GameManager, storage_root: &Path) {
         Ok(n) if n > 0 => tracing::info!(deleted = n, "sweeper: purged expired guests"),
         Err(e) => tracing::warn!(error = %e, "sweeper: purge_expired_guests failed"),
         _ => {}
+    }
+    match blindall_db::SeasonRepo::new(pool.clone())
+        .ensure_current()
+        .await
+    {
+        Ok((_, rewarded)) => {
+            for uid in rewarded {
+                levels.dispatch(uid, blindall_db::LevelTrigger::Score);
+            }
+        }
+        Err(e) => tracing::warn!(error = %e, "sweeper: season ensure_current failed"),
     }
 }
 

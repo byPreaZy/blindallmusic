@@ -27,7 +27,7 @@ pub fn RankingsPage() -> impl IntoView {
     let initial_tab = match path.as_str() {
         "/rankings/season" => "season",
         "/rankings/teams" => "teams",
-        "/rankings/minigames" => "players",
+        "/rankings/minigames" => "minigames",
         _ => "players",
     };
     let initial = query.get_untracked();
@@ -41,7 +41,7 @@ pub fn RankingsPage() -> impl IntoView {
         .unwrap_or(0);
     let initial_tab_q = initial
         .get("tab")
-        .filter(|s| ["players", "season", "teams"].contains(&s.as_str()))
+        .filter(|s| ["players", "season", "teams", "minigames"].contains(&s.as_str()))
         .map(|s| s.to_string());
     let tab = RwSignal::new(
         initial_tab_q.unwrap_or_else(|| initial_tab.to_string()),
@@ -154,9 +154,9 @@ pub fn RankingsPage() -> impl IntoView {
                 <nav class="-mb-px flex gap-2 overflow-x-auto" aria-label="Tabs">
                     {move || {
                         let authed = auth.user.get().is_some();
-                        [("players", "/rankings"), ("season", "/rankings/season"), ("teams", "/rankings/teams")]
+                        [("players", "/rankings"), ("season", "/rankings/season"), ("minigames", "/rankings/minigames"), ("teams", "/rankings/teams")]
                             .into_iter()
-                            .filter(|(tb, _)| *tb == "players" || *tb == "season" || authed)
+                            .filter(|(tb, _)| *tb != "teams" || authed)
                             .map(|(tb, href)| {
                                 let tb_s = tb.to_string();
                                 view! {
