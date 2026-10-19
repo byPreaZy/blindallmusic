@@ -191,8 +191,8 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/duels") view=DuelsPage/>
                         <Route path=path!("/duels/:id") view=DuelPlayPage/>
                         <Route path=path!("/daily") view=DailyPage/>
-                        <Route path=path!("/games") view=DuelsPage/>
-                        <Route path=path!("/games/:type") view=DuelsPage/>
+                        <Route path=path!("/games") view=GamesIndexPage/>
+                        <Route path=path!("/games/:type") view=GamePlayPage/>
                         <Route path=path!("/donations") view=DonationsPage/>
                         <Route path=path!("/faq") view=FaqRedirect/>
                         <Route path=path!("/user/banned") view=BannedPage/>
