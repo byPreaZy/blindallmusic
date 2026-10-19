@@ -272,12 +272,13 @@ impl MinigameRepo {
              WHERE t.provider != 'youtube' \
              AND (t.preview_url IS NOT NULL \
                   OR t.provider IN ('spotify','itunes','deezer','audius')) \
-             {} AND t.id >= $2 ORDER BY t.id LIMIT 1",
+             {} {} AND t.id >= $2 ORDER BY t.id LIMIT 1",
             if require_artwork {
                 "AND t.artwork_url IS NOT NULL"
             } else {
                 ""
-            }
+            },
+            generic_filter(answer_type_id),
         );
         sqlx::query(&sql)
             .bind(answer_type_id)
@@ -329,14 +330,15 @@ impl MinigameRepo {
             if out.len() >= count {
                 break;
             }
-            let batch: Vec<String> = sqlx::query_scalar(
+            let batch: Vec<String> = sqlx::query_scalar(&format!(
                 "SELECT ta.value FROM track_answers ta \
                  JOIN tracks t ON t.id = ta.track_id \
                  JOIN playlists p ON p.id = t.playlist_id AND p.is_public = true \
                  WHERE ta.answer_type_id = $1 AND ta.track_id != $2 \
                  AND ta.value IS NOT NULL AND ta.value != $3 AND ta.id >= $4 \
-                 ORDER BY ta.id LIMIT 5",
-            )
+                 {} ORDER BY ta.id LIMIT 5",
+                generic_filter(answer_type_id)
+            ))
             .bind(answer_type_id)
             .bind(exclude_track)
             .bind(exclude_value)
@@ -356,6 +358,29 @@ impl MinigameRepo {
 fn shuffle<T>(v: &mut [T]) {
     use rand::seq::SliceRandom;
     v.shuffle(&mut rand::rng());
+}
+
+/// SQL fragment excluding answer values that are never quiz material:
+/// generic OST/compilation filler titles ("Main Title", "End Credits") and
+/// cover-factory pseudo-artists ("Cartoon Theme Players") — the real answer
+/// is the work name, not the functional label.
+fn generic_filter(answer_type_id: i64) -> &'static str {
+    match answer_type_id {
+        x if x == ANSWER_TYPE_TITLE => concat!(
+            "AND ta.value !~* '^\\m(main titles?|main themes?|title themes?|end titles?",
+            "|end credits?|closing (themes?|credits)|opening (titles?|themes?|credits)",
+            "|love themes?|menu themes?|title screens?|themes? (songs?|from)|generic themes?",
+            "|overtures?|prologues?|epilogues?|finales?|interludes?|preludes?|reprises?",
+            "|medleys?|suites?|intros?|outros?|untitled|bonus tracks?|hidden tracks?",
+            "|silence|blank|track [0-9]+)\\M'"
+        ),
+        x if x == ANSWER_TYPE_ARTIST => concat!(
+            "AND ta.value !~* '(theme players|soundtrack (ensemble|orchestra|players)",
+            "|video game players|animation players|anime players|^\\mtv themes\\M",
+            "|^various artists?\\M|cinematique|movie orchestra|trend orchestra)'"
+        ),
+        _ => "",
+    }
 }
 
 fn anagram_list() -> &'static [(&'static str, &'static str)] {
