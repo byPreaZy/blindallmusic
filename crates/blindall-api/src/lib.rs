@@ -627,9 +627,17 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/v1/version",
             get(|| async {
+                let build = std::env::var("APP_VERSION").unwrap_or_else(|_| "dev".into());
+                // A release tag (vX.Y.Z) is the real product version; a plain
+                // git sha or "dev" falls back to the cargo version.
+                let tag = build.trim_start_matches('v');
+                let is_release = tag.split('.').count() == 3
+                    && tag
+                        .split('.')
+                        .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()));
                 Json(serde_json::json!({
-                    "version": env!("CARGO_PKG_VERSION"),
-                    "build": std::env::var("APP_VERSION").unwrap_or_else(|_| "dev".into()),
+                    "version": if is_release { tag } else { env!("CARGO_PKG_VERSION") },
+                    "build": build,
                 }))
             }),
         )

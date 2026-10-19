@@ -1,7 +1,15 @@
 name: Deploy
 
-# Push sur main -> build de l'image sur le runner GitHub, transfert
-# `docker save | ssh docker load` vers le VPS, puis `compose up`.
+# Push sur main -> tag semver auto (conventional commits), build de l'image
+# avec la version du tag, release GitHub, transfert `docker save | ssh docker
+# load` vers le VPS, puis `compose up`.
+#
+# La version du tag est injectée via BUILD_VERSION -> APP_VERSION ->
+# /api/v1/version -> footer de l'app et cache-busting du service worker.
+#
+# Ordre volontaire : le tag n'est publié qu'après un build réussi, pour ne
+# jamais consommer un numéro de version sur un build cassé.
+#
 # Secrets requis (repo Settings -> Secrets -> Actions) :
 #   VPS_HOST, VPS_USER, VPS_SSH_KEY, ENV_PRODUCTION (contenu de .env.production)
 
@@ -10,11 +18,37 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute next version
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag_prefix: v
+          default_bump: patch
+          release_branches: main
+          create_annotated_tag: false
+          dry_run: true
+
+      - name: Resolved build version
+        id: build_version
+        run: |
+          tag="${{ steps.tag_version.outputs.new_tag }}"
+          echo "value=${tag:-${GITHUB_SHA::8}}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v3
 
@@ -26,9 +60,25 @@ jobs:
           load: true
           tags: blindall:latest
           build-args: |
-            BUILD_VERSION=${{ github.sha }}
+            BUILD_VERSION=${{ steps.build_version.outputs.value }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Tag release
+        if: steps.tag_version.outputs.new_tag != ''
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.tag_version.outputs.new_tag }}"
+          git push origin "${{ steps.tag_version.outputs.new_tag }}"
+
+      - name: GitHub release
+        if: steps.tag_version.outputs.new_tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag_version.outputs.new_tag }}
+          name: ${{ steps.tag_version.outputs.new_tag }}
+          generate_release_notes: true
 
       - name: Deploy to VPS
         env:
