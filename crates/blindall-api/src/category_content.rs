@@ -23,22 +23,22 @@ fn slug_override(slug: &str, field: &str) -> Option<&'static str> {
             "Choisis une salle ci-dessus, rejoins la partie et écoute l'extrait. Tape le titre, l'artiste ou la réponse demandée le plus vite possible pour marquer des points."
         }
         ("genre-musical", "faq_a3") => {
-            "Non. Toutes les salles officielles Blind'All Music sont gratuites et jouables directement dans ton navigateur, sur ordinateur ou mobile."
+            "Non. Toutes les salles officielles Blind'All Music se jouent directement dans ton navigateur, sur ordinateur ou mobile."
         }
         ("genre-musical", "faq_q1") => {
             "Quels styles musicaux sont disponibles sur Blind'All Music ?"
         }
         ("genre-musical", "faq_q2") => "Comment jouer à un blind test musical ?",
-        ("genre-musical", "faq_q3") => "Faut-il payer ou installer une application ?",
+        ("genre-musical", "faq_q3") => "Faut-il installer une application ?",
         ("genre-musical", "heading") => "Blind test par genre musical",
         ("genre-musical", "intro") => {
             "Sur Blind'All Music, retrouve :count salles officielles dédiées aux grands styles musicaux : :rooms. Chaque room propose des extraits sélectionnés pour tester ta culture musicale en multijoueur, en temps réel."
         }
         ("genre-musical", "intro_secondary") => {
-            "Que tu sois fan de variété française, de tubes internationaux ou de morceaux plus pointus, choisis la salle qui correspond à ton style et affronte d'autres joueurs. Gratuit, sans téléchargement, directement dans le navigateur."
+            "Que tu sois fan de variété française, de tubes internationaux ou de morceaux plus pointus, choisis la salle qui correspond à ton style et affronte d'autres joueurs. Sans téléchargement, directement dans le navigateur."
         }
         ("genre-musical", "meta_description") => {
-            "Joue gratuitement à des blind tests par style musical sur Blind'All Music : Rap FR, Rock, Pop, Chanson française, Electro, Jazz, K-pop, Métal et plus. Multijoueur en direct."
+            "Joue à des blind tests par style musical sur Blind'All Music : Rap FR, Rock, Pop, Chanson française, Electro, Jazz, K-pop, Métal et plus. Multijoueur en direct."
         }
         ("genre-musical", "meta_title") => {
             "Blind test par genre musical, Rap, Rock, Pop, Jazz | Blind'All Music"
@@ -65,7 +65,7 @@ fn slug_override(slug: &str, field: &str) -> Option<&'static str> {
             "Chaque salle est dédiée à une période précise, avec des playlists pensées pour retrouver les classiques, les one-hit wonders et les incontournables du moment. Idéal pour les soirées nostalgie entre amis."
         }
         ("les-decennies", "meta_description") => {
-            "Blind tests gratuits par décennie sur Blind'All Music : années 70, 80, 90, 2000, 2010, 2020 et plus. Retrouve les tubes qui ont marqué chaque époque."
+            "Blind tests par décennie sur Blind'All Music : années 70, 80, 90, 2000, 2010, 2020 et plus. Retrouve les tubes qui ont marqué chaque époque."
         }
         ("les-decennies", "meta_title") => {
             "Blind test par décennie : années 70, 80, 90, 2000 | Blind'All Music"
@@ -79,11 +79,11 @@ fn slug_override(slug: &str, field: &str) -> Option<&'static str> {
             "Oui, c'est l'usage principal : lancer une room thématique et jouer à plusieurs sur les mêmes extraits, en direct."
         }
         ("les-speciales", "faq_a3") => {
-            "Comme toutes les salles officielles Blind'All Music, elles sont gratuites et accessibles depuis le navigateur."
+            "Comme toutes les salles officielles Blind'All Music, elles sont accessibles directement depuis le navigateur, sur ordinateur comme sur mobile."
         }
         ("les-speciales", "faq_q1") => "Quand les salles spéciales sont-elles disponibles ?",
         ("les-speciales", "faq_q2") => "Est-ce adapté pour une soirée entre amis ?",
-        ("les-speciales", "faq_q3") => "Les salles spéciales sont-elles gratuites ?",
+        ("les-speciales", "faq_q3") => "Comment rejoindre une salle spéciale ?",
         ("les-speciales", "heading") => "Blind tests événementiels et spéciaux",
         ("les-speciales", "intro") => {
             "Découvre :count salles officielles pour les occasions et fêtes : :rooms. Des playlists pensées pour animer une soirée, un apéro ou un événement à thème."
@@ -116,10 +116,10 @@ fn slug_override(slug: &str, field: &str) -> Option<&'static str> {
             "Retrouve :count salles officielles autour des musiques des écrans et de la culture pop : :rooms. Bandes originales, génériques, tubes de films, séries, jeux vidéo et phénomènes internet."
         }
         ("sur-les-ecrans", "intro_secondary") => {
-            "Parfait pour les fans de Disney, d'anime, de séries cultes ou de jeux vidéo. Rejoins une partie en cours ou lance une manche quand tu veux, gratuitement, sans inscription obligatoire."
+            "Parfait pour les fans de Disney, d'anime, de séries cultes ou de jeux vidéo. Rejoins une partie en cours ou lance une manche quand tu veux, sans inscription obligatoire."
         }
         ("sur-les-ecrans", "meta_description") => {
-            "Blind tests gratuits sur la culture pop : Disney, films, séries TV, anime, jeux vidéo, Eurovision, pubs TV et plus. Multijoueur sur Blind'All Music."
+            "Blind tests sur la culture pop : Disney, films, séries TV, anime, jeux vidéo, Eurovision, pubs TV et plus. Multijoueur sur Blind'All Music."
         }
         ("sur-les-ecrans", "meta_title") => {
             "Blind test Disney, films, séries, jeux vidéo | Blind'All Music"
@@ -142,7 +142,7 @@ fn fill(t: &str, category: &str, count: i64, rooms: &str) -> String {
 pub fn content(slug: &str, category: &str, count: i64, rooms: &str) -> CategoryContent {
     let title = fill(
         tpl(
-            "Blind test :category, quiz musical multijoueur gratuit | Blind'All Music",
+            "Blind test :category, quiz musical multijoueur en ligne | Blind'All Music",
             slug,
             "title",
         ),
@@ -152,7 +152,7 @@ pub fn content(slug: &str, category: &str, count: i64, rooms: &str) -> CategoryC
     );
     let meta_title = fill(
         tpl(
-            "Blind test :category, quiz musical multijoueur gratuit | Blind'All Music",
+            "Blind test :category, quiz musical multijoueur en ligne | Blind'All Music",
             slug,
             "meta_title",
         ),
@@ -162,7 +162,7 @@ pub fn content(slug: &str, category: &str, count: i64, rooms: &str) -> CategoryC
     );
     let meta_description = fill(
         tpl(
-            "Joue gratuitement à des blind tests et quiz musicaux :category sur Blind'All Music. Salles officielles multijoueur en direct, sans téléchargement.",
+            "Joue à des blind tests et quiz musicaux :category sur Blind'All Music. Salles officielles multijoueur en direct, sans téléchargement.",
             slug,
             "meta_description",
         ),
@@ -178,7 +178,7 @@ pub fn content(slug: &str, category: &str, count: i64, rooms: &str) -> CategoryC
     );
     let intro = fill(
         tpl(
-            "Découvre :count salles officielles de blind test :category sur Blind'All Music. Écoute l'extrait, trouve le titre ou l'artiste et affronte d'autres joueurs en temps réel, gratuitement dans ton navigateur.",
+            "Découvre :count salles officielles de blind test :category sur Blind'All Music. Écoute l'extrait, trouve le titre ou l'artiste et affronte d'autres joueurs en temps réel, dans ton navigateur.",
             slug,
             "intro",
         ),
@@ -244,7 +244,7 @@ pub fn content(slug: &str, category: &str, count: i64, rooms: &str) -> CategoryC
             ),
             fill(
                 tpl(
-                    "Tu peux rejoindre une room en invité, mais un compte gratuit te permet de sauvegarder ton score, ton niveau et ton ELO.",
+                    "Tu peux rejoindre une room en invité, mais un compte te permet de sauvegarder ton score, ton niveau et ton ELO.",
                     slug,
                     "faq_a2",
                 ),
@@ -256,7 +256,7 @@ pub fn content(slug: &str, category: &str, count: i64, rooms: &str) -> CategoryC
         (
             fill(
                 tpl(
-                    "Les blind tests :category sont-ils gratuits ?",
+                    "Peut-on jouer aux blind tests :category sur mobile ?",
                     slug,
                     "faq_q3",
                 ),
@@ -266,7 +266,7 @@ pub fn content(slug: &str, category: &str, count: i64, rooms: &str) -> CategoryC
             ),
             fill(
                 tpl(
-                    "Oui, toutes les salles officielles Blind'All Music sont gratuites et jouables directement dans le navigateur.",
+                    "Oui, toutes les salles officielles Blind'All Music se jouent directement dans le navigateur, sur ordinateur comme sur mobile.",
                     slug,
                     "faq_a3",
                 ),

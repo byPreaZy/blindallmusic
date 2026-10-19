@@ -56,11 +56,11 @@ pub async fn llms(State(state): State<AppState>) -> Response {
     let base = state.app_url.trim_end_matches('/');
     text_response(format!(
         "# Blind'All Music\n\n\
-         > Blind'All Music is a free online multiplayer music quiz platform (blind tests). \
+         > Blind'All Music is an online multiplayer music quiz platform (blind tests). \
          Players join themed rooms, listen to audio clips and identify songs in \
          real time against other players.\n\n\
          Blind'All Music runs official public rooms (80s, 2000s, Disney, French songs, \
-         rock, pop, rap…) and community-created private rooms. Free to play in \
+         rock, pop, rap…) and community-created private rooms. Playable in \
          the browser, no download. Available in French, English and Spanish. \
          Primary audience: French-speaking music fans in France and worldwide.\n\n\
          ## Core pages\n\n\

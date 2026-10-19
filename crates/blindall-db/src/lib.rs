@@ -208,6 +208,13 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0023_level_metrics_backfill.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            24,
+            "remove_free_volunteer_copy".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0024_remove_free_volunteer_copy.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {

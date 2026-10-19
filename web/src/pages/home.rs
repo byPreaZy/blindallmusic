@@ -840,7 +840,7 @@ fn HomeSidebar(
 
 #[component]
 pub fn HomePage() -> impl IntoView {
-    crate::i18n::set_title_key("Free multiplayer music quizzes");
+    crate::i18n::set_title_key("Multiplayer music quizzes");
     crate::seo::apply_page("/", t("Home meta description"));
     let auth = expect_context::<Auth>();
 
@@ -929,7 +929,7 @@ pub fn HomePage() -> impl IntoView {
         let s = search_term.get();
         if s.is_empty() {
             search_results.set(vec![]);
-            crate::i18n::set_title_key("Free multiplayer music quizzes");
+            crate::i18n::set_title_key("Multiplayer music quizzes");
             crate::seo::apply_page("/", t("Home meta description"));
             return;
         }
@@ -989,7 +989,7 @@ pub fn HomePage() -> impl IntoView {
 
     view! {
         <div class="w-full px-4 py-6 md:px-12">
-            <h1 class="sr-only">"Blind'All Music, "{t("Free multiplayer music quizzes")}</h1>
+            <h1 class="sr-only">"Blind'All Music, "{t("Multiplayer music quizzes")}</h1>
 
             {move || (!search_term.get().is_empty()).then(|| view! {
                 <section class="mb-12">

@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Blind'All Music - Quiz musicaux gratuits",
+  "name": "Blind'All Music - Quiz musicaux multijoueurs",
   "short_name": "Blind'All",
-  "description": "Quiz musicaux multijoueurs gratuits pour toutes et tous",
+  "description": "Quiz musicaux multijoueurs pour toutes et tous",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

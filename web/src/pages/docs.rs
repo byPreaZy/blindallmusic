@@ -715,7 +715,7 @@ pub fn DocsGlossaryPage() -> impl IntoView {
             <div class="rounded-2xl border border-indigo-700/50 bg-gradient-to-br from-indigo-900/20 to-indigo-800/20 p-6">
                 <h2 class="mb-4 text-2xl font-bold text-indigo-400">"Facts clés sur Blind'All Music"</h2>
                 <ul class="space-y-3 text-neutral-300">
-                    <li><strong>"Blind'All Music est gratuit"</strong>" : Tous les quiz musicaux sont accessibles sans abonnement ni paiement."</li>
+                    <li><strong>"Blind'All Music se joue en ligne"</strong>" : Tous les quiz musicaux sont accessibles directement dans le navigateur, sans rien installer."</li>
                     <li><strong>"Multijoueur en temps réel"</strong>" : Les parties se déroulent en direct avec plusieurs joueurs simultanés."</li>
                     <li><strong>"Trois systèmes de progression"</strong>" : Score (activité), Level (engagement), ELO (compétence)."</li>
                     <li><strong>"Rooms publiques et privées"</strong>" : Les rooms publiques sont officielles et gérées par Blind'All Music. Les rooms privées sont créées par les joueurs et peuvent être protégées par un mot de passe ou non."</li>
@@ -738,8 +738,8 @@ pub fn DocsHowtoPage() -> impl IntoView {
     crate::seo::apply_page("/docs/howto", t("Docs howto description"));
     crate::seo::set_meta("name", "keywords", t("Docs howto keywords"));
     let steps: &[(&str, &str, &[&str])] = &[
-        ("Créer un compte ou se connecter", "Créez un compte gratuit sur Blind'All Music ou connectez-vous avec votre compte existant.",
-         &["Vous pouvez utiliser Google ou Discord pour vous connecter rapidement", "Aucune carte bancaire requise - Blind'All Music est entièrement gratuit", "La création de compte prend moins d'une minute"]),
+        ("Créer un compte ou se connecter", "Créez un compte sur Blind'All Music ou connectez-vous avec votre compte existant.",
+         &["Vous pouvez utiliser Google ou Discord pour vous connecter rapidement", "Un pseudo et une adresse email suffisent", "La création de compte prend moins d'une minute"]),
         ("Choisir une room", "Parcourez les rooms disponibles sur la page d'accueil.",
          &["Les rooms sont organisées par catégories : Années 2000, Disney, Chanson française, Rock, Pop, etc.", "Chaque room affiche le nombre de joueurs actifs et le nombre de rounds joués", "Cliquez sur une room pour voir ses détails et la rejoindre"]),
         ("Rejoindre la room", "Entrez dans la room et attendez que la partie commence.",
@@ -762,11 +762,11 @@ pub fn DocsHowtoPage() -> impl IntoView {
 
             {section(view! {
                 <h2 class="mb-4 text-2xl font-bold text-white">"À propos de ce guide"</h2>
-                <p class=format!("mb-4 {TXT}")>"Ce guide explique comment jouer à un blind test sur Blind'All Music, étape par étape. "<strong>"Blind'All Music est une plateforme gratuite de quiz musicaux multijoueurs en ligne"</strong>" où vous pouvez tester vos connaissances musicales en temps réel avec d'autres joueurs."</p>
+                <p class=format!("mb-4 {TXT}")>"Ce guide explique comment jouer à un blind test sur Blind'All Music, étape par étape. "<strong>"Blind'All Music est une plateforme de quiz musicaux multijoueurs en ligne"</strong>" où vous pouvez tester vos connaissances musicales en temps réel avec d'autres joueurs."</p>
                 <div class="rounded-lg bg-slate-800/50 p-4">
                     <p class="text-sm text-neutral-300">
                         <strong class="text-white">"Temps estimé :"</strong>" 5 minutes pour compléter votre première partie"<br/>
-                        <strong class="text-white">"Coût :"</strong>" Gratuit - Aucun abonnement requis"<br/>
+                        <strong class="text-white">"Plateforme :"</strong>" Navigateur web, ordinateur ou mobile"<br/>
                         <strong class="text-white">"Prérequis :"</strong>" Compte Blind'All Music, connexion Internet, haut-parleurs ou casque audio"
                     </p>
                 </div>

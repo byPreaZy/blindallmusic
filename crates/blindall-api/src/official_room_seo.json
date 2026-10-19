@@ -39,13 +39,13 @@
   "chanson-francaise": {
    "fr": {
     "intro": "Blind test Chanson française sur Blind'All Music : variété francophone, tubes d'hier et d'aujourd'hui. Écoute l'extrait et sois le plus rapide à retrouver le titre ou l'artiste.",
-    "intro_secondary": "Salle officielle multijoueur, gratuite et sans téléchargement. Rejoins une partie en direct ou lance une manche avec la communauté."
+    "intro_secondary": "Salle officielle multijoueur, en ligne et sans téléchargement. Rejoins une partie en direct ou lance une manche avec la communauté."
    }
   },
   "electro": {
    "fr": {
     "intro": "Blind test Electro : house, techno, EDM et hits électroniques. Devine le morceau le plus vite possible face aux autres joueurs.",
-    "intro_secondary": "Playlist officielle Blind'All Music, mise à jour par l'équipe de modération. Jouable gratuitement dans le navigateur."
+    "intro_secondary": "Playlist officielle Blind'All Music, mise à jour par l'équipe de modération. Jouable directement dans le navigateur."
    }
   },
   "jazz": {
@@ -57,7 +57,7 @@
   "k-pop": {
    "fr": {
     "intro": "Blind test K-pop : idols, chorés et tubes coréens. Affronte d'autres fans en temps réel.",
-    "intro_secondary": "Salle officielle gratuite : idéale pour les soirées entre amis fans de K-pop."
+    "intro_secondary": "Salle officielle Blind'All Music : idéale pour les soirées entre amis fans de K-pop."
    }
   },
   "metal": {
@@ -69,7 +69,7 @@
   "musique-classique": {
    "fr": {
     "intro": "Blind test Musique classique : compositeurs, œuvres et interprétations célèbres. Un défi pour les mélomanes.",
-    "intro_secondary": "Salle officielle Blind'All Music : gratuit, en ligne, multijoueur."
+    "intro_secondary": "Salle officielle Blind'All Music : en ligne, multijoueur."
    }
   },
   "pop": {
@@ -99,7 +99,7 @@
   "rock": {
    "fr": {
     "intro": "Blind test Rock : classiques, alternative et rock moderne. Retrouve les artistes et les titres cultes.",
-    "intro_secondary": "Gratuit, multijoueur, directement dans ton navigateur."
+    "intro_secondary": "Multijoueur, directement dans ton navigateur."
    }
   },
   "annees-2000": {
@@ -111,7 +111,7 @@
   "annees-2010": {
    "fr": {
     "intro": "Blind test Années 2010 : EDM, pop mondiale et tubes qui ont marqué la décennie.",
-    "intro_secondary": "Joue en direct contre d'autres joueurs, gratuit et sans appli à installer."
+    "intro_secondary": "Joue en direct contre d'autres joueurs, sans appli à installer."
    }
   },
   "annees-2020": {
@@ -153,7 +153,7 @@
   "halloween": {
    "fr": {
     "intro": "Blind test Halloween : ambiances sombres, BO de films d'horreur et tubes festifs.",
-    "intro_secondary": "Édition spéciale Blind'All Music : multijoueur gratuit."
+    "intro_secondary": "Édition spéciale Blind'All Music en multijoueur."
    }
   },
   "love": {
@@ -195,7 +195,7 @@
   "disney": {
    "fr": {
     "intro": "Blind test Disney : princesses, Pixar, classiques et nouveautés du studio.",
-    "intro_secondary": "L'une des salles les plus jouées sur Blind'All Music, gratuit et multijoueur."
+    "intro_secondary": "L'une des salles les plus jouées sur Blind'All Music, en multijoueur."
    }
   },
   "eurovision": {

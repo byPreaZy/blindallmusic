@@ -150,7 +150,7 @@ pub fn Footer() -> impl IntoView {
                         <div class="mb-4 flex items-center">
                             <span class="text-xl font-bold uppercase tracking-[0.12em] text-brand-primary">"Blind'All Music"</span>
                         </div>
-                        <p class="mb-4 text-white/70">{t("Free multiplayer music quizzes for everyone. Challenge friends and discover new music.")}</p>
+                        <p class="mb-4 text-white/70">{t("Multiplayer music quizzes for everyone. Challenge friends and discover new music.")}</p>
                         <div class="flex space-x-4">
                             <a href=api::DISCORD_INVITE_URL target="_blank" rel="external nofollow" class="text-white/70 transition-colors hover:text-brand-accent">
                                 <span class="sr-only">"Discord"</span>
@@ -199,7 +199,7 @@ pub fn Footer() -> impl IntoView {
                         {format!("© {} Blind'All Music. {}", js_sys::Date::new_0().get_full_year(), t("All rights reserved."))}
                     </div>
                     <div class="flex items-center gap-3 text-white/50">
-                        <span>{t("Site personnel fait bénévolement avec")}" ❤️ "{t("en France")}</span>
+                        <span>{t("Independent project made with")}" ❤️ "{t("en France")}</span>
                         <AppVersion/>
                     </div>
                 </div>
