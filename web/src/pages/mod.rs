@@ -13,6 +13,7 @@ pub mod playlists;
 pub mod profile;
 pub mod rankings;
 pub mod room_forms;
+pub mod room_live;
 pub mod room_show;
 pub mod rooms;
 pub mod settings;

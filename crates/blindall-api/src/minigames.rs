@@ -634,13 +634,18 @@ pub async fn daily_show(
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
-    let (score, answered) = state
+    let (score, answered, my_answers) = state
         .minigames
         .daily_progress(user.id, today, &game_type)
         .await
         .ok()
         .flatten()
-        .unwrap_or((0, 0));
+        .unwrap_or((0, 0, json!([])));
+    let streak = state
+        .minigames
+        .daily_streak(user.id, &game_type, DAILY_QUESTIONS_CONST as i64)
+        .await
+        .unwrap_or(0);
     let leaderboard = state
         .minigames
         .daily_leaderboard(today, &game_type, 20)
@@ -652,6 +657,8 @@ pub async fn daily_show(
         "total": questions.len(),
         "score": score,
         "answered": answered,
+        "my_answers": my_answers,
+        "streak": streak,
         "questions": strip_questions(&questions),
         "leaderboard": leaderboard,
     }))

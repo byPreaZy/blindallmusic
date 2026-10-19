@@ -627,9 +627,153 @@ pub async fn public_state(
         .and_then(|s| s.round.as_ref())
         .map(|r| (r.current, r.is_playing))
         .unwrap_or((0, false));
-    Ok(Json(blindall_game::events::room_public_state(
-        &cfg, count, idx, playing,
-    )))
+    let mut out = blindall_game::events::room_public_state(&cfg, count, idx, playing);
+    if playing {
+        if let (Some(t), Some(started)) = (
+            snapshot.as_ref().and_then(|s| s.current_track.as_ref()),
+            snapshot
+                .as_ref()
+                .and_then(|s| s.round.as_ref())
+                .and_then(|r| r.current_track_started_at),
+        ) {
+            out["current_track"] = blindall_game::events::salon_track_started(
+                t,
+                started,
+                cfg.track_duration,
+                idx,
+                cfg.tracks_by_round.into(),
+            );
+        }
+    }
+    Ok(Json(out))
+}
+
+/// Salon/TV live view state: current track audio, running round standings
+/// and reveal data. Open for public rooms; participants only otherwise.
+pub async fn live_state(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: axum::http::HeaderMap,
+    axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<std::net::SocketAddr>,
+    user: OptionalUser,
+) -> Result<Json<Value>, StatusCode> {
+    let ip = crate::auth_session::client_ip(&headers, &addr.ip().to_string());
+    if state.auth.is_ip_banned(&ip).await {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if let Some(u) = &user.0 {
+        if state.moderation.is_banned(u.id).await.unwrap_or(false) {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+    let cfg = state
+        .store
+        .room_config(id)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    if !cfg.is_public {
+        let allowed = match &user.0 {
+            Some(u) => {
+                state
+                    .presence
+                    .has_participation(id, u.id)
+                    .await
+                    .unwrap_or(false)
+                    || state.rooms.is_moderator(id, u.id).await
+                    || u.is_administrator
+            }
+            None => false,
+        };
+        if !allowed {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+    let now = chrono::Utc::now().timestamp();
+    let count = state.presence.member_count(id, now).await.unwrap_or(0);
+    let snapshot = state.manager.snapshot(id).await.ok().flatten();
+    let round_any = snapshot.as_ref().and_then(|s| s.round.as_ref());
+    let round = round_any.filter(|r| r.finished_at.is_none());
+    let playing = round.map(|r| r.is_playing).unwrap_or(false);
+
+    // Keep showing the just-finished round's scores until the snapshot clears.
+    let mut standings: Vec<Value> = vec![];
+    if let Some(r) = round_any {
+        let raw = state.scores.all_scores(r.id).await.unwrap_or_default();
+        let ids: Vec<i64> = raw.iter().map(|(u, _)| *u).collect();
+        let infos = state.store.players_info(&ids).await.unwrap_or_default();
+        let mut rows: Vec<Value> = raw
+            .into_iter()
+            .map(|(uid, score)| {
+                let info = infos.get(&uid);
+                json!({
+                    "user_id": uid,
+                    "name": info.map(|p| p.name.clone()).unwrap_or_default(),
+                    "photo": info.and_then(|p| p.photo.clone()),
+                    "score": score,
+                })
+            })
+            .collect();
+        rows.sort_by(|a, b| {
+            b["score"]
+                .as_f64()
+                .unwrap_or(0.0)
+                .partial_cmp(&a["score"].as_f64().unwrap_or(0.0))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        standings = rows;
+    }
+
+    let mut phase = "idle";
+    let mut out = json!({
+        "room_id": id,
+        "name": cfg.name,
+        "is_playing": playing,
+        "member_count": count,
+        "current_index": round.map(|r| r.current).unwrap_or(0),
+        "tracks_total": cfg.tracks_by_round,
+        "standings": standings,
+    });
+    if playing {
+        if let (Some(t), Some(started)) = (
+            snapshot.as_ref().and_then(|s| s.current_track.as_ref()),
+            round.and_then(|r| r.current_track_started_at),
+        ) {
+            let elapsed = (chrono::Utc::now() - started).num_seconds();
+            if elapsed < cfg.track_duration as i64 {
+                phase = "playing";
+                out["current_track"] = blindall_game::events::salon_track_started(
+                    t,
+                    started,
+                    cfg.track_duration,
+                    out["current_index"].as_i64().unwrap_or(0),
+                    cfg.tracks_by_round.into(),
+                );
+            } else {
+                // Track's window elapsed but the round still points at it:
+                // inter-track pause → the answers can be revealed on screen.
+                phase = "reveal";
+                out["reveal_track"] = blindall_game::events::track_playlist_payload(t);
+            }
+        }
+    }
+    out["phase"] = json!(phase);
+    Ok(Json(out))
+}
+
+/// QR code SVG pointing at the room join URL — used by the salon/TV view.
+pub async fn qr_code(State(state): State<AppState>, Path(id): Path<i64>) -> Response {
+    if state.store.room_config(id).await.is_err() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let url = format!("{}/rooms/{}", state.mail.app_url.trim_end_matches('/'), id);
+    let Ok(code) = qrcode::QrCode::new(url.as_bytes()) else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+    let svg = code
+        .render::<qrcode::render::svg::Color>()
+        .min_dimensions(512, 512)
+        .build();
+    ([(axum::http::header::CONTENT_TYPE, "image/svg+xml")], svg).into_response()
 }
 
 // ---- management ------------------------------------------------------------
@@ -1605,6 +1749,17 @@ pub async fn update_photo(
         .has_control(&room, user.id, user.is_administrator)
         .await
     {
+        return forbidden();
+    }
+    let can_picture = user.is_administrator
+        || room.is_pro
+        || room.is_public
+        || state
+            .auth
+            .can_change_picture(user.id)
+            .await
+            .unwrap_or(false);
+    if !can_picture {
         return forbidden();
     }
     let mut bytes = None;

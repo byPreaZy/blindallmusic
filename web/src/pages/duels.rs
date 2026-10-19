@@ -17,6 +17,40 @@ fn game_name(ty: &str) -> &'static str {
     }
 }
 
+/// Wordle-style 🟩🟥 grid from a player's stored answers ({idx, correct}).
+fn answers_grid(answers: &[Value]) -> String {
+    let mut v: Vec<(i64, bool)> = answers
+        .iter()
+        .map(|a| {
+            (
+                a["idx"].as_i64().unwrap_or(0),
+                a["correct"].as_bool().unwrap_or(false),
+            )
+        })
+        .collect();
+    v.sort_by_key(|(i, _)| *i);
+    v.iter()
+        .map(|(_, c)| if *c { "🟩" } else { "🟥" })
+        .collect()
+}
+
+fn copy_clipboard(text: String, copied: RwSignal<bool>) {
+    if let Some(w) = web_sys::window() {
+        let _ = w.navigator().clipboard().write_text(&text);
+    }
+    copied.set(true);
+    gloo_timers::callback::Timeout::new(1_500, move || {
+        let _ = copied.try_set(false);
+    })
+    .forget();
+}
+
+fn site_origin() -> String {
+    web_sys::window()
+        .and_then(|w| w.location().origin().ok())
+        .unwrap_or_default()
+}
+
 // ---- question card (shared by duel + daily) -----------------------------------
 
 #[component]
@@ -347,6 +381,7 @@ pub fn DuelPlayPage() -> impl IntoView {
     let result = RwSignal::new(Option::<Value>::None);
     let checking = RwSignal::new(false);
     let wrong = RwSignal::new(false);
+    let copied = RwSignal::new(false);
 
     leptos::task::spawn_local(async move {
         match api::get::<Value>(&format!("/api/v1/duels/{}", duel_id())).await {
@@ -462,8 +497,55 @@ pub fn DuelPlayPage() -> impl IntoView {
                                 <p class="mt-2 text-neutral-400">
                                     {if finished { t("Final score").to_string() } else { t("Your side is done — check back later.").to_string() }}
                                 </p>
-                                <div class="mt-6 flex justify-center gap-3">
+                                <div class="mt-6 flex flex-wrap justify-center gap-3">
                                     <A href="/duels" attr:class="btn-primary">{t("Back to duels")}</A>
+                                    <button type="button"
+                                        class="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80 transition hover:bg-white/10"
+                                        on:click={
+                                            let gt = d["game_type"].as_str().unwrap_or("quiz").to_string();
+                                            let line = format!("{} {} – {} {}",
+                                                d["creator_name"].as_str().unwrap_or("?"),
+                                                d["creator_score"].as_i64().unwrap_or(0),
+                                                d["opponent_score"].as_i64().unwrap_or(0),
+                                                d["opponent_name"].as_str().unwrap_or("…"));
+                                            let grid = answers_grid(
+                                                d["my_answers"].as_array().map(Vec::as_slice).unwrap_or(&[]));
+                                            move |_| {
+                                                copy_clipboard(
+                                                    format!("Blind'All — {} {}\n{}\n{}\n{}/duels",
+                                                        t("Duel"), t(game_name(&gt)), line, grid, site_origin()),
+                                                    copied);
+                                            }
+                                        }>
+                                        {move || if copied.get() { t("Copied!") } else { t("Share result") }}
+                                    </button>
+                                    {if finished {
+                                        let uid = crate::auth::use_auth().user.get().map(|u| u.id).unwrap_or(0);
+                                        let other = if d["creator_id"].as_i64() == Some(uid) {
+                                            d["opponent_id"].as_i64()
+                                        } else {
+                                            Some(d["creator_id"].as_i64().unwrap_or(0))
+                                        };
+                                        let gt = d["game_type"].as_str().unwrap_or("quiz").to_string();
+                                        let qc = d["question_count"].as_i64().unwrap_or(10);
+                                        other.map(|oid| view! {
+                                            <button type="button" class="btn-primary"
+                                                on:click=move |_| {
+                                                    let gt = gt.clone();
+                                                    leptos::task::spawn_local(async move {
+                                                        if let Ok(v) = api::post::<Value, _>("/api/v1/duels",
+                                                            &json!({"game_type": gt, "count": qc, "opponent_id": oid})).await {
+                                                            if let Some(nid) = v["id"].as_i64() {
+                                                                leptos_router::hooks::use_navigate()(
+                                                                    &format!("/duels/{nid}"), Default::default());
+                                                            }
+                                                        }
+                                                    });
+                                                }>{t("Rematch")}</button>
+                                        }.into_any()).unwrap_or_else(|| view! { <div/> }.into_any())
+                                    } else {
+                                        view! { <div/> }.into_any()
+                                    }}
                                 </div>
                             </div>
                         </div>
@@ -528,6 +610,8 @@ pub fn DailyPage() -> impl IntoView {
     let checking = RwSignal::new(false);
     let wrong = RwSignal::new(false);
     let daily_type = RwSignal::new("quiz");
+    let copied = RwSignal::new(false);
+    let marks = RwSignal::new(Vec::<Value>::new());
 
     let load = move |ty: &'static str| {
         daily_type.set(ty);
@@ -538,12 +622,14 @@ pub fn DailyPage() -> impl IntoView {
         idx.set(0);
         score.set(0);
         total.set(0);
+        marks.set(vec![]);
         leptos::task::spawn_local(async move {
             match api::get::<Value>(&format!("/api/v1/daily-challenge?type={ty}")).await {
                 Ok(v) => {
                     idx.set(v["answered"].as_i64().unwrap_or(0) as usize);
                     score.set(v["score"].as_i64().unwrap_or(0));
                     total.set(v["total"].as_i64().unwrap_or(0));
+                    marks.set(v["my_answers"].as_array().cloned().unwrap_or_default());
                     data.set(Some(v));
                 }
                 Err(e) => error.set(Some(e.message)),
@@ -567,6 +653,10 @@ pub fn DailyPage() -> impl IntoView {
                     wrong.set(!d["correct"].as_bool().unwrap_or(false));
                     score.set(d["score"].as_i64().unwrap_or(0));
                     total.set(d["total"].as_i64().unwrap_or(0));
+                    marks.update(|m| m.push(json!({
+                        "idx": i as i64,
+                        "correct": d["correct"].as_bool().unwrap_or(false),
+                    })));
                     result.set(Some(d));
                 }
                 Err(e) => error.set(Some(e.message)),
@@ -615,15 +705,26 @@ pub fn DailyPage() -> impl IntoView {
                 let date = d["date"].as_str().unwrap_or("").to_string();
                 let lb = d["leaderboard"].as_array().cloned().unwrap_or_default();
                 let done = idx.get() >= total.get() as usize;
+                let streak_h = d["streak"].as_i64().unwrap_or(0);
                 let header = view! {
                     <div class="mb-6 flex items-center justify-between">
                         <div>
                             <h1 class="retro-title retro-title--white text-xl">{t("Daily challenge")}</h1>
                             <p class="text-xs text-amber-300/80">{date}</p>
                         </div>
-                        <span class="rounded-full border border-amber-500/40 bg-amber-500/20 px-3 py-1 text-sm font-bold text-amber-300">
-                            {move || score.get()} " pts"
+                        <div class="flex items-center gap-2">
+                            {if streak_h > 1 {
+                                view! {
+                                    <span class="rounded-full border border-orange-500/40 bg-orange-500/15 px-3 py-1 text-sm font-bold text-orange-300"
+                                        title=t("days in a row")>
+                                        "🔥 "{streak_h}
+                                    </span>
+                                }.into_any()
+                            } else { view! { <div/> }.into_any() }}
+                            <span class="rounded-full border border-amber-500/40 bg-amber-500/20 px-3 py-1 text-sm font-bold text-amber-300">
+                                {move || score.get()} " pts"
                         </span>
+                        </div>
                     </div>
                 };
                 let leaderboard = view! {
@@ -643,12 +744,37 @@ pub fn DailyPage() -> impl IntoView {
                     })}
                 };
                 if done {
+                    let streak = d["streak"].as_i64().unwrap_or(0);
+                    let date = d["date"].as_str().unwrap_or("").to_string();
+                    let gt = daily_type.get().to_string();
                     view! {
                         <div>
                             {header}
                             <div class="rounded-2xl border-2 border-amber-500/20 bg-neutral-900/80 p-8 text-center">
                                 <h2 class="text-2xl font-black text-white">{t("Daily complete!")}</h2>
                                 <p class="mt-2 text-neutral-400">{t("Come back tomorrow for a new set.")}</p>
+                                {if streak > 0 {
+                                    view! {
+                                        <p class="mt-3 text-lg font-bold text-amber-400">
+                                            "🔥 "{streak}" "{t("days in a row")}
+                                        </p>
+                                    }.into_any()
+                                } else { view! { <div/> }.into_any() }}
+                                <div class="mt-6 flex justify-center">
+                                    <button type="button"
+                                        class="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80 transition hover:bg-white/10"
+                                        on:click=move |_| {
+                                            copy_clipboard(
+                                                format!("Blind'All — {} {} {}\n{} {}\n{}\n{}/daily",
+                                                    t("Daily challenge"), t(game_name(&gt)), date,
+                                                    score.get_untracked(), t("pts"),
+                                                    answers_grid(&marks.get_untracked()),
+                                                    site_origin()),
+                                                copied);
+                                        }>
+                                        {move || if copied.get() { t("Copied!") } else { t("Share result") }}
+                                    </button>
+                                </div>
                             </div>
                             {leaderboard}
                         </div>
@@ -683,7 +809,7 @@ pub fn DailyPage() -> impl IntoView {
                                 } else {
                                     view! {
                                         <QuestionView q=cur["question"].clone()
-                                            game_type="quiz".to_string()
+                                            game_type=daily_type.get().to_string()
                                             disabled=checking.get()
                                             on_answer=submit/>
                                     }.into_any()

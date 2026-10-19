@@ -193,6 +193,8 @@ pub fn router(state: AppState) -> Router {
             post(rooms::presence_left),
         )
         .route("/api/v1/rooms/{id}/public-state", get(rooms::public_state))
+        .route("/api/v1/rooms/{id}/live-state", get(rooms::live_state))
+        .route("/api/v1/rooms/{id}/qr.svg", get(rooms::qr_code))
         .route(
             "/api/v1/rooms/{id}/messages",
             get(chat::history).post(chat::store),

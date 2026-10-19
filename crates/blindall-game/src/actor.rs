@@ -372,6 +372,22 @@ impl RoomActor {
             let room_v = self.room_payload().await;
             let payload = events::track_played(self.round.as_ref().unwrap(), &room_v, &track);
             self.broadcast("TrackPlayed", payload).await;
+            let (idx, total) = self
+                .round
+                .as_ref()
+                .map(|r| (r.current, r.tracks.len() as i64))
+                .unwrap_or((0, 0));
+            self.broadcast_public(
+                "SalonTrackStarted",
+                events::salon_track_started(
+                    &track,
+                    Utc::now(),
+                    self.room.track_duration,
+                    idx,
+                    total,
+                ),
+            )
+            .await;
             self.broadcast_public_state().await;
 
             self.phase = Phase::Playing {
@@ -523,6 +539,15 @@ impl RoomActor {
             Utc::now(),
         );
         self.broadcast("TrackEnded", payload).await;
+        if let Some(t) = self.current_track.as_ref() {
+            let next_at = if is_last {
+                None
+            } else {
+                Some(Utc::now() + chrono::Duration::seconds(self.room.pause_between_tracks as i64))
+            };
+            self.broadcast_public("SalonTrackEnded", events::salon_track_ended(t, next_at))
+                .await;
+        }
 
         if is_last {
             self.play_next_track().await;
@@ -662,6 +687,12 @@ impl RoomActor {
     async fn broadcast(&self, event: &str, data: Value) {
         self.hub
             .broadcast(&events::room_channel(self.room.id), event, data, None)
+            .await;
+    }
+
+    async fn broadcast_public(&self, event: &str, data: Value) {
+        self.hub
+            .broadcast(&events::public_channel(self.room.id), event, data, None)
             .await;
     }
 

@@ -721,9 +721,10 @@ impl MinigameRepo {
         user_id: i64,
         day: chrono::NaiveDate,
         game_type: &str,
-    ) -> Result<Option<(i64, i64)>, sqlx::Error> {
+    ) -> Result<Option<(i64, i64, serde_json::Value)>, sqlx::Error> {
         sqlx::query(
-            "SELECT score, jsonb_array_length(answers)::bigint FROM minigame_daily_scores
+            "SELECT score, jsonb_array_length(answers)::bigint AS n, answers
+             FROM minigame_daily_scores
              WHERE user_id = $1 AND day = $2 AND game_type = $3",
         )
         .bind(user_id)
@@ -735,10 +736,43 @@ impl MinigameRepo {
             o.map(|r| {
                 (
                     r.get::<i32, _>("score") as i64,
-                    r.get::<i64, _>("jsonb_array_length"),
+                    r.get::<i64, _>("n"),
+                    r.get::<serde_json::Value, _>("answers"),
                 )
             })
         })
+    }
+
+    /// Consecutive days (ending today or yesterday) with a completed daily
+    /// of this game type — classic date-island streak computation.
+    pub async fn daily_streak(
+        &self,
+        user_id: i64,
+        game_type: &str,
+        min_answers: i64,
+    ) -> Result<i64, sqlx::Error> {
+        sqlx::query_scalar(
+            "WITH d AS (
+               SELECT DISTINCT day FROM minigame_daily_scores
+               WHERE user_id = $1 AND game_type = $2
+                 AND jsonb_array_length(answers) >= $3
+             ), g AS (
+               SELECT day, day - (ROW_NUMBER() OVER (ORDER BY day))::int AS grp
+               FROM d
+             ), latest AS (
+               SELECT grp, MAX(day) AS last_day FROM g
+               GROUP BY grp ORDER BY last_day DESC LIMIT 1
+             )
+             SELECT COALESCE(CASE
+               WHEN (SELECT last_day FROM latest) >= CURRENT_DATE - 1
+               THEN (SELECT COUNT(*) FROM g WHERE grp = (SELECT grp FROM latest))
+               ELSE 0 END, 0)::bigint",
+        )
+        .bind(user_id)
+        .bind(game_type)
+        .bind(min_answers)
+        .fetch_one(&self.pool)
+        .await
     }
 
     /// Today's leaderboard: higher score first, earlier finish wins ties.

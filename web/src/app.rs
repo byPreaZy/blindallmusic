@@ -30,6 +30,7 @@ use crate::pages::playlists::{PlaylistCreatePage, PlaylistsPage};
 use crate::pages::profile::ProfilePage;
 use crate::pages::rankings::RankingsPage;
 use crate::pages::room_forms::{RoomCreatePage, RoomEditPage};
+use crate::pages::room_live::RoomLivePage;
 use crate::pages::room_show::RoomPage;
 use crate::pages::rooms::RoomsIndexPage;
 use crate::pages::settings::SettingsPage;
@@ -166,6 +167,7 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/rooms/create") view=RoomCreatePage/>
                         <Route path=path!("/rooms") view=RoomsIndexPage/>
                         <Route path=path!("/rooms/:id") view=|| view! { <ParamRemount><RoomPage/></ParamRemount> }/>
+                        <Route path=path!("/rooms/:id/live") view=|| view! { <ParamRemount><RoomLivePage/></ParamRemount> }/>
                         <Route path=path!("/rooms/:id/edit") view=|| view! { <ParamRemount><RoomEditPage/></ParamRemount> }/>
                         <Route path=path!("/rankings") view=RankingsPage/>
                         <Route path=path!("/rankings/season") view=RankingsPage/>

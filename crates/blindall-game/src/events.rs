@@ -170,6 +170,36 @@ pub fn resolve_photo_url(storage_prefix: &str, photo_path: Option<&str>, name: &
     }
 }
 
+/// Public-channel (spectator/salon) payload for a starting track:
+/// audio + timing only — never the answer values.
+pub fn salon_track_started(
+    track: &GameTrack,
+    started_at: DateTime<Utc>,
+    duration: u32,
+    index: i64,
+    total: i64,
+) -> Value {
+    json!({
+        "preview_url": track.preview_url,
+        "audio": track.audio,
+        "started_at": started_at.to_rfc3339_opts(SecondsFormat::Micros, true),
+        "duration": duration,
+        "index": index,
+        "total": total,
+        "hint": track.hint,
+    })
+}
+
+/// Public-channel reveal once a track ends (answers are fair game then).
+pub fn salon_track_ended(track: &GameTrack, next_track_at: Option<DateTime<Utc>>) -> Value {
+    json!({
+        "track": track_playlist_payload(track),
+        "next_track_at": next_track_at
+            .map(|t| Value::String(t.to_rfc3339_opts(SecondsFormat::Micros, true)))
+            .unwrap_or(Value::Null),
+    })
+}
+
 pub fn track_playlist_payload(track: &GameTrack) -> Value {
     json!({
         "id": track.id,

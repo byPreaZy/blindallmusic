@@ -290,6 +290,60 @@ async fn public_state_returns_game_snapshot() {
     assert!(r.body.is_object());
 }
 
+// ---- salon / TV live view ---------------------------------------------------
+
+#[tokio::test]
+async fn live_state_public_room_anonymous_ok() {
+    let c = Client::anon();
+    let r = c
+        .get("/api/v1/rooms/6/live-state")
+        .await
+        .expect_ok("live-state anon");
+    assert!(r.body["name"].is_string(), "room name: {}", r.text);
+    assert!(r.body["phase"].is_string(), "phase: {}", r.text);
+    assert!(r.body["standings"].is_array(), "standings: {}", r.text);
+    assert!(r.body["member_count"].is_number());
+    let phase = r.body["phase"].as_str().unwrap();
+    assert!(
+        ["idle", "playing", "reveal"].contains(&phase),
+        "unexpected phase {phase}"
+    );
+}
+
+#[tokio::test]
+async fn live_state_private_room_forbidden_for_outsider() {
+    let (owner, _) = Client::register("lv").await;
+    let (id, _, _) = searchable_room(&owner).await;
+
+    let anon = Client::anon()
+        .get(&format!("/api/v1/rooms/{id}/live-state"))
+        .await;
+    assert_eq!(
+        anon.status,
+        StatusCode::FORBIDDEN,
+        "anon on private room → 403: {}",
+        anon.text
+    );
+
+    let (other, _) = Client::register("lv2").await;
+    let denied = other.get(&format!("/api/v1/rooms/{id}/live-state")).await;
+    assert_eq!(denied.status, StatusCode::FORBIDDEN, "outsider → 403");
+
+    let ok = owner.get(&format!("/api/v1/rooms/{id}/live-state")).await;
+    assert!(ok.ok(), "owner/moderator can watch: {}", ok.text);
+}
+
+#[tokio::test]
+async fn room_qr_svg_endpoint() {
+    let c = Client::anon();
+    let r = c.get("/api/v1/rooms/6/qr.svg").await;
+    assert_eq!(r.status, StatusCode::OK, "qr.svg: {}", r.text);
+    assert!(r.text.contains("<svg"), "SVG payload: {}", &r.text[..80]);
+
+    let missing = c.get("/api/v1/rooms/99999999/qr.svg").await;
+    assert_eq!(missing.status, StatusCode::NOT_FOUND);
+}
+
 // ---- seasonal visibility (is_active) ---------------------------------------
 
 #[tokio::test]
