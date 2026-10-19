@@ -19,6 +19,7 @@ pub enum RoomCommand {
     Pause,
     Resume,
     Stop,
+    NextTrack,
     CheckAnswer {
         user_id: i64,
         track_id: i64,
@@ -47,6 +48,7 @@ pub enum RoomCommand {
 pub struct RoomSnapshot {
     pub room_id: i64,
     pub is_playing: bool,
+    pub paused: bool,
     pub round: Option<RoundRow>,
     pub current_track: Option<GameTrack>,
     pub played_track_ids: Vec<i64>,
@@ -153,6 +155,11 @@ impl RoomActor {
             RoomCommand::Pause => self.pause().await,
             RoomCommand::Resume => self.resume().await,
             RoomCommand::Stop => self.stop().await,
+            RoomCommand::NextTrack => {
+                if matches!(self.phase, Phase::Playing { .. }) {
+                    self.on_track_end().await;
+                }
+            }
             RoomCommand::CheckAnswer {
                 user_id,
                 track_id,
@@ -174,6 +181,7 @@ impl RoomActor {
                 let _ = reply.send(RoomSnapshot {
                     room_id: self.room.id,
                     is_playing: self.round.as_ref().map(|r| r.is_playing).unwrap_or(false),
+                    paused: matches!(self.phase, Phase::Paused { .. }),
                     round: self.round.clone(),
                     current_track: self.current_track.clone(),
                     played_track_ids: self.played_track_ids(),
@@ -442,17 +450,40 @@ impl RoomActor {
     }
 
     async fn stop(&mut self) {
-        let Some(round) = self.round.as_mut() else {
-            return;
-        };
-        if round.finished_at.is_some() {
+        if self
+            .round
+            .as_ref()
+            .map(|r| r.finished_at.is_some())
+            .unwrap_or(true)
+        {
             return; // PHP: stop is idempotent via finished_at
         }
+        // PHP parity: RoundController@stop broadcasts TrackEnded so players
+        // see the answers of the track interrupted mid-play.
+        if matches!(self.phase, Phase::Playing { .. }) {
+            if let (Some(round), Some(track)) =
+                (self.round.as_ref(), self.current_track.as_ref())
+            {
+                let payload = events::track_ended(
+                    round,
+                    self.room.pause_between_tracks,
+                    Some(events::track_playlist_payload(track)),
+                    None,
+                    Utc::now(),
+                );
+                self.broadcast("TrackEnded", payload).await;
+                self.broadcast_public("SalonTrackEnded", events::salon_track_ended(track, None))
+                    .await;
+            }
+        }
+        let round = self.round.as_mut().unwrap();
         let now = Utc::now();
         round.is_playing = false;
         round.finished_at = Some(now);
         let round_id = round.id;
-        let payload = events::round_payload(round);
+        let mut payload = events::round_payload(round);
+        // PHP emits {round_id} — keep the alias alongside the full payload.
+        payload["round_id"] = json!(round_id);
         let _ = self.store.finish_round(round_id, now).await;
         let _ = self.store.set_room_playing(self.room.id, false).await;
 

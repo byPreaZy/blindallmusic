@@ -53,12 +53,10 @@ fn AppVersion() -> impl IntoView {
 #[component]
 fn PartnersCarousel() -> impl IntoView {
     let idx = RwSignal::new(0usize);
-    let handle = send_wrapper::SendWrapper::new(gloo_timers::callback::Interval::new(
-        5000,
-        move || {
+    let handle =
+        send_wrapper::SendWrapper::new(gloo_timers::callback::Interval::new(5000, move || {
             idx.update(|i| *i = (*i + 1) % PARTNERS.len());
-        },
-    ));
+        }));
     on_cleanup(move || drop(handle));
 
     view! {

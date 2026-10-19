@@ -47,7 +47,9 @@ pub fn ProfilePage() -> impl IntoView {
             if let Ok(v) = api::get::<Value>(&format!("/api/v1/users/{uid}/donations")).await {
                 donations.set(v["donations"].as_array().cloned().unwrap_or_default());
             }
-            if let Ok(v) = api::get::<Value>(&format!("/api/v1/profile/{uid}/score-evolution")).await {
+            if let Ok(v) =
+                api::get::<Value>(&format!("/api/v1/profile/{uid}/score-evolution")).await
+            {
                 evolution.set(
                     v["score_evolution"]
                         .as_array()
@@ -235,7 +237,11 @@ pub fn ProfilePage() -> impl IntoView {
 }
 
 #[component]
-fn ProfileHeader(profile: RwSignal<Value>, on_level: impl Fn(leptos::ev::MouseEvent) + Copy + Send + Sync + 'static, on_share: impl Fn(leptos::ev::MouseEvent) + Copy + Send + Sync + 'static) -> impl IntoView {
+fn ProfileHeader(
+    profile: RwSignal<Value>,
+    on_level: impl Fn(leptos::ev::MouseEvent) + Copy + Send + Sync + 'static,
+    on_share: impl Fn(leptos::ev::MouseEvent) + Copy + Send + Sync + 'static,
+) -> impl IntoView {
     view! {
         {move || {
             let p = profile.get();
@@ -384,7 +390,11 @@ fn AdminRoleCard(profile: RwSignal<Value>) -> impl IntoView {
             .await
             {
                 Ok(_) => profile.update(|p| {
-                    p["role"] = Value::String(if role == "user" { String::new() } else { role.into() });
+                    p["role"] = Value::String(if role == "user" {
+                        String::new()
+                    } else {
+                        role.into()
+                    });
                 }),
                 Err(e) => error.set(e.message),
             }
@@ -430,14 +440,41 @@ fn AdminRoleCard(profile: RwSignal<Value>) -> impl IntoView {
 fn PerformanceBanner(perf: Value, rank: Value) -> impl IntoView {
     let position = rank["position"].as_i64();
     let fmt = |v: f64| -> String {
-        if v >= 1000.0 { format!("{v:.0}") } else { format!("{}", (v * 10.0).round() / 10.0) }
+        if v >= 1000.0 {
+            format!("{v:.0}")
+        } else {
+            format!("{}", (v * 10.0).round() / 10.0)
+        }
     };
     let stats: Vec<(&'static str, String, &'static str)> = vec![
-        ("Rounds played", perf["rounds_played"].as_i64().unwrap_or(0).to_string(), "text-white"),
-        ("Best round", fmt(perf["best_round_score"].as_f64().unwrap_or(0.0)), "text-brand-secondary"),
-        ("Best win streak", perf["best_win_streak"].as_i64().unwrap_or(0).to_string(), "text-white"),
-        ("Day streak", perf["consecutive_days_streak"].as_i64().unwrap_or(0).to_string(), "text-amber-300"),
-        ("This week", fmt(perf["week_score"].as_f64().unwrap_or(0.0)), "text-white"),
+        (
+            "Rounds played",
+            perf["rounds_played"].as_i64().unwrap_or(0).to_string(),
+            "text-white",
+        ),
+        (
+            "Best round",
+            fmt(perf["best_round_score"].as_f64().unwrap_or(0.0)),
+            "text-brand-secondary",
+        ),
+        (
+            "Best win streak",
+            perf["best_win_streak"].as_i64().unwrap_or(0).to_string(),
+            "text-white",
+        ),
+        (
+            "Day streak",
+            perf["consecutive_days_streak"]
+                .as_i64()
+                .unwrap_or(0)
+                .to_string(),
+            "text-amber-300",
+        ),
+        (
+            "This week",
+            fmt(perf["week_score"].as_f64().unwrap_or(0.0)),
+            "text-white",
+        ),
     ];
     view! {
         <section class="rounded-2xl border border-white/10 bg-brand-deep/60 p-4 sm:p-5">
@@ -513,8 +550,10 @@ fn badge_icon(name: &str) -> impl IntoView {
         ],
         _ => vec!["M12 2l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z"],
     };
-    let circle = (name == "map-pin").then(|| view! {
-        <circle cx="12" cy="10" r="3"/>
+    let circle = (name == "map-pin").then(|| {
+        view! {
+            <circle cx="12" cy="10" r="3"/>
+        }
     });
     view! {
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
@@ -531,12 +570,21 @@ fn ProfileBadges(badges: Vec<Value>) -> impl IntoView {
     if badges.is_empty() {
         return view! { <div/> }.into_any();
     }
-    let earned: Vec<Value> = badges.iter().filter(|b| b["earned"].as_bool().unwrap_or(false)).cloned().collect();
-    let in_progress: Vec<Value> = badges.iter()
-        .filter(|b| !b["earned"].as_bool().unwrap_or(false)
-            && b["target"].as_i64().is_some()
-            && b["current"].as_i64().unwrap_or(0) < b["target"].as_i64().unwrap_or(0))
-        .take(3).cloned().collect();
+    let earned: Vec<Value> = badges
+        .iter()
+        .filter(|b| b["earned"].as_bool().unwrap_or(false))
+        .cloned()
+        .collect();
+    let in_progress: Vec<Value> = badges
+        .iter()
+        .filter(|b| {
+            !b["earned"].as_bool().unwrap_or(false)
+                && b["target"].as_i64().is_some()
+                && b["current"].as_i64().unwrap_or(0) < b["target"].as_i64().unwrap_or(0)
+        })
+        .take(3)
+        .cloned()
+        .collect();
     view! {
         <section class="overflow-visible rounded-2xl border border-white/10 bg-brand-deep/40 p-4 sm:p-5">
             <h2 class="mb-3 text-sm font-bold uppercase tracking-wider text-white/70">{t("Badges")}</h2>

@@ -24,9 +24,7 @@ impl Auth {
                             api::store_token(None);
                         } else if e.body["error"].as_str() == Some("banned") {
                             if let Some(w) = web_sys::window() {
-                                if w.location().pathname().ok().as_deref()
-                                    != Some("/user/banned")
-                                {
+                                if w.location().pathname().ok().as_deref() != Some("/user/banned") {
                                     let _ = w.location().set_href("/user/banned");
                                 }
                             }
@@ -59,8 +57,15 @@ impl Auth {
             password: &'a str,
             remember: bool,
         }
-        let resp: AuthResponse =
-            api::post("/api/v1/auth/login", &Body { email, password, remember }).await?;
+        let resp: AuthResponse = api::post(
+            "/api/v1/auth/login",
+            &Body {
+                email,
+                password,
+                remember,
+            },
+        )
+        .await?;
         api::store_token(Some(&resp.token));
         self.user.set(Some(resp.user));
         Ok(())

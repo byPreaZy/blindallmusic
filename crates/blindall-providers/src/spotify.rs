@@ -118,17 +118,27 @@ impl SpotifyClient {
     }
 
     pub async fn find_playlist(&self, playlist_id: &str) -> Result<Value, ProviderError> {
-        let token = self.access_token().await?;
-        let resp = self
-            .http
-            .get(format!("{API}/playlists/{}", playlist_id.trim()))
-            .bearer_auth(token)
-            .send()
-            .await
-            .map_err(|e| {
-                tracing::error!(error = %e, "spotify playlist lookup failed");
-                ProviderError::new("spotify", format!("Spotify : {e}"), 500)
-            })?;
+        let mut token = self.access_token().await?;
+        let mut retried_401 = false;
+        let resp = loop {
+            let resp = self
+                .http
+                .get(format!("{API}/playlists/{}", playlist_id.trim()))
+                .bearer_auth(&token)
+                .send()
+                .await
+                .map_err(|e| {
+                    tracing::error!(error = %e, "spotify playlist lookup failed");
+                    ProviderError::new("spotify", format!("Spotify : {e}"), 500)
+                })?;
+            if resp.status().as_u16() == 401 && !retried_401 {
+                retried_401 = true;
+                *self.token.lock().unwrap() = None;
+                token = self.access_token().await?;
+                continue;
+            }
+            break resp;
+        };
         let status = resp.status().as_u16();
         let j = resp.json::<Value>().await.unwrap_or_default();
         if status != 200 {
@@ -152,15 +162,19 @@ impl SpotifyClient {
         &self,
         playlist_id: &str,
     ) -> Result<Vec<ProviderTrack>, ProviderError> {
-        let token = self.access_token().await?;
+        let mut token = self.access_token().await?;
         let mut url = format!(
             "{API}/playlists/{}/tracks?market={}&limit=100",
             playlist_id.trim(),
             self.market
         );
         let mut out = Vec::new();
-        let mut hops = 0u32;
+        let mut seen_urls = std::collections::HashSet::new();
+        let mut retried_401 = false;
         loop {
+            if !seen_urls.insert(url.clone()) {
+                break;
+            }
             let resp = self
                 .http
                 .get(&url)
@@ -172,6 +186,13 @@ impl SpotifyClient {
                     ProviderError::new("spotify", format!("Spotify : {e}"), 500)
                 })?;
             let status = resp.status().as_u16();
+            if status == 401 && !retried_401 {
+                // Cached token may be stale — refresh once and retry.
+                retried_401 = true;
+                *self.token.lock().unwrap() = None;
+                token = self.access_token().await?;
+                continue;
+            }
             let j = resp.json::<Value>().await.unwrap_or_default();
             if status != 200 {
                 let msg = j["error"]["message"].as_str().unwrap_or("Spotify error");
@@ -197,10 +218,7 @@ impl SpotifyClient {
                 );
             }
             match j["next"].as_str() {
-                Some(next) if hops < 25 => {
-                    url = next.to_string();
-                    hops += 1;
-                }
+                Some(next) if seen_urls.len() < 500 => url = next.to_string(),
                 _ => break,
             }
         }

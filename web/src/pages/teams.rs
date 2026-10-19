@@ -29,8 +29,7 @@ pub fn TeamsPage() -> impl IntoView {
         let (s, p) = (search.get(), page.get());
         loading.set(true);
         leptos::task::spawn_local(async move {
-            let url = format!("/api/v1/teams?search={}&page={p}",
-                urlencoding(&s));
+            let url = format!("/api/v1/teams?search={}&page={p}", urlencoding(&s));
             match api::get::<Value>(&url).await {
                 Ok(v) => {
                     teams.set(v["teams"].as_array().cloned().unwrap_or_default());
@@ -343,7 +342,11 @@ pub fn TeamShowPage() -> impl IntoView {
                 grouped.push(c);
             }
             let int_part: String = grouped.chars().rev().collect();
-            if d == "0" { int_part } else { format!("{int_part},{d}") }
+            if d == "0" {
+                int_part
+            } else {
+                format!("{int_part},{d}")
+            }
         } else {
             format!("{}", (n * 10.0).round() / 10.0)
         }
@@ -709,6 +712,12 @@ pub fn TeamShowPage() -> impl IntoView {
 
 fn urlencoding(s: &str) -> String {
     s.chars()
-        .map(|c| if c.is_alphanumeric() || "-_.~".contains(c) { c.to_string() } else { format!("%{:02X}", c as u32) })
+        .map(|c| {
+            if c.is_alphanumeric() || "-_.~".contains(c) {
+                c.to_string()
+            } else {
+                format!("%{:02X}", c as u32)
+            }
+        })
         .collect()
 }

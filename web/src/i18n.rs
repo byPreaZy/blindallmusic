@@ -884,7 +884,21 @@ fn en<'a>(key: &'a str) -> &'a str {
         "Aliases (comma separated)" => "Aliases (comma separated)",
         "No answers" => "No answers",
         "Failed to save" => "Failed to save",
+        "Resume" => "Resume",
+        "Next track" => "Next track",
+        "Paused" => "Paused",
+        "The game is paused by the host." => "The game is paused by the host.",
+        "Host controls" => "Host controls",
+        "Venue name (shown on the TV screen)" => "Venue name (shown on the TV screen)",
+        "e.g. Le Comptoir — jeudi soir" => "e.g. The Corner Bar — quiz night",
 
+
+        "Public rooms without moderators" => "Public rooms without moderators",
+        "Public playlists without moderators" => "Public playlists without moderators",
+        "Revoke" => "Revoke",
+        "owner" => "owner",
+        "Check if the song is already in the playlist" => "Check if the song is already in the playlist",
+        "No need to send suggestions separately. Gather them in a single suggestion, to give better readability for moderators" => "No need to send suggestions separately. Gather them in a single suggestion, to give better readability for moderators",
         k => k,
     }
 }
@@ -1796,6 +1810,20 @@ fn es<'a>(key: &'a str) -> &'a str {
         "pts" => "pts",
         "scores" => "puntos",
         "selected" => "seleccionados",
+        "Resume" => "Reanudar",
+        "Next track" => "Pista siguiente",
+        "Paused" => "En pausa",
+        "The game is paused by the host." => "El anfitrión ha puesto el juego en pausa.",
+        "Host controls" => "Controles del anfitrión",
+        "Venue name (shown on the TV screen)" => "Nombre del local (se muestra en la TV)",
+        "e.g. Le Comptoir — jeudi soir" => "p. ej. Bar La Esquina — noche de quiz",
+
+        "Public rooms without moderators" => "Salas públicas sin moderadores",
+        "Public playlists without moderators" => "Playlists públicas sin moderadores",
+        "Revoke" => "Revocar",
+        "owner" => "propietario",
+        "Check if the song is already in the playlist" => "Comprobar si la canción ya está en la playlist",
+        "No need to send suggestions separately. Gather them in a single suggestion, to give better readability for moderators" => "No hace falta enviar las sugerencias por separado. Agrúpalas en una sola sugerencia para facilitar la lectura de los moderadores",
         k => k,
     }
 }
@@ -2706,6 +2734,20 @@ fn fr<'a>(key: &'a str) -> &'a str {
         "pts" => "pts",
         "scores" => "points",
         "selected" => "sélectionnés",
+        "Resume" => "Reprendre",
+        "Next track" => "Piste suivante",
+        "Paused" => "En pause",
+        "The game is paused by the host." => "La partie est en pause, décidée par l'animateur.",
+        "Host controls" => "Contrôles animateur",
+        "Venue name (shown on the TV screen)" => "Nom du lieu (affiché sur l'écran TV)",
+        "e.g. Le Comptoir — jeudi soir" => "ex. Le Comptoir — jeudi soir",
+
+        "Public rooms without moderators" => "Rooms publiques sans modérateurs",
+        "Public playlists without moderators" => "Playlists publiques sans modérateurs",
+        "Revoke" => "Révoquer",
+        "owner" => "propriétaire",
+        "Check if the song is already in the playlist" => "Vérifier si le titre est déjà dans la playlist",
+        "No need to send suggestions separately. Gather them in a single suggestion, to give better readability for moderators" => "Pas besoin d'envoyer les suggestions séparément. Regroupez-les dans une seule suggestion pour faciliter la lecture des modérateurs",
         k => k,
     }
 }

@@ -407,10 +407,15 @@ pub async fn moderators(
     if !user.is_administrator {
         return forbidden();
     }
-    match state.moderation.moderators(q.page(), q.per_page()).await {
-        Ok(p) => Json(json!({"moderators": p.to_json()})).into_response(),
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    }
+    let page = match state.moderation.moderators(q.page(), q.per_page()).await {
+        Ok(p) => p,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+    let coverage = match state.moderation.moderators_coverage().await {
+        Ok(c) => c,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+    Json(json!({"moderators": page.to_json(), "coverage": coverage})).into_response()
 }
 
 pub async fn detach_room_moderator(
@@ -420,6 +425,19 @@ pub async fn detach_room_moderator(
 ) -> Response {
     if !user.is_administrator {
         return forbidden();
+    }
+    // PHP: assertPublicRoom + assertNotRoomOwner
+    match state.rooms.find(room_id).await {
+        Ok(Some(r)) if r.is_public && r.user_id != user_id => {}
+        Ok(Some(_)) => {
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(json!({"error": "Moderation moderator room is not public or user is owner."})),
+            )
+                .into_response()
+        }
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
     match state.rooms.detach_moderator(room_id, user_id).await {
         Ok(_) => Json(json!({"ok": true})).into_response(),
@@ -434,6 +452,19 @@ pub async fn detach_playlist_moderator(
 ) -> Response {
     if !user.is_administrator {
         return forbidden();
+    }
+    // PHP: assertPublicPlaylist + assertNotPlaylistOwner
+    match state.playlists.find(playlist_id).await {
+        Ok(Some(p)) if p.is_public && p.user_id != user_id => {}
+        Ok(Some(_)) => {
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(json!({"error": "Moderation moderator playlist is not public or user is owner."})),
+            )
+                .into_response()
+        }
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
     match state.playlists.detach_moderator(playlist_id, user_id).await {
         Ok(_) => Json(json!({"ok": true})).into_response(),

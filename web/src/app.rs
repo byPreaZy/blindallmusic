@@ -7,12 +7,12 @@ use crate::pages::admin::{
 };
 use crate::pages::docs::{
     BannedPage, CategoryLandingPage, ContactPage, DocsCreateContentPage, DocsEloPage,
-    DocsGlossaryPage, DocsHowtoPage, DocsIndexPage, DocsLevelPage, DocsSupportPage,
-    FaqRedirect, LanguageSwitch, LocaleRedirect, RankingSortRedirect,
+    DocsGlossaryPage, DocsHowtoPage, DocsIndexPage, DocsLevelPage, DocsSupportPage, FaqRedirect,
+    LanguageSwitch, LocaleRedirect, RankingSortRedirect,
 };
 use crate::pages::donations::DonationsPage;
-use crate::pages::faq::FaqPage;
 use crate::pages::duels::{DailyPage, DuelPlayPage, DuelsPage};
+use crate::pages::faq::FaqPage;
 use crate::pages::games::{GamePlayPage, GamesIndexPage};
 use crate::pages::home::HomePage;
 use crate::pages::login::{
@@ -21,8 +21,7 @@ use crate::pages::login::{
 };
 use crate::pages::moderation::{
     ModBannedUsers, ModDashboard, ModDataQuality, ModModerators, ModSuggestions, ModTracks,
-    ModTrashedMessages,
-    ModUserShow, ModUsers,
+    ModTrashedMessages, ModUserShow, ModUsers,
 };
 use crate::pages::pages::StaticPage;
 use crate::pages::playlist_edit::PlaylistEditPage;
@@ -100,7 +99,9 @@ pub fn App() -> impl IntoView {
         let rt = match shared_rt.get_untracked() {
             Some(rt) => rt,
             None => {
-                let Some(token) = crate::api::stored_token() else { return };
+                let Some(token) = crate::api::stored_token() else {
+                    return;
+                };
                 let rt = crate::ws::Realtime::connect(&token);
                 rt.start_heartbeat().forget();
                 shared_rt.set(Some(rt.clone()));
@@ -125,19 +126,31 @@ pub fn App() -> impl IntoView {
             }),
         );
         let user_sig = auth.user;
-        rt.listen(&ch, "UserLevelUpdated", std::rc::Rc::new(move |data| {
-            user_sig.update(|u| {
-                if let Some(u) = u.as_mut() {
-                    if let Some(v) = data["level"].as_i64() { u.level = v; }
-                    if let Some(v) = data["current_xp"].as_i64() { u.current_xp = v; }
-                    if let Some(v) = data["xp_for_next_level"].as_i64() { u.xp_for_next_level = v; }
-                    if let Some(v) = data["total_xp"].as_i64() { u.total_xp = v; }
-                    if data["level_metrics"].is_object() {
-                        u.level_metrics = Some(data["level_metrics"].clone());
+        rt.listen(
+            &ch,
+            "UserLevelUpdated",
+            std::rc::Rc::new(move |data| {
+                user_sig.update(|u| {
+                    if let Some(u) = u.as_mut() {
+                        if let Some(v) = data["level"].as_i64() {
+                            u.level = v;
+                        }
+                        if let Some(v) = data["current_xp"].as_i64() {
+                            u.current_xp = v;
+                        }
+                        if let Some(v) = data["xp_for_next_level"].as_i64() {
+                            u.xp_for_next_level = v;
+                        }
+                        if let Some(v) = data["total_xp"].as_i64() {
+                            u.total_xp = v;
+                        }
+                        if data["level_metrics"].is_object() {
+                            u.level_metrics = Some(data["level_metrics"].clone());
+                        }
                     }
-                }
-            });
-        }));
+                });
+            }),
+        );
         user_subscribed.set(Some(u.id));
     });
 

@@ -115,6 +115,32 @@ impl PlaylistRepo {
         .fetch_all(&self.pool)
         .await?;
 
+        let ids: Vec<i64> = rows.iter().map(|r| r.get("id")).collect();
+        // Batch the moderator lists — one query for all playlists instead
+        // of one per row (PHP eager-loads `moderators`).
+        let mut mods_by_playlist: std::collections::HashMap<i64, Vec<ModeratorEntry>> =
+            std::collections::HashMap::new();
+        if !ids.is_empty() {
+            let mod_rows = sqlx::query(
+                "SELECT m.moderable_id, u.id, u.name FROM moderables m \
+                 JOIN users u ON u.id = m.user_id \
+                 WHERE m.moderable_type = 'App\\Models\\Playlist' \
+                 AND m.moderable_id = ANY($1)",
+            )
+            .bind(&ids)
+            .fetch_all(&self.pool)
+            .await?;
+            for m in &mod_rows {
+                mods_by_playlist
+                    .entry(m.get("moderable_id"))
+                    .or_default()
+                    .push(ModeratorEntry {
+                        id: m.get("id"),
+                        name: m.get("name"),
+                    });
+            }
+        }
+
         let mut out = Vec::with_capacity(rows.len());
         for r in rows {
             let id: i64 = r.get("id");
@@ -128,7 +154,7 @@ impl PlaylistRepo {
                 },
                 owner_name: r.get("owner_name"),
                 total_tracks: r.get("total_tracks"),
-                moderators: self.moderators(id).await.unwrap_or_default(),
+                moderators: mods_by_playlist.remove(&id).unwrap_or_default(),
                 updated_at: r.get("updated_at"),
             });
         }
@@ -185,9 +211,14 @@ impl PlaylistRepo {
         playlist_id: i64,
         user_id: i64,
     ) -> Result<(), sqlx::Error> {
+        // PHP syncWithoutDetaching semantics — no duplicate moderable rows.
         sqlx::query(
             "INSERT INTO moderables (user_id, moderable_type, moderable_id, \
-             created_at, updated_at) VALUES ($1, 'App\\Models\\Playlist', $2, $3, $4)",
+             created_at, updated_at) \
+             SELECT $1, 'App\\Models\\Playlist', $2, $3, $4 \
+             WHERE NOT EXISTS ( \
+                 SELECT 1 FROM moderables WHERE user_id = $1 \
+                 AND moderable_type = 'App\\Models\\Playlist' AND moderable_id = $2)",
         )
         .bind(user_id)
         .bind(playlist_id)
@@ -294,8 +325,12 @@ impl PlaylistRepo {
     }
 
     pub async fn has_rooms(&self, playlist_id: i64) -> bool {
+        // Soft-deleted rooms must not keep a public playlist undeletable
+        // (PHP: $playlist->has('rooms') excludes trashed rooms).
         sqlx::query_scalar::<_, i64>(
-            "SELECT EXISTS(SELECT 1 FROM playlist_room WHERE playlist_id = $1)::int::bigint",
+            "SELECT EXISTS(SELECT 1 FROM playlist_room pr \
+             JOIN rooms r ON r.id = pr.room_id AND r.deleted_at IS NULL \
+             WHERE pr.playlist_id = $1)::int::bigint",
         )
         .bind(playlist_id)
         .fetch_one(&self.pool)
@@ -304,15 +339,48 @@ impl PlaylistRepo {
         .unwrap_or(false)
     }
 
+    pub async fn name_taken(&self, name: &str, except: Option<i64>) -> Result<bool, sqlx::Error> {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT EXISTS(SELECT 1 FROM playlists WHERE name = $1 \
+             AND ($2::bigint IS NULL OR id != $2))::int::bigint",
+        )
+        .bind(name)
+        .bind(except)
+        .fetch_one(&self.pool)
+        .await
+        .map(|v| v == 1)
+    }
+
+    pub async fn track_exists(
+        &self,
+        playlist_id: i64,
+        provider: &str,
+        provider_id: &str,
+    ) -> Result<bool, sqlx::Error> {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT EXISTS(SELECT 1 FROM tracks WHERE playlist_id = $1 \
+             AND provider = $2 AND provider_id = $3)::int::bigint",
+        )
+        .bind(playlist_id)
+        .bind(provider)
+        .bind(provider_id)
+        .fetch_one(&self.pool)
+        .await
+        .map(|v| v == 1)
+    }
+
     pub async fn provider_track_id(
         &self,
         playlist_id: i64,
+        provider: &str,
         provider_id: &str,
     ) -> Result<Option<i64>, sqlx::Error> {
         sqlx::query_scalar::<_, i64>(
-            "SELECT id FROM tracks WHERE playlist_id = $1 AND provider_id = $2 LIMIT 1",
+            "SELECT id FROM tracks WHERE playlist_id = $1 AND provider = $2 \
+             AND provider_id = $3 LIMIT 1",
         )
         .bind(playlist_id)
+        .bind(provider)
         .bind(provider_id)
         .fetch_optional(&self.pool)
         .await
@@ -474,51 +542,31 @@ impl PlaylistRepo {
         track_name: &str,
     ) -> Result<i64, sqlx::Error> {
         let mut tx = self.pool.begin().await?;
-        let existing = sqlx::query_scalar::<_, i64>(
-            "SELECT id FROM tracks WHERE playlist_id = $1 AND provider = $2 AND provider_id = $3",
+        let now = Utc::now();
+        // Atomic upsert on the (playlist, provider, provider_id) natural key —
+        // the old SELECT-then-INSERT raced under concurrent imports.
+        let track_id = sqlx::query_scalar::<_, i64>(
+            "INSERT INTO tracks (user_id, playlist_id, provider, provider_id, \
+             provider_url, preview_url, artwork_url, created_at, updated_at) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
+             ON CONFLICT (playlist_id, provider, provider_id) \
+             DO UPDATE SET provider_url = EXCLUDED.provider_url, \
+                 preview_url = EXCLUDED.preview_url, \
+                 artwork_url = EXCLUDED.artwork_url, \
+                 updated_at = EXCLUDED.updated_at \
+             RETURNING id",
         )
+        .bind(user_id)
         .bind(playlist_id)
         .bind(provider)
         .bind(provider_id)
-        .fetch_optional(&mut *tx)
+        .bind(provider_url)
+        .bind(preview_url)
+        .bind(artwork_url)
+        .bind(now)
+        .bind(now)
+        .fetch_one(&mut *tx)
         .await?;
-
-        let now = Utc::now();
-        let track_id = match existing {
-            Some(id) => {
-                sqlx::query(
-                    "UPDATE tracks SET provider_url = $1, preview_url = $2, \
-                     artwork_url = $3, updated_at = $4 WHERE id = $5",
-                )
-                .bind(provider_url)
-                .bind(preview_url)
-                .bind(artwork_url)
-                .bind(now)
-                .bind(id)
-                .execute(&mut *tx)
-                .await?;
-                id
-            }
-            None => {
-                let res = sqlx::query_scalar::<_, i64>(
-                    "INSERT INTO tracks (user_id, playlist_id, provider, provider_id, \
-                     provider_url, preview_url, artwork_url, created_at, updated_at) \
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id",
-                )
-                .bind(user_id)
-                .bind(playlist_id)
-                .bind(provider)
-                .bind(provider_id)
-                .bind(provider_url)
-                .bind(preview_url)
-                .bind(artwork_url)
-                .bind(now)
-                .bind(now)
-                .fetch_one(&mut *tx)
-                .await?;
-                res
-            }
-        };
 
         let (clean_title, feats, medley) = blindall_core::sanitize::clean_import_title(track_name);
         let title = if clean_title.is_empty() {
@@ -574,7 +622,37 @@ impl PlaylistRepo {
             }
         }
 
-        for feat in &feats {
+        // Un extrait "feat. A & B" est eclate en artistes individuels, sauf si
+        // la forme jointe existe deja comme reponse artiste dans le catalogue
+        // ("Earth, Wind & Fire", "Simon & Garfunkel", "W&W"… = un seul acte).
+        let mut feat_values: Vec<String> = Vec::new();
+        for raw in &feats {
+            let segments = blindall_core::sanitize::split_feat_artists(raw);
+            if segments.len() <= 1 {
+                if let Some(single) = segments.into_iter().next() {
+                    if !single.is_empty() {
+                        feat_values.push(single);
+                    }
+                }
+                continue;
+            }
+            let joined_is_artist: bool = sqlx::query_scalar::<_, Option<i64>>(
+                "SELECT ta.id FROM track_answers ta \
+                 WHERE ta.answer_type_id = 1 AND ta.value ILIKE $1 LIMIT 1",
+            )
+            .bind(raw)
+            .fetch_optional(&mut *tx)
+            .await?
+            .is_some();
+            if joined_is_artist {
+                feat_values.push(raw.clone());
+            } else {
+                feat_values.extend(segments);
+            }
+        }
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        feat_values.retain(|f| seen.insert(f.to_lowercase()));
+        for feat in &feat_values {
             sqlx::query(
                 "INSERT INTO track_answers (track_id, answer_type_id, value, aliases, \
                  score, created_at, updated_at) \

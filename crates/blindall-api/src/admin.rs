@@ -672,6 +672,14 @@ pub async fn update_playlist(
             "The name field is required and must not exceed 50 characters.",
         );
     }
+    // PHP Rule::unique('playlists')->ignore($playlist) on admin update.
+    match state.playlists.name_taken(name, Some(id)).await {
+        Ok(true) => {
+            return err("name", "The name has already been taken.");
+        }
+        Ok(false) => {}
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
     match state
         .admin
         .admin_update_playlist(

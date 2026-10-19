@@ -36,8 +36,7 @@ pub fn LevelBadge(
     #[prop(into)] level: Signal<i64>,
     #[prop(into)] current_xp: Signal<i64>,
     #[prop(into)] xp_for_next_level: Signal<i64>,
-    #[prop(default = 40)]
-    size: u32,
+    #[prop(default = 40)] size: u32,
 ) -> impl IntoView {
     let stroke_w = if size <= 28 { 2.5 } else { 3.5 };
     let radius = if size <= 28 { 12.0 } else { 17.0 };
@@ -93,14 +92,58 @@ pub fn LevelInfo(
             let g = |k: &str| m[k].as_i64().unwrap_or(0);
             let has_team = m["has_team"].as_bool().unwrap_or(false);
             vec![
-                (t("Total score").to_string(), format!("{} {}", g("score_public_rooms"), t("points")), g("score_public_rooms"), None),
-                (t("Mini-games score").to_string(), format!("{} {}", g("minigame_scores_total"), t("points")), g("minigame_scores_total").min(1000), Some(1000)),
-                (t("Seniority").to_string(), format!("{} {}", g("seniority_months"), t("months")), (g("seniority_months") * 50).min(600), Some(600)),
-                (t("Consecutive days streak").to_string(), format!("{} {}", g("consecutive_days_streak"), t("days")), (g("consecutive_days_streak") * 10).min(300), Some(300)),
-                (t("Rooms created").to_string(), g("rooms_created_count").to_string(), (g("rooms_created_count") * 100).min(1000), Some(1000)),
-                (t("Playlists created").to_string(), g("playlists_created_count").to_string(), (g("playlists_created_count") * 20).min(2000), Some(2000)),
-                (t("Tracks liked").to_string(), g("tracks_liked_count").to_string(), (g("tracks_liked_count") * 5).min(1000), Some(1000)),
-                (t("Team").to_string(), if has_team { t("Yes").to_string() } else { t("No").to_string() }, if has_team { 200 } else { 0 }, Some(200)),
+                (
+                    t("Total score").to_string(),
+                    format!("{} {}", g("score_public_rooms"), t("points")),
+                    g("score_public_rooms"),
+                    None,
+                ),
+                (
+                    t("Mini-games score").to_string(),
+                    format!("{} {}", g("minigame_scores_total"), t("points")),
+                    g("minigame_scores_total").min(1000),
+                    Some(1000),
+                ),
+                (
+                    t("Seniority").to_string(),
+                    format!("{} {}", g("seniority_months"), t("months")),
+                    (g("seniority_months") * 50).min(600),
+                    Some(600),
+                ),
+                (
+                    t("Consecutive days streak").to_string(),
+                    format!("{} {}", g("consecutive_days_streak"), t("days")),
+                    (g("consecutive_days_streak") * 10).min(300),
+                    Some(300),
+                ),
+                (
+                    t("Rooms created").to_string(),
+                    g("rooms_created_count").to_string(),
+                    (g("rooms_created_count") * 100).min(1000),
+                    Some(1000),
+                ),
+                (
+                    t("Playlists created").to_string(),
+                    g("playlists_created_count").to_string(),
+                    (g("playlists_created_count") * 20).min(2000),
+                    Some(2000),
+                ),
+                (
+                    t("Tracks liked").to_string(),
+                    g("tracks_liked_count").to_string(),
+                    (g("tracks_liked_count") * 5).min(1000),
+                    Some(1000),
+                ),
+                (
+                    t("Team").to_string(),
+                    if has_team {
+                        t("Yes").to_string()
+                    } else {
+                        t("No").to_string()
+                    },
+                    if has_team { 200 } else { 0 },
+                    Some(200),
+                ),
             ]
         })
         .unwrap_or_default();

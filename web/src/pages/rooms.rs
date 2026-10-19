@@ -68,7 +68,10 @@ pub fn RoomsIndexPage() -> impl IntoView {
         leptos::task::spawn_local(async move {
             let mut url = "/api/v1/rooms/mine?trashed=with".to_string();
             if !search_v.is_empty() {
-                url.push_str(&format!("&search={}", js_sys::encode_uri_component(&search_v)));
+                url.push_str(&format!(
+                    "&search={}",
+                    js_sys::encode_uri_component(&search_v)
+                ));
             }
             match api::get::<Value>(&url).await {
                 Ok(v) => rooms.set(

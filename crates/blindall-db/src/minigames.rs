@@ -64,6 +64,11 @@ impl MinigameRepo {
         let mut choices = self
             .wrong_choices(track.id, answer_type_id, &correct, 3)
             .await?;
+        if choices.len() < 3 {
+            // Not enough distinct distractors — abort so the caller retries
+            // with another track instead of shipping a 2-choice question.
+            return Ok(None);
+        }
         choices.insert(0, correct.clone());
         shuffle(&mut choices);
         Ok(Some(ChoicesQuestion {
@@ -190,8 +195,13 @@ impl MinigameRepo {
         limit: i64,
     ) -> Result<Vec<serde_json::Value>, sqlx::Error> {
         sqlx::query(
+            // Solo leaderboard only: duel & daily answers are scored in their
+            // own tables (duels, daily leaderboard) and marked in metadata —
+            // counting them here would let an oracle/alt farm the solo board.
             "SELECT m.user_id, u.name, CAST(SUM(m.score) AS bigint) AS total FROM minigame_scores m \
              JOIN users u ON u.id = m.user_id WHERE m.game_type = $1 \
+             AND u.is_guest = false AND u.deleted_at IS NULL \
+             AND NOT (m.metadata ? 'duel_id') AND NOT (m.metadata ? 'daily') \
              GROUP BY m.user_id, u.name ORDER BY total DESC LIMIT $2",
         )
         .bind(game_type)
@@ -237,7 +247,11 @@ impl MinigameRepo {
             }
         }
         if found.is_none() {
-            found = self.pick_one(answer_type_id, require_artwork, 1).await?;
+            // Deterministic fallback (smallest eligible id) used to
+            // over-represent old tracks — uniform pick on the rare miss path.
+            found = self
+                .pick_one_uniform(answer_type_id, require_artwork)
+                .await?;
         }
         let Some((id, provider, provider_id, preview_url, artwork_url)) = found else {
             return Ok(None);
@@ -269,9 +283,9 @@ impl MinigameRepo {
              FROM tracks t \
              JOIN playlists p ON p.id = t.playlist_id AND p.is_public = true \
              JOIN track_answers ta ON ta.track_id = t.id AND ta.answer_type_id = $1 \
-             WHERE t.provider != 'youtube' \
+             WHERE t.provider NOT IN ('youtube','audius') \
              AND (t.preview_url IS NOT NULL \
-                  OR t.provider IN ('spotify','itunes','deezer','audius')) \
+                  OR t.provider IN ('spotify','itunes','deezer')) \
              {} {} AND t.id >= $2 ORDER BY t.id LIMIT 1",
             if require_artwork {
                 "AND t.artwork_url IS NOT NULL"
@@ -283,6 +297,45 @@ impl MinigameRepo {
         sqlx::query(&sql)
             .bind(answer_type_id)
             .bind(from_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map(|o| {
+                o.map(|r| {
+                    (
+                        r.get("id"),
+                        r.get("provider"),
+                        r.get("provider_id"),
+                        r.get("preview_url"),
+                        r.get("artwork_url"),
+                    )
+                })
+            })
+    }
+
+    async fn pick_one_uniform(
+        &self,
+        answer_type_id: i64,
+        require_artwork: bool,
+    ) -> Result<Option<(i64, String, Option<String>, Option<String>, Option<String>)>, sqlx::Error>
+    {
+        let sql = format!(
+            "SELECT t.id, t.provider, t.provider_id, t.preview_url, t.artwork_url \
+             FROM tracks t \
+             JOIN playlists p ON p.id = t.playlist_id AND p.is_public = true \
+             JOIN track_answers ta ON ta.track_id = t.id AND ta.answer_type_id = $1 \
+             WHERE t.provider NOT IN ('youtube','audius') \
+             AND (t.preview_url IS NOT NULL \
+                  OR t.provider IN ('spotify','itunes','deezer')) \
+             {} {} ORDER BY random() LIMIT 1",
+            if require_artwork {
+                "AND t.artwork_url IS NOT NULL"
+            } else {
+                ""
+            },
+            generic_filter(answer_type_id),
+        );
+        sqlx::query(&sql)
+            .bind(answer_type_id)
             .fetch_optional(&self.pool)
             .await
             .map(|o| {
@@ -441,20 +494,52 @@ impl MinigameRepo {
     pub async fn gen_question_set(&self, game_type: &str, n: usize) -> Vec<serde_json::Value> {
         let mut out = Vec::new();
         let mut seen = std::collections::HashSet::new();
-        let track_based = game_type != "anagram";
         for _ in 0..n * 4 {
             if out.len() >= n {
                 break;
             }
+            // A None means "that draw couldn't build a full question" (too few
+            // distractors) — retry with another draw inside the same budget.
             let Some(q) = self.gen_question(game_type).await else {
-                break;
+                continue;
             };
-            let key = q["track"]["id"].as_i64().unwrap_or_else(|| rand::random());
-            if !track_based || seen.insert(key) {
+            // Dedup on the track for track-based games, on the artist for
+            // anagrams (the old rand key never deduplicated anagrams).
+            let key = if game_type == "anagram" {
+                q["correct_value"].as_str().map(str::to_string)
+            } else {
+                q["track"]["id"].as_i64().map(|i| i.to_string())
+            };
+            if key.is_some_and(|k| seen.insert(k)) {
                 out.push(q);
             }
         }
         out
+    }
+
+    /// A duel opponent must be a live registered account (not guest, not
+    /// soft-deleted); the ban check lives in the moderation repo.
+    pub async fn challengeable(&self, user_id: i64) -> Result<bool, sqlx::Error> {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND is_guest = false \
+             AND deleted_at IS NULL)::int::bigint",
+        )
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await
+        .map(|v| v == 1)
+    }
+
+    /// Pending duels created by this user (open or accepted, not finished) —
+    /// used to cap challenge spam.
+    pub async fn pending_duel_count(&self, user_id: i64) -> Result<i64, sqlx::Error> {
+        sqlx::query_scalar(
+            "SELECT COUNT(*) FROM minigame_duels WHERE creator_id = $1 \
+             AND status IN ('open','active')",
+        )
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await
     }
 
     pub async fn create_duel(
@@ -521,7 +606,7 @@ impl MinigameRepo {
              JOIN users c ON c.id = d.creator_id
              LEFT JOIN users o ON o.id = d.opponent_id
              WHERE d.creator_id = $1 OR d.opponent_id = $1
-                OR (d.status = 'open' AND d.creator_id <> $1)
+                OR (d.status = 'open' AND d.creator_id <> $1 AND d.opponent_id IS NULL)
              ORDER BY d.created_at DESC
              LIMIT 50",
         )
@@ -620,6 +705,7 @@ impl MinigameRepo {
                     COUNT(*) AS total
              FROM per_user p
              JOIN users u ON u.id = p.uid
+             WHERE u.is_guest = false AND u.deleted_at IS NULL
              GROUP BY u.id, u.name, u.elo
              ORDER BY wins DESC, draws DESC, u.elo DESC
              LIMIT $1",
@@ -663,16 +749,20 @@ impl MinigameRepo {
             return Ok(v.as_array().cloned().unwrap_or_default());
         }
         let qs = self.gen_question_set(game_type, n).await;
-        sqlx::query(
+        // On generation race, return the canonical stored set — not the
+        // loser's unpersisted one (phantom-set bug).
+        let stored = sqlx::query_scalar::<_, serde_json::Value>(
             "INSERT INTO minigame_daily (day, game_type, questions)
-             VALUES ($1, $2, $3::jsonb) ON CONFLICT DO NOTHING",
+             VALUES ($1, $2, $3::jsonb)
+             ON CONFLICT (day, game_type) DO UPDATE SET day = EXCLUDED.day
+             RETURNING questions",
         )
         .bind(day)
         .bind(game_type)
         .bind(serde_json::to_string(&qs).unwrap_or_else(|_| "[]".into()))
-        .execute(&self.pool)
+        .fetch_one(&self.pool)
         .await?;
-        Ok(qs)
+        Ok(stored.as_array().cloned().unwrap_or_default())
     }
 
     /// Record a daily answer. Replay-safe per index via WHERE NOT EXISTS.
@@ -750,6 +840,7 @@ impl MinigameRepo {
         user_id: i64,
         game_type: &str,
         min_answers: i64,
+        today: chrono::NaiveDate,
     ) -> Result<i64, sqlx::Error> {
         sqlx::query_scalar(
             "WITH d AS (
@@ -764,13 +855,14 @@ impl MinigameRepo {
                GROUP BY grp ORDER BY last_day DESC LIMIT 1
              )
              SELECT COALESCE(CASE
-               WHEN (SELECT last_day FROM latest) >= CURRENT_DATE - 1
+               WHEN (SELECT last_day FROM latest) >= $4::date - 1
                THEN (SELECT COUNT(*) FROM g WHERE grp = (SELECT grp FROM latest))
                ELSE 0 END, 0)::bigint",
         )
         .bind(user_id)
         .bind(game_type)
         .bind(min_answers)
+        .bind(today)
         .fetch_one(&self.pool)
         .await
     }
@@ -787,6 +879,7 @@ impl MinigameRepo {
              FROM minigame_daily_scores s
              JOIN users u ON u.id = s.user_id
              WHERE s.day = $1 AND s.game_type = $2
+               AND u.is_guest = false AND u.deleted_at IS NULL
              ORDER BY s.score DESC, s.updated_at ASC
              LIMIT $3",
         )

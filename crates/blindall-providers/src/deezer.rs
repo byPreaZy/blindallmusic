@@ -74,7 +74,9 @@ impl DeezerClient {
                     "Deezer : {}",
                     j["error"]["message"].as_str().unwrap_or("unknown error")
                 ),
-                if status == 0 { 404 } else { status },
+                // Deezer answers HTTP 200 with an {"error": …} body — never
+                // surface that as a successful status to the caller.
+                if status >= 400 { status } else { 404 },
             ));
         }
         Ok(serde_json::json!({
@@ -95,8 +97,13 @@ impl DeezerClient {
             urlencoded(playlist_id.trim())
         );
         let mut out = Vec::new();
-        let mut hops = 0u32;
+        // PHP paginates until `next` is absent — generous cap plus a
+        // cycle guard on repeated URLs instead of truncating at ~2.6k tracks.
+        let mut seen_urls = std::collections::HashSet::new();
         loop {
+            if !seen_urls.insert(url.clone()) {
+                break;
+            }
             let resp = self.http.get(&url).send().await.map_err(|e| {
                 tracing::error!(error = %e, "deezer playlist tracks failed");
                 ProviderError::new("deezer", "Deezer service is temporarily unavailable", 500)
@@ -128,10 +135,7 @@ impl DeezerClient {
                 );
             }
             match j["next"].as_str() {
-                Some(next) if hops < 25 => {
-                    url = next.to_string();
-                    hops += 1;
-                }
+                Some(next) if seen_urls.len() < 500 => url = next.to_string(),
                 _ => break,
             }
         }

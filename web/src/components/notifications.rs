@@ -6,8 +6,8 @@ use serde_json::{json, Value};
 
 #[component]
 pub fn Notifications() -> impl IntoView {
-    let items = use_context::<crate::app::NotificationFeed>()
-        .unwrap_or_else(|| RwSignal::new(Vec::new()));
+    let items =
+        use_context::<crate::app::NotificationFeed>().unwrap_or_else(|| RwSignal::new(Vec::new()));
     let open = RwSignal::new(false);
     let busy = RwSignal::new(false);
 
@@ -24,18 +24,16 @@ pub fn Notifications() -> impl IntoView {
     let mark_read = move |id: String| {
         remove(&id);
         leptos::task::spawn_local(async move {
-            let _ = api::post_empty::<Value>(
-                &format!("/api/v1/users/notifications/{id}/read"),
-            ).await;
+            let _ =
+                api::post_empty::<Value>(&format!("/api/v1/users/notifications/{id}/read")).await;
         });
     };
 
     let mark_done = move |id: String| {
         remove(&id);
         leptos::task::spawn_local(async move {
-            let _ = api::post_empty::<Value>(
-                &format!("/api/v1/users/notifications/{id}/done"),
-            ).await;
+            let _ =
+                api::post_empty::<Value>(&format!("/api/v1/users/notifications/{id}/done")).await;
         });
     };
 
@@ -49,7 +47,8 @@ pub fn Notifications() -> impl IntoView {
             let _ = api::post::<Value, _>(
                 &format!("/api/v1/teams/requests/{request_id}/{action}"),
                 &body,
-            ).await;
+            )
+            .await;
             items.update(|l| l.retain(|n| n["id"].as_str() != Some(notif_id.as_str())));
             busy.set(false);
         });
@@ -57,8 +56,8 @@ pub fn Notifications() -> impl IntoView {
 
     let count = move || items.get().len();
 
-    let popup = use_context::<crate::app::NotificationPopup>()
-        .unwrap_or_else(|| RwSignal::new(None));
+    let popup =
+        use_context::<crate::app::NotificationPopup>().unwrap_or_else(|| RwSignal::new(None));
 
     view! {
         <div class="relative">

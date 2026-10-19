@@ -63,6 +63,9 @@ fn expired_question() -> Response {
 // ---- index -----------------------------------------------------------------
 
 pub async fn index(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
     Json(json!({
         "games": games_list(&state, Some(user.id)).await
     }))
@@ -97,8 +100,11 @@ pub async fn games_list(state: &AppState, user_id: Option<i64>) -> Vec<Value> {
 pub async fn leaderboard(
     State(state): State<AppState>,
     Path(game_type): Path<String>,
-    CurrentUser(_user): CurrentUser,
+    CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
     let game_type = game_type.replace('-', "_");
     match state.minigames.leaderboard(&game_type, 10).await {
         Ok(rows) => Json(json!({"leaderboard": rows})).into_response(),
@@ -111,8 +117,11 @@ pub async fn leaderboard(
 pub async fn next(
     State(state): State<AppState>,
     Path(game): Path<String>,
-    CurrentUser(_user): CurrentUser,
+    CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
     let game = game.replace('-', "_");
     match game.as_str() {
         TYPE_QUIZ | TYPE_WHO_SANG | TYPE_ALBUM_COVER => {
@@ -165,6 +174,9 @@ pub async fn check(
     CurrentUser(user): CurrentUser,
     Json(body): Json<CheckBody>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
     let game = game.replace('-', "_");
     let (correct, correct_value, meta): (bool, Option<String>, Value) = match game.as_str() {
         TYPE_QUIZ | TYPE_FIRST_LETTER => {
@@ -359,6 +371,9 @@ pub async fn duels_index(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
     match state.minigames.duels_for(user.id).await {
         Ok(d) => Json(json!({"duels": d})).into_response(),
         Err(e) => {
@@ -370,8 +385,11 @@ pub async fn duels_index(
 
 pub async fn duels_leaderboard(
     State(state): State<AppState>,
-    CurrentUser(_user): CurrentUser,
+    CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
     match state.minigames.duel_leaderboard(20).await {
         Ok(rows) => Json(json!({"leaderboard": rows})).into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
@@ -390,6 +408,9 @@ pub async fn duel_create(
     CurrentUser(user): CurrentUser,
     Json(body): Json<CreateDuelBody>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
     let game_type = body.game_type.replace('-', "_");
     if !VALID_TYPES.contains(&game_type.as_str()) {
         return duel_err(StatusCode::UNPROCESSABLE_ENTITY, "Invalid game type.");
@@ -399,6 +420,22 @@ pub async fn duel_create(
             StatusCode::UNPROCESSABLE_ENTITY,
             "Cannot challenge yourself.",
         );
+    }
+    if let Some(opp) = body.opponent_id {
+        let challengeable = state.minigames.challengeable(opp).await.unwrap_or(false)
+            && !state.moderation.is_banned(opp).await.unwrap_or(false);
+        if !challengeable {
+            return duel_err(StatusCode::UNPROCESSABLE_ENTITY, "Invalid opponent.");
+        }
+    }
+    if state
+        .minigames
+        .pending_duel_count(user.id)
+        .await
+        .unwrap_or(0)
+        >= 25
+    {
+        return duel_err(StatusCode::TOO_MANY_REQUESTS, "Too many pending duels.");
     }
     let n = body
         .count
@@ -446,6 +483,9 @@ pub async fn duel_show(
     Path(id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
     match state.minigames.duel(id).await {
         Ok(Some(row)) => {
             let creator_id = row["creator_id"].as_i64().unwrap_or_default();
@@ -466,6 +506,9 @@ pub async fn duel_accept(
     Path(id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
     match state.minigames.accept_duel(id, user.id).await {
         Ok(0) => duel_err(StatusCode::UNPROCESSABLE_ENTITY, "Duel cannot be accepted."),
         Ok(_) => {
@@ -503,6 +546,9 @@ pub async fn duel_answer(
     CurrentUser(user): CurrentUser,
     Json(body): Json<DuelAnswerBody>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
     let Some(row) = state.minigames.duel(id).await.ok().flatten() else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -615,6 +661,9 @@ pub async fn daily_show(
     CurrentUser(user): CurrentUser,
     axum::extract::Query(q): axum::extract::Query<DailyQuery>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
     let game_type = q
         .game_type
         .unwrap_or_else(|| TYPE_QUIZ.to_string())
@@ -641,9 +690,11 @@ pub async fn daily_show(
         .ok()
         .flatten()
         .unwrap_or((0, 0, json!([])));
+    // A day counts toward the streak once every question in *that day's* set
+    // is answered — the set can be smaller than the nominal size.
     let streak = state
         .minigames
-        .daily_streak(user.id, &game_type, DAILY_QUESTIONS_CONST as i64)
+        .daily_streak(user.id, &game_type, questions.len() as i64, today)
         .await
         .unwrap_or(0);
     let leaderboard = state
@@ -679,6 +730,9 @@ pub async fn daily_answer(
     CurrentUser(user): CurrentUser,
     Json(body): Json<DailyAnswerBody>,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
     let game_type = body.game_type.replace('-', "_");
     if !VALID_TYPES.contains(&game_type.as_str()) {
         return duel_err(StatusCode::UNPROCESSABLE_ENTITY, "Invalid game type.");

@@ -59,11 +59,19 @@ pub fn RoomChat(
                 config.set(ChatConfig {
                     standard_emojis: v["reactions"]["standard"]
                         .as_array()
-                        .map(|a| a.iter().filter_map(|e| e.as_str().map(str::to_string)).collect())
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|e| e.as_str().map(str::to_string))
+                                .collect()
+                        })
                         .unwrap_or_default(),
                     supporter_emojis: v["reactions"]["supporter"]
                         .as_array()
-                        .map(|a| a.iter().filter_map(|e| e.as_str().map(str::to_string)).collect())
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|e| e.as_str().map(str::to_string))
+                                .collect()
+                        })
                         .unwrap_or_default(),
                     public_moderator_ids: v["public_moderator_ids"]
                         .as_array()
@@ -78,38 +86,50 @@ pub fn RoomChat(
         let rt = rt.clone();
         rt.subscribe(&channel);
         let ch = channel.clone();
-        rt.listen(&ch, "NewMessage", Rc::new(move |data| {
-            if let Some(m) = data.get("message") {
-                messages.update(|msgs| {
-                    let id = m["id"].as_i64().unwrap_or_default();
-                    if !msgs.iter().any(|x| x["id"].as_i64() == Some(id)) {
-                        msgs.push(m.clone());
-                        if msgs.len() > 50 {
-                            msgs.remove(0);
+        rt.listen(
+            &ch,
+            "NewMessage",
+            Rc::new(move |data| {
+                if let Some(m) = data.get("message") {
+                    messages.update(|msgs| {
+                        let id = m["id"].as_i64().unwrap_or_default();
+                        if !msgs.iter().any(|x| x["id"].as_i64() == Some(id)) {
+                            msgs.push(m.clone());
+                            if msgs.len() > 50 {
+                                msgs.remove(0);
+                            }
                         }
-                    }
-                });
-            }
-        }));
+                    });
+                }
+            }),
+        );
         let ch = channel.clone();
         let messages2 = messages;
-        rt.listen(&ch, "MessageReported", Rc::new(move |data| {
-            if let Some(m) = data.get("message") {
-                let id = m["id"].as_i64().unwrap_or_default();
-                messages2.update(|msgs| {
-                    if let Some(x) = msgs.iter_mut().find(|x| x["id"].as_i64() == Some(id)) {
-                        *x = m.clone();
-                    }
-                });
-            }
-        }));
+        rt.listen(
+            &ch,
+            "MessageReported",
+            Rc::new(move |data| {
+                if let Some(m) = data.get("message") {
+                    let id = m["id"].as_i64().unwrap_or_default();
+                    messages2.update(|msgs| {
+                        if let Some(x) = msgs.iter_mut().find(|x| x["id"].as_i64() == Some(id)) {
+                            *x = m.clone();
+                        }
+                    });
+                }
+            }),
+        );
         let ch = channel.clone();
-        rt.listen(&ch, "MessageDeleted", Rc::new(move |data| {
-            let id = data["message"]["id"].as_i64().unwrap_or_default();
-            messages.update(|msgs| {
-                msgs.retain(|x| x["id"].as_i64() != Some(id));
-            });
-        }));
+        rt.listen(
+            &ch,
+            "MessageDeleted",
+            Rc::new(move |data| {
+                let id = data["message"]["id"].as_i64().unwrap_or_default();
+                messages.update(|msgs| {
+                    msgs.retain(|x| x["id"].as_i64() != Some(id));
+                });
+            }),
+        );
         let rtw = SendWrapper::new(rt);
         on_cleanup(move || rtw.leave(&channel));
     }
@@ -128,11 +148,8 @@ pub fn RoomChat(
             body: String,
         }
         leptos::task::spawn_local(async move {
-            match api::post_no_content(
-                &format!("/api/v1/rooms/{room_id}/messages"),
-                &B { body },
-            )
-            .await
+            match api::post_no_content(&format!("/api/v1/rooms/{room_id}/messages"), &B { body })
+                .await
             {
                 Ok(_) => {}
                 Err(e) => {
@@ -305,7 +322,12 @@ fn ChatMessage(
         .map(str::to_string);
     let team_name = message["user"]["team"]["name"].as_str().map(str::to_string);
     let role = StoredValue::new(message["user"]["role"].as_str().unwrap_or("").to_string());
-    let custom_tag = StoredValue::new(message["user"]["custom_tag"].as_str().unwrap_or("").to_string());
+    let custom_tag = StoredValue::new(
+        message["user"]["custom_tag"]
+            .as_str()
+            .unwrap_or("")
+            .to_string(),
+    );
     let reports = RwSignal::new(message["reports"].as_i64().unwrap_or(0).abs());
     let reactions = RwSignal::new(message["reactions"].as_array().cloned().unwrap_or_default());
     let reactions_hydrated = message["reactions"].is_array();
@@ -320,7 +342,8 @@ fn ChatMessage(
         let reactions = reactions;
         let user_reaction = user_reaction;
         leptos::task::spawn_local(async move {
-            if let Ok(v) = api::get::<Value>(&format!("/api/v1/messages/{msg_id}/reactions")).await {
+            if let Ok(v) = api::get::<Value>(&format!("/api/v1/messages/{msg_id}/reactions")).await
+            {
                 if let Some(arr) = v["reactions"].as_array() {
                     reactions.set(arr.clone());
                 }
@@ -335,12 +358,16 @@ fn ChatMessage(
         rt.subscribe(&ch);
         let reactions = reactions;
         let user_reaction = user_reaction;
-        rt.listen(&ch, "MessageReactionUpdated", Rc::new(move |data| {
-            if let Some(arr) = data["reactions"].as_array() {
-                reactions.set(arr.clone());
-            }
-            user_reaction.set(data["userReaction"].as_str().map(str::to_string));
-        }));
+        rt.listen(
+            &ch,
+            "MessageReactionUpdated",
+            Rc::new(move |data| {
+                if let Some(arr) = data["reactions"].as_array() {
+                    reactions.set(arr.clone());
+                }
+                user_reaction.set(data["userReaction"].as_str().map(str::to_string));
+            }),
+        );
         let rtw = SendWrapper::new(rt);
         on_cleanup(move || rtw.leave(&ch));
     }

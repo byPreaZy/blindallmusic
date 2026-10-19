@@ -196,12 +196,12 @@ pub async fn scores(
         return Err(err(StatusCode::FORBIDDEN, "room_access_required"));
     }
     let scores = state.scores.all_scores(round_id).await.unwrap_or_default();
-    Ok(Json(json!({
-        "scores": scores
-            .into_iter()
-            .map(|(uid, s)| json!({"user_id": uid, "score": s}))
-            .collect::<Vec<_>>(),
-    })))
+    // PHP contract: {scores: {"<userId>": <float>}} — a map, not a list.
+    let map: serde_json::Map<String, serde_json::Value> = scores
+        .into_iter()
+        .map(|(uid, s)| (uid.to_string(), json!(s)))
+        .collect();
+    Ok(Json(json!({ "scores": map })))
 }
 
 async fn participates(state: &AppState, room_id: i64, user_id: i64) -> bool {
@@ -296,6 +296,27 @@ pub async fn resume(
     state
         .manager
         .send(id, RoomCommand::Resume)
+        .await
+        .map_err(|_| err(StatusCode::SERVICE_UNAVAILABLE, "room_unavailable"))?;
+    Ok(Json(json!({"success": true})))
+}
+
+pub async fn next(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    if user.is_guest {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(json!({"message": "guest_forbidden"})),
+        ));
+    }
+
+    require_room_control(&state, id, &user).await?;
+    state
+        .manager
+        .send(id, RoomCommand::NextTrack)
         .await
         .map_err(|_| err(StatusCode::SERVICE_UNAVAILABLE, "room_unavailable"))?;
     Ok(Json(json!({"success": true})))

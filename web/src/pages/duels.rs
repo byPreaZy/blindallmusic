@@ -63,7 +63,11 @@ pub fn QuestionView(
     let input = RwSignal::new(String::new());
     let choices: Vec<String> = q["choices"]
         .as_array()
-        .map(|a| a.iter().filter_map(|c| c.as_str().map(str::to_string)).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|c| c.as_str().map(str::to_string))
+                .collect()
+        })
         .unwrap_or_default();
     // Cover art only for the album_cover game (and it stays blurred/zoomed —
     // it IS the puzzle). Elsewhere it can spoil the artist/title printed on it.
@@ -188,9 +192,7 @@ pub fn DuelsPage() -> impl IntoView {
         if v.len() >= 2 {
             leptos::task::spawn_local(async move {
                 if let Ok(r) = api::get::<Value>(&format!("/api/v1/users?search={v}")).await {
-                    suggestions.set(
-                        r["users"]["data"].as_array().cloned().unwrap_or_default(),
-                    );
+                    suggestions.set(r["users"]["data"].as_array().cloned().unwrap_or_default());
                 }
             });
         }
@@ -402,8 +404,9 @@ pub fn DuelPlayPage() -> impl IntoView {
                             .map(|a| a.iter().filter_map(|x| x["idx"].as_i64()).collect())
                             .unwrap_or_default();
                         let total = v["questions"].as_array().map(|q| q.len()).unwrap_or(0);
-                        let next =
-                            (0..total as i64).find(|i| !answered.contains(i)).unwrap_or(total as i64);
+                        let next = (0..total as i64)
+                            .find(|i| !answered.contains(i))
+                            .unwrap_or(total as i64);
                         idx.set(next as usize);
                     }
                     duel.set(Some(v));
@@ -422,8 +425,7 @@ pub fn DuelPlayPage() -> impl IntoView {
             move || {
                 let waiting = duel.get_untracked().is_some_and(|d| {
                     d["status"].as_str() != Some("finished")
-                        && idx.get_untracked()
-                            >= d["question_count"].as_i64().unwrap_or(0) as usize
+                        && idx.get_untracked() >= d["question_count"].as_i64().unwrap_or(0) as usize
                 });
                 if waiting {
                     fetch_duel(false);
@@ -686,10 +688,12 @@ pub fn DailyPage() -> impl IntoView {
                     wrong.set(!d["correct"].as_bool().unwrap_or(false));
                     score.set(d["score"].as_i64().unwrap_or(0));
                     total.set(d["total"].as_i64().unwrap_or(0));
-                    marks.update(|m| m.push(json!({
-                        "idx": i as i64,
-                        "correct": d["correct"].as_bool().unwrap_or(false),
-                    })));
+                    marks.update(|m| {
+                        m.push(json!({
+                            "idx": i as i64,
+                            "correct": d["correct"].as_bool().unwrap_or(false),
+                        }))
+                    });
                     result.set(Some(d));
                 }
                 Err(e) => error.set(Some(e.message)),

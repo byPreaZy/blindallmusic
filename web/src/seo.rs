@@ -48,7 +48,9 @@ pub fn set_meta(attr: &str, key: &str, content: &str) {
             let _ = el.set_attribute("content", content);
         }
         None => {
-            let Ok(el) = doc.create_element("meta") else { return };
+            let Ok(el) = doc.create_element("meta") else {
+                return;
+            };
             let _ = el.set_attribute(attr, key);
             let _ = el.set_attribute("content", content);
             let _ = el.set_attribute("data-seo-injected", "1");
@@ -67,7 +69,9 @@ pub fn set_canonical(href: &str) {
             let _ = el.set_attribute("href", href);
         }
         None => {
-            let Ok(el) = doc.create_element("link") else { return };
+            let Ok(el) = doc.create_element("link") else {
+                return;
+            };
             let _ = el.set_attribute("rel", "canonical");
             let _ = el.set_attribute("href", href);
             let _ = el.set_attribute("data-seo-injected", "1");
@@ -82,7 +86,9 @@ pub fn set_hreflang(lang: &str, href: &str) {
     let Some(doc) = document() else { return };
     let sel = format!("link[rel=\"alternate\"][hreflang=\"{lang}\"]");
     if doc.query_selector(&sel).ok().flatten().is_none() {
-        let Ok(el) = doc.create_element("link") else { return };
+        let Ok(el) = doc.create_element("link") else {
+            return;
+        };
         let _ = el.set_attribute("rel", "alternate");
         let _ = el.set_attribute("hreflang", lang);
         let _ = el.set_attribute("data-seo-injected", "1");
@@ -102,7 +108,9 @@ pub fn set_json_ld(id: &str, json: &serde_json::Value) {
     match doc.query_selector(&sel).ok().flatten() {
         Some(el) => el.set_text_content(Some(&text)),
         None => {
-            let Ok(el) = doc.create_element("script") else { return };
+            let Ok(el) = doc.create_element("script") else {
+                return;
+            };
             let _ = el.set_attribute("type", "application/ld+json");
             let _ = el.set_attribute("data-seo-ld", id);
             let _ = el.set_attribute("data-seo-injected", "1");
@@ -122,7 +130,10 @@ pub fn reset() {
     let Some(doc) = document() else { return };
     if let Ok(nodes) = doc.query_selector_all("[data-seo-injected]") {
         for i in 0..nodes.length() {
-            if let Some(el) = nodes.item(i).and_then(|n| n.dyn_into::<web_sys::Element>().ok()) {
+            if let Some(el) = nodes
+                .item(i)
+                .and_then(|n| n.dyn_into::<web_sys::Element>().ok())
+            {
                 el.remove();
             }
         }

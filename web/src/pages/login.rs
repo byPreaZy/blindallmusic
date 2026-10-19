@@ -29,10 +29,15 @@ pub fn LoginPage() -> impl IntoView {
         error.set(None);
         let navigate = navigate.clone();
         leptos::task::spawn_local(async move {
-            match auth.login(&email.get(), &password.get(), remember.get()).await {
+            match auth
+                .login(&email.get(), &password.get(), remember.get())
+                .await
+            {
                 Ok(()) => navigate("/", Default::default()),
                 Err(e) => error.set(Some(
-                    e.first("email").or(e.first("password")).unwrap_or(e.message),
+                    e.first("email")
+                        .or(e.first("password"))
+                        .unwrap_or(e.message),
                 )),
             }
             busy.set(false);
@@ -86,6 +91,7 @@ pub fn SocialButtons() -> impl IntoView {
     const PROVIDERS: &[(&str, &str)] = &[
         ("google", "Google"),
         ("discord", "Discord"),
+        ("deezer", "Deezer"),
     ];
     view! {
         <div class="mt-4 rounded-xl border border-white/10 bg-surface-raised/60 p-6">
@@ -95,7 +101,7 @@ pub fn SocialButtons() -> impl IntoView {
             {move || error.get().map(|e| view! {
                 <p class="form-error mb-3 text-center">{e}</p>
             })}
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid grid-cols-3 gap-2">
                 {PROVIDERS.iter().map(|(id, label)| {
                     let id = *id;
                     view! {
@@ -159,8 +165,7 @@ pub fn RegisterPage() -> impl IntoView {
             {
                 Ok(()) => navigate("/", Default::default()),
                 Err(e) => {
-                    let mut errs: Vec<String> =
-                        e.errors.values().flatten().cloned().collect();
+                    let mut errs: Vec<String> = e.errors.values().flatten().cloned().collect();
                     if errs.is_empty() {
                         errs.push(e.message);
                     }

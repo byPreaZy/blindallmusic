@@ -41,7 +41,10 @@ pub fn FaqPage() -> impl IntoView {
         }
         voting.set(Some(id));
         leptos::task::spawn_local(async move {
-            if api::post_empty::<Value>(&format!("/api/v1/faqs/{id}/vote/{dir}")).await.is_ok() {
+            if api::post_empty::<Value>(&format!("/api/v1/faqs/{id}/vote/{dir}"))
+                .await
+                .is_ok()
+            {
                 refresh.update(|r| *r += 1);
             }
             voting.set(None);
@@ -142,6 +145,12 @@ pub fn FaqPage() -> impl IntoView {
 
 fn encode(s: &str) -> String {
     s.chars()
-        .map(|c| if c.is_alphanumeric() || "-_.~".contains(c) { c.to_string() } else { format!("%{:02X}", c as u32) })
+        .map(|c| {
+            if c.is_alphanumeric() || "-_.~".contains(c) {
+                c.to_string()
+            } else {
+                format!("%{:02X}", c as u32)
+            }
+        })
         .collect()
 }

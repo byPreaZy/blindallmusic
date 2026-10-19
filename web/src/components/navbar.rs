@@ -27,7 +27,10 @@ fn SearchRooms() -> impl IntoView {
                     if ev.key() == "/" {
                         let tag = ev
                             .target()
-                            .and_then(|t| wasm_bindgen::JsCast::dyn_ref::<web_sys::HtmlElement>(&t).map(|e| e.tag_name()))
+                            .and_then(|t| {
+                                wasm_bindgen::JsCast::dyn_ref::<web_sys::HtmlElement>(&t)
+                                    .map(|e| e.tag_name())
+                            })
                             .unwrap_or_default();
                         if tag != "INPUT" && tag != "TEXTAREA" {
                             ev.prevent_default();

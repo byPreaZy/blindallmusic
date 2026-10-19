@@ -10,7 +10,8 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 
 const USERS_SVG: &str = "M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z";
-const NOTE_SVG: &str = "M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z";
+const NOTE_SVG: &str =
+    "M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z";
 const ARROW_SVG: &str = "M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3";
 const DISCORD_SVG: &str = "M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286z";
 
@@ -69,9 +70,7 @@ impl HomeRoom {
             is_public: v["is_public"].as_bool().unwrap_or(true),
             is_autostart: v["is_autostart"].as_bool().unwrap_or(true),
             is_playing: v["is_playing"].as_bool().unwrap_or(false),
-            is_password_protected: v["is_password_protected"]
-                .as_bool()
-                .unwrap_or(false),
+            is_password_protected: v["is_password_protected"].as_bool().unwrap_or(false),
             tracks_by_round: v["tracks_by_round"].as_i64().unwrap_or(15),
             current_track_index: v["current_track_index"].as_i64().unwrap_or(0),
             subscriptions: v["subscriptions"].as_i64().unwrap_or(0),
@@ -166,9 +165,9 @@ fn use_room_public_channel(
     room: &HomeRoom,
     card_ref: NodeRef<leptos::html::Article>,
 ) -> (
-    RwSignal<i64>, // member_count
+    RwSignal<i64>,  // member_count
     RwSignal<bool>, // is_playing
-    RwSignal<i64>, // current_track_index
+    RwSignal<i64>,  // current_track_index
     RwSignal<bool>, // member_count_bump
 ) {
     let member_count = RwSignal::new(room.subscriptions);
@@ -177,7 +176,11 @@ fn use_room_public_channel(
     let bump = RwSignal::new(false);
 
     let room_id = room.id;
-    let tab = if room.is_public { "official" } else { "community" };
+    let tab = if room.is_public {
+        "official"
+    } else {
+        "community"
+    };
     let channel = StoredValue::new(format!("room.public:{room_id}"));
     let last_reported = StoredValue::new(room.subscriptions);
     let subscribed = StoredValue::new(false);
@@ -259,10 +262,12 @@ fn use_room_public_channel(
             subscribed.set_value(true);
             poll();
             let poll = poll.clone();
-            interval_handle
-                .set_value(Some(gloo_timers::callback::Interval::new(30_000, move || {
+            interval_handle.set_value(Some(gloo_timers::callback::Interval::new(
+                30_000,
+                move || {
                     poll();
-                })));
+                },
+            )));
             if let Some(rt) = shared_rt.and_then(|s| s.get()) {
                 rt.join(&channel.get_value());
                 rt.listen(
@@ -299,8 +304,8 @@ fn use_room_public_channel(
         };
         let subscribe = subscribe.clone();
         let unsubscribe = unsubscribe.clone();
-        let cb = Closure::wrap(
-            Box::new(move |entries: js_sys::Array, _o: web_sys::IntersectionObserver| {
+        let cb = Closure::wrap(Box::new(
+            move |entries: js_sys::Array, _o: web_sys::IntersectionObserver| {
                 let Some(entry) = entries
                     .get(0)
                     .dyn_into::<web_sys::IntersectionObserverEntry>()
@@ -313,15 +318,14 @@ fn use_room_public_channel(
                 } else {
                     unsubscribe();
                 }
-            })
-                as Box<dyn FnMut(js_sys::Array, web_sys::IntersectionObserver)>,
-        );
+            },
+        )
+            as Box<dyn FnMut(js_sys::Array, web_sys::IntersectionObserver)>);
         let init = web_sys::IntersectionObserverInit::new();
         init.set_root_margin("120px");
-        if let Ok(obs) = web_sys::IntersectionObserver::new_with_options(
-            cb.as_ref().unchecked_ref(),
-            &init,
-        ) {
+        if let Ok(obs) =
+            web_sys::IntersectionObserver::new_with_options(cb.as_ref().unchecked_ref(), &init)
+        {
             obs.observe(el.unchecked_ref());
             observer.set_value(Some((obs, cb)));
         }
@@ -347,7 +351,14 @@ fn use_room_public_channel(
 
 #[component]
 fn RoomCard(room: HomeRoom) -> impl IntoView {
-    let href = format!("/rooms/{}", if room.slug.is_empty() { room.id.to_string() } else { room.slug.clone() });
+    let href = format!(
+        "/rooms/{}",
+        if room.slug.is_empty() {
+            room.id.to_string()
+        } else {
+            room.slug.clone()
+        }
+    );
     let is_public = room.is_public;
     let is_autostart = room.is_autostart;
     let tracks_by_round = room.tracks_by_round;
@@ -631,9 +642,10 @@ fn TopPlayers(list: Vec<Value>) -> impl IntoView {
     };
     let avatar = |u: &Value| {
         let name = u["name"].as_str().unwrap_or("?").to_string();
-        let src = u["photo"].as_str().map(str::to_string).unwrap_or_else(|| {
-            format!("/api/v1/avatar?name={}", urlencoding(&name))
-        });
+        let src = u["photo"]
+            .as_str()
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("/api/v1/avatar?name={}", urlencoding(&name)));
         (src, name)
     };
 
@@ -703,7 +715,13 @@ fn TopPlayers(list: Vec<Value>) -> impl IntoView {
 
 fn urlencoding(s: &str) -> String {
     s.chars()
-        .map(|c| if c.is_alphanumeric() { c.to_string() } else { format!("%{:02X}", c as u32) })
+        .map(|c| {
+            if c.is_alphanumeric() {
+                c.to_string()
+            } else {
+                format!("%{:02X}", c as u32)
+            }
+        })
         .collect()
 }
 
@@ -881,13 +899,34 @@ pub fn HomePage() -> impl IntoView {
                             .unwrap_or_default(),
                     );
                     if tab_v == "minigames" {
-                        minigames.set(v["catalog_items"]["data"].as_array().cloned().unwrap_or_default());
+                        minigames.set(
+                            v["catalog_items"]["data"]
+                                .as_array()
+                                .cloned()
+                                .unwrap_or_default(),
+                        );
                     }
-                    last_page.set(v["catalog_items"]["last_page"].as_i64().unwrap_or(1).max(1) as usize);
-                    public_cats.set(v["public_categories"].as_array().cloned().unwrap_or_default());
-                    community_cats.set(v["community_categories"].as_array().cloned().unwrap_or_default());
+                    last_page
+                        .set(v["catalog_items"]["last_page"].as_i64().unwrap_or(1).max(1) as usize);
+                    public_cats.set(
+                        v["public_categories"]
+                            .as_array()
+                            .cloned()
+                            .unwrap_or_default(),
+                    );
+                    community_cats.set(
+                        v["community_categories"]
+                            .as_array()
+                            .cloned()
+                            .unwrap_or_default(),
+                    );
                     counts.set(v["catalog_tab_player_counts"].clone());
-                    weekly.set(v["weekly_top_users"].as_array().cloned().unwrap_or_default());
+                    weekly.set(
+                        v["weekly_top_users"]
+                            .as_array()
+                            .cloned()
+                            .unwrap_or_default(),
+                    );
                     featured.set(
                         v["featured_rooms"]
                             .as_array()
@@ -922,9 +961,7 @@ pub fn HomePage() -> impl IntoView {
 
     let query = use_query_map();
     let search_results = RwSignal::new(Vec::<HomeRoom>::new());
-    let search_term = Signal::derive(move || {
-        query.get().get("search").unwrap_or_default()
-    });
+    let search_term = Signal::derive(move || query.get().get("search").unwrap_or_default());
     Effect::new(move |_| {
         let s = search_term.get();
         if s.is_empty() {

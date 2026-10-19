@@ -389,5 +389,6 @@ pub fn fake_room(id: i64) -> RoomConfig {
         is_autostart: true,
         is_random: false,
         discord_webhook_url: None,
+        venue_name: None,
     }
 }

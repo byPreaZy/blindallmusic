@@ -25,10 +25,7 @@ struct DownvoteBody<'a> {
 
 fn apply_vote_payload(played_tracks: RwSignal<Vec<Value>>, track_id: i64, data: &Value) {
     played_tracks.update(|list| {
-        if let Some(tp) = list
-            .iter_mut()
-            .find(|x| x["id"].as_i64() == Some(track_id))
-        {
+        if let Some(tp) = list.iter_mut().find(|x| x["id"].as_i64() == Some(track_id)) {
             for k in ["upvotes", "downvotes", "user_voted_up", "user_voted_down"] {
                 if !data[k].is_null() {
                     tp[k] = data[k].clone();
@@ -75,7 +72,10 @@ pub fn PlaylistPanel(
 
     let remove_track = move |tid: i64| {
         let ok = web_sys::window()
-            .and_then(|w| w.confirm_with_message(&t("Delete this track from the playlist?")).ok())
+            .and_then(|w| {
+                w.confirm_with_message(&t("Delete this track from the playlist?"))
+                    .ok()
+            })
             .unwrap_or(false);
         if !ok {
             return;
@@ -102,9 +102,7 @@ pub fn PlaylistPanel(
                 if let Ok(d) = api::post_empty::<Value>(&path).await {
                     apply_vote_payload(played_tracks, track_id, &d);
                 }
-            } else if let Ok(d) =
-                api::post::<Value, _>(&path, &DownvoteBody { reason }).await
-            {
+            } else if let Ok(d) = api::post::<Value, _>(&path, &DownvoteBody { reason }).await {
                 apply_vote_payload(played_tracks, track_id, &d);
             }
         });
@@ -336,7 +334,10 @@ pub fn PlaylistPanel(
 fn display_votes(v: &Value) -> String {
     match v {
         Value::String(s) => s.clone(),
-        _ => v.as_i64().map(|n| n.to_string()).unwrap_or_else(|| "0".into()),
+        _ => v
+            .as_i64()
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "0".into()),
     }
 }
 
@@ -427,7 +428,9 @@ fn TrackModModal(
         move || {
             let answers_url = answers_url.clone();
             leptos::task::spawn_local(async move {
-                let Ok(v) = api::get::<Value>(&answers_url).await else { return };
+                let Ok(v) = api::get::<Value>(&answers_url).await else {
+                    return;
+                };
                 let type_name = |tid: i64| {
                     types
                         .get_untracked()
@@ -561,8 +564,7 @@ fn TrackModModal(
             let track_url = track_url.clone();
             leptos::task::spawn_local(async move {
                 if api::delete_no_content(&track_url).await.is_ok() {
-                    played_tracks
-                        .update(|l| l.retain(|x| x["id"].as_i64() != Some(track_id)));
+                    played_tracks.update(|l| l.retain(|x| x["id"].as_i64() != Some(track_id)));
                     on_close.run(());
                 }
             });

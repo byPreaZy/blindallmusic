@@ -286,15 +286,31 @@ async fn round_scores_endpoint_lists_scorers() {
     let (round, track) = wait_round(&owner, room_id).await;
     answer(&owner, round, track, "E2E Song").await;
 
-    let s = owner
-        .get(&format!("/api/v1/rounds/{round}/scores"))
-        .await
-        .expect_ok("scores");
-    let list = s.json("/scores").as_array().cloned().unwrap_or_default();
+    // Scores settle asynchronously (the room actor pipes the Redis write) —
+    // poll briefly instead of assuming the write landed before the GET.
+    let mut map = serde_json::Map::new();
+    for _ in 0..20 {
+        let s = owner
+            .get(&format!("/api/v1/rounds/{round}/scores"))
+            .await
+            .expect_ok("scores");
+        map = s.json("/scores").as_object().cloned().unwrap_or_default();
+        if map
+            .get(&owner.user_id.to_string())
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0)
+            > 0.0
+        {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    }
     assert!(
-        list.iter()
-            .any(|e| e["user_id"] == owner.user_id && e["score"].as_f64().unwrap() > 0.0),
-        "owner must appear in round scores: {list:?}"
+        map.get(&owner.user_id.to_string())
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0)
+            > 0.0,
+        "owner must appear in round scores: {map:?}"
     );
 }
 

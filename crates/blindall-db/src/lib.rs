@@ -215,6 +215,34 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0024_remove_free_volunteer_copy.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            25,
+            "room_venue_name".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0025_room_venue_name.sql").into(),
+            false,
+        ),
+        sqlx::migrate::Migration::new(
+            26,
+            "performance_indexes".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0026_performance_indexes.sql").into(),
+            false,
+        ),
+        sqlx::migrate::Migration::new(
+            27,
+            "tracks_provider_unique".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0027_tracks_provider_unique.sql").into(),
+            false,
+        ),
+        sqlx::migrate::Migration::new(
+            28,
+            "resync_serial_sequences".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0028_resync_serial_sequences.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {

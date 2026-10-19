@@ -118,10 +118,13 @@ pub async fn index(
 
     if let Some(search) = q.search.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         let mut rooms = state.home.search_rooms(search).await.unwrap_or_default();
-        for r in &mut rooms {
-            r.subscriptions = state.presence.member_count(r.id, now).await.unwrap_or(0);
-        }
         let ids: Vec<i64> = rooms.iter().map(|r| r.id).collect();
+        if let Ok(counts) = state.presence.member_counts(&ids, now).await {
+            let counts: std::collections::HashMap<i64, i64> = counts.into_iter().collect();
+            for r in &mut rooms {
+                r.subscriptions = counts.get(&r.id).copied().unwrap_or(0);
+            }
+        }
         if let Ok(idx) = state.home.live_track_indices(&ids).await {
             for r in &mut rooms {
                 r.current_track_index = idx.get(&r.id).copied().unwrap_or(0);
@@ -150,10 +153,13 @@ pub async fn index(
         _ => state.home.catalog_rooms(true).await.unwrap_or_default(),
     };
 
-    for r in &mut rooms {
-        r.subscriptions = state.presence.member_count(r.id, now).await.unwrap_or(0);
-    }
     let ids: Vec<i64> = rooms.iter().map(|r| r.id).collect();
+    if let Ok(counts) = state.presence.member_counts(&ids, now).await {
+        let counts: std::collections::HashMap<i64, i64> = counts.into_iter().collect();
+        for r in &mut rooms {
+            r.subscriptions = counts.get(&r.id).copied().unwrap_or(0);
+        }
+    }
     if let Ok(idx) = state.home.live_track_indices(&ids).await {
         for r in &mut rooms {
             r.current_track_index = idx.get(&r.id).copied().unwrap_or(0);
@@ -199,8 +205,12 @@ pub async fn index(
 
     let featured_rooms: Vec<Value> = match featured {
         Ok(mut fr) => {
-            for r in &mut fr {
-                r.subscriptions = state.presence.member_count(r.id, now).await.unwrap_or(0);
+            let ids: Vec<i64> = fr.iter().map(|r| r.id).collect();
+            if let Ok(counts) = state.presence.member_counts(&ids, now).await {
+                let counts: std::collections::HashMap<i64, i64> = counts.into_iter().collect();
+                for r in &mut fr {
+                    r.subscriptions = counts.get(&r.id).copied().unwrap_or(0);
+                }
             }
             fr.iter().map(|r| room_json(r, &storage)).collect()
         }
@@ -210,11 +220,10 @@ pub async fn index(
     let mut counts = json!({"official": 0, "community": 0});
     for (key, is_public) in [("official", true), ("community", false)] {
         if let Ok(all) = state.home.catalog_rooms(is_public).await {
-            let mut n = 0i64;
-            for r in &all {
-                n += state.presence.member_count(r.id, now).await.unwrap_or(0);
+            let ids: Vec<i64> = all.iter().map(|r| r.id).collect();
+            if let Ok(per_room) = state.presence.member_counts(&ids, now).await {
+                counts[key] = json!(per_room.iter().map(|(_, n)| *n).sum::<i64>());
             }
-            counts[key] = json!(n);
         }
     }
 

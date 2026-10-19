@@ -50,20 +50,41 @@ impl OAuthStates {
     }
 }
 
-fn provider_meta(name: &str) -> Option<(&'static str, &'static str, &'static str, &'static str)> {
+struct ProviderMeta {
+    auth_url: &'static str,
+    token_url: &'static str,
+    user_url: &'static str,
+    scope: &'static str,
+    /// Deezer quirk: params are `app_id`/`secret`/`perms` (not
+    /// client_id/client_secret/scope), the token endpoint can answer plain
+    /// `access_token=…` text, and the access token rides the query string
+    /// instead of a Bearer header.
+    deezer_style: bool,
+}
+
+fn provider_meta(name: &str) -> Option<ProviderMeta> {
     match name {
-        "google" => Some((
-            "https://accounts.google.com/o/oauth2/auth",
-            "https://oauth2.googleapis.com/token",
-            "https://openidconnect.googleapis.com/v1/userinfo",
-            "openid email profile",
-        )),
-        "discord" => Some((
-            "https://discord.com/oauth2/authorize",
-            "https://discord.com/api/oauth2/token",
-            "https://discord.com/api/users/@me",
-            "identify email",
-        )),
+        "google" => Some(ProviderMeta {
+            auth_url: "https://accounts.google.com/o/oauth2/auth",
+            token_url: "https://oauth2.googleapis.com/token",
+            user_url: "https://openidconnect.googleapis.com/v1/userinfo",
+            scope: "openid email profile",
+            deezer_style: false,
+        }),
+        "discord" => Some(ProviderMeta {
+            auth_url: "https://discord.com/oauth2/authorize",
+            token_url: "https://discord.com/api/oauth2/token",
+            user_url: "https://discord.com/api/users/@me",
+            scope: "identify email",
+            deezer_style: false,
+        }),
+        "deezer" => Some(ProviderMeta {
+            auth_url: "https://connect.deezer.com/oauth/auth.php",
+            token_url: "https://connect.deezer.com/oauth/access_token.php",
+            user_url: "https://api.deezer.com/user/me",
+            scope: "basic_access,email",
+            deezer_style: true,
+        }),
         _ => None,
     }
 }
@@ -94,7 +115,7 @@ pub async fn callback_compat(
 }
 
 fn authorize_url(state: &AppState, provider: &str) -> Result<String, Response> {
-    let Some((auth_url, _, _, scope)) = provider_meta(provider) else {
+    let Some(meta) = provider_meta(provider) else {
         return Err(StatusCode::NOT_FOUND.into_response());
     };
     let Some(cfg) = state.oauth.providers.get(provider) else {
@@ -105,14 +126,23 @@ fn authorize_url(state: &AppState, provider: &str) -> Result<String, Response> {
             .into_response());
     };
     let oauth_state = state.oauth_states.issue();
-    let q: Vec<(String, String)> = vec![
-        ("client_id".into(), cfg.client_id.clone()),
-        ("redirect_uri".into(), cfg.redirect_uri.clone()),
-        ("response_type".into(), "code".to_string()),
-        ("state".into(), oauth_state),
-        ("scope".into(), scope.to_string()),
-    ];
-    Ok(format!("{auth_url}?{}", serde_urlencoded(&q)))
+    let q: Vec<(String, String)> = if meta.deezer_style {
+        vec![
+            ("app_id".into(), cfg.client_id.clone()),
+            ("redirect_uri".into(), cfg.redirect_uri.clone()),
+            ("perms".into(), meta.scope.to_string()),
+            ("state".into(), oauth_state),
+        ]
+    } else {
+        vec![
+            ("client_id".into(), cfg.client_id.clone()),
+            ("redirect_uri".into(), cfg.redirect_uri.clone()),
+            ("response_type".into(), "code".to_string()),
+            ("state".into(), oauth_state),
+            ("scope".into(), meta.scope.to_string()),
+        ]
+    };
+    Ok(format!("{}?{}", meta.auth_url, serde_urlencoded(&q)))
 }
 
 fn serde_urlencoded(pairs: &[(String, String)]) -> String {
@@ -146,7 +176,7 @@ pub async fn callback(
     headers: HeaderMap,
     axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<std::net::SocketAddr>,
 ) -> Response {
-    let Some((_, token_url, user_url, _)) = provider_meta(&provider) else {
+    let Some(meta) = provider_meta(&provider) else {
         return StatusCode::NOT_FOUND.into_response();
     };
     let Some(cfg) = state.oauth.providers.get(&provider) else {
@@ -175,7 +205,7 @@ pub async fn callback(
     }
 
     let t0 = Instant::now();
-    let token = match exchange_code(&state.http, cfg, token_url, &code).await {
+    let token = match exchange_code(&state.http, cfg, &meta, &code).await {
         Ok(t) => t,
         Err(e) => {
             tracing::warn!(provider, error = %e, "oauth token exchange failed");
@@ -188,7 +218,7 @@ pub async fn callback(
     };
     let t_exchange = t0.elapsed();
     let t1 = Instant::now();
-    let info = match fetch_profile(&state.http, &provider, user_url, &token).await {
+    let info = match fetch_profile(&state.http, &provider, &meta, &token).await {
         Ok(i) => i,
         Err(e) => {
             tracing::warn!(provider, error = %e, "oauth profile fetch failed");
@@ -305,34 +335,58 @@ async fn unique_name(state: &AppState, base: &str) -> String {
 async fn exchange_code(
     http: &reqwest::Client,
     cfg: &OAuthProviderEntry,
-    token_url: &str,
+    meta: &ProviderMeta,
     code: &str,
 ) -> anyhow::Result<String> {
-    let form = vec![
-        ("grant_type", "authorization_code".to_string()),
-        ("code", code.to_string()),
-        ("redirect_uri", cfg.redirect_uri.clone()),
-        ("client_id", cfg.client_id.clone()),
-        ("client_secret", cfg.client_secret.clone()),
-    ];
-    let resp = http.post(token_url).form(&form).send().await?;
+    let form: Vec<(String, String)> = if meta.deezer_style {
+        vec![
+            ("app_id".into(), cfg.client_id.clone()),
+            ("secret".into(), cfg.client_secret.clone()),
+            ("code".into(), code.to_string()),
+            ("output".into(), "json".to_string()),
+        ]
+    } else {
+        vec![
+            ("grant_type".into(), "authorization_code".to_string()),
+            ("code".into(), code.to_string()),
+            ("redirect_uri".into(), cfg.redirect_uri.clone()),
+            ("client_id".into(), cfg.client_id.clone()),
+            ("client_secret".into(), cfg.client_secret.clone()),
+        ]
+    };
+    let resp = http.post(meta.token_url).form(&form).send().await?;
     if !resp.status().is_success() {
         anyhow::bail!("token endpoint returned {}", resp.status());
     }
-    let body: Value = resp.json().await?;
-    body.get("access_token")
-        .and_then(|t| t.as_str())
-        .map(str::to_string)
-        .ok_or_else(|| anyhow::anyhow!("no access_token in response"))
+    let text = resp.text().await?;
+    if let Ok(body) = serde_json::from_str::<Value>(&text) {
+        if let Some(t) = body.get("access_token").and_then(|t| t.as_str()) {
+            return Ok(t.to_string());
+        }
+    }
+    // Deezer's default is `access_token=…&expires=…` plain text.
+    for pair in text.trim().split('&') {
+        if let Some(tok) = pair.strip_prefix("access_token=") {
+            if !tok.is_empty() {
+                return Ok(tok.to_string());
+            }
+        }
+    }
+    anyhow::bail!("no access_token in response")
 }
 
 async fn fetch_profile(
     http: &reqwest::Client,
     provider: &str,
-    user_url: &str,
+    meta: &ProviderMeta,
     token: &str,
 ) -> anyhow::Result<SocialProfile> {
-    let resp = http.get(user_url).bearer_auth(token).send().await?;
+    let req = if meta.deezer_style {
+        http.get(meta.user_url).query(&[("access_token", token)])
+    } else {
+        http.get(meta.user_url).bearer_auth(token)
+    };
+    let resp = req.send().await?;
     if !resp.status().is_success() {
         anyhow::bail!("profile endpoint returned {}", resp.status());
     }

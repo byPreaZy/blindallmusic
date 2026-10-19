@@ -43,9 +43,7 @@ pub fn RankingsPage() -> impl IntoView {
         .get("tab")
         .filter(|s| ["players", "season", "teams", "minigames"].contains(&s.as_str()))
         .map(|s| s.to_string());
-    let tab = RwSignal::new(
-        initial_tab_q.unwrap_or_else(|| initial_tab.to_string()),
-    );
+    let tab = RwSignal::new(initial_tab_q.unwrap_or_else(|| initial_tab.to_string()));
     let sort = RwSignal::new(initial_sort);
     let room = RwSignal::new(initial_room);
     let page = RwSignal::new(
@@ -67,16 +65,16 @@ pub fn RankingsPage() -> impl IntoView {
 
     Effect::new(move |_| {
         let q = query.get();
-        if let Some(s) = q
-            .get("sort")
-            .filter(|s| PLAYER_SORTS.contains(&s.as_str()))
-        {
+        if let Some(s) = q.get("sort").filter(|s| PLAYER_SORTS.contains(&s.as_str())) {
             if sort.get_untracked() != *s {
                 sort.set(s.clone());
                 page.set(1);
             }
         }
-        let room_v = q.get("room").and_then(|r| r.parse::<i64>().ok()).unwrap_or(0);
+        let room_v = q
+            .get("room")
+            .and_then(|r| r.parse::<i64>().ok())
+            .unwrap_or(0);
         if room.get_untracked() != room_v {
             room.set(room_v);
             page.set(1);
@@ -92,17 +90,14 @@ pub fn RankingsPage() -> impl IntoView {
     });
 
     let fetch = move || {
-        let (tab_v, sort_v, room_v, page_v) =
-            (tab.get(), sort.get(), room.get(), page.get());
+        let (tab_v, sort_v, room_v, page_v) = (tab.get(), sort.get(), room.get(), page.get());
         loading.set(true);
         leptos::task::spawn_local(async move {
             let url = match tab_v.as_str() {
                 "season" => format!("/api/v1/seasons?page={page_v}"),
                 "teams" => format!("/api/v1/rankings/teams?page={page_v}"),
                 "minigames" => format!("/api/v1/rankings/minigames?page={page_v}"),
-                _ => format!(
-                    "/api/v1/rankings?sort={sort_v}&page={page_v}&room={room_v}"
-                ),
+                _ => format!("/api/v1/rankings?sort={sort_v}&page={page_v}&room={room_v}"),
             };
             match api::get::<Value>(&url).await {
                 Ok(v) => payload.set(v),
@@ -198,6 +193,19 @@ fn PlayersBoard(
     room: RwSignal<i64>,
     page: RwSignal<i64>,
 ) -> impl IntoView {
+    // PHP: clicking a ranked user's level lazily fetches level-metrics.
+    let level_modal = RwSignal::new(Option::<Value>::None);
+    let open_level = move |uid: i64| {
+        leptos::task::spawn_local(async move {
+            if let Ok(v) = api::get::<Value>(&format!(
+                "/api/v1/rankings/users/{uid}/level-metrics"
+            ))
+            .await
+            {
+                level_modal.set(Some(v));
+            }
+        });
+    };
     view! {
         <div>
             <div class="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
@@ -405,10 +413,22 @@ fn PlayersBoard(
                                                             custom_tag=u["custom_tag"].as_str().unwrap_or("").to_string()/>
                                                     </div>
                                                     <div class="mt-2 flex flex-wrap gap-2">
-                                                        <div class=chip("level")>
-                                                            <MetricTip label=t("Level") tip=t("Your experience level based on XP earned while playing.")/>
-                                                            <span class="text-sm font-bold text-white">{stats["level"].as_i64().unwrap_or(1)}</span>
-                                                        </div>
+                                                        {if !is_guest {
+                                                            view! {
+                                                                <button type="button" class=format!("{} cursor-pointer transition-colors hover:border-yellow-500/70", chip("level"))
+                                                                    on:click=move |_| open_level(uid)>
+                                                                    <MetricTip label=t("Level") tip=t("Your experience level based on XP earned while playing.")/>
+                                                                    <span class="text-sm font-bold text-white">{stats["level"].as_i64().unwrap_or(1)}</span>
+                                                                </button>
+                                                            }.into_any()
+                                                        } else {
+                                                            view! {
+                                                                <div class=chip("level")>
+                                                                    <MetricTip label=t("Level") tip=t("Your experience level based on XP earned while playing.")/>
+                                                                    <span class="text-sm font-bold text-white">{stats["level"].as_i64().unwrap_or(1)}</span>
+                                                                </div>
+                                                            }.into_any()
+                                                        }}
                                                         <div class=chip("elo")>
                                                             <MetricTip label=t("ELO") tip=t("Your competitive skill rating. It can go up or down depending on your results.")/>
                                                             <span class="text-sm font-bold text-white">{elo_v}</span>
@@ -452,6 +472,33 @@ fn PlayersBoard(
                     </div>
                 }.into_any()
             }}
+            {move || level_modal.get().map(|m| {
+                view! {
+                    <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4"
+                        on:click=move |_| level_modal.set(None)>
+                        <div class="max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 shadow-2xl"
+                            on:click=move |e| e.stop_propagation()>
+                            <div class="flex items-center justify-between border-b border-neutral-700 px-6 py-4">
+                                <h2 class="text-lg font-bold text-white">{t("Level")} " " {m["level"].as_i64().unwrap_or(1)}</h2>
+                                <button type="button" class="text-neutral-400 hover:text-neutral-200"
+                                    on:click=move |_| level_modal.set(None)>
+                                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="px-6 py-6">
+                                <crate::components::level::LevelInfo
+                                    level=m["level"].as_i64().unwrap_or(1)
+                                    current_xp=m["current_xp"].as_i64().unwrap_or(0)
+                                    xp_for_next_level=m["xp_for_next_level"].as_i64().unwrap_or(100)
+                                    total_xp=m["total_xp"].as_i64().unwrap_or(0)
+                                    level_metrics=m.get("level_metrics").filter(|v| !v.is_null()).cloned() />
+                            </div>
+                        </div>
+                    </div>
+                }
+            })}
         </div>
     }
 }
@@ -459,7 +506,11 @@ fn PlayersBoard(
 // ---- teams -----------------------------------------------------------------------
 
 #[component]
-fn TeamsBoard(payload: RwSignal<Value>, loading: RwSignal<bool>, page: RwSignal<i64>) -> impl IntoView {
+fn TeamsBoard(
+    payload: RwSignal<Value>,
+    loading: RwSignal<bool>,
+    page: RwSignal<i64>,
+) -> impl IntoView {
     view! {
         <div>
             {move || payload.get()["user_position"]["position"].as_i64().map(|pos| {
@@ -563,7 +614,11 @@ fn TeamsBoard(payload: RwSignal<Value>, loading: RwSignal<bool>, page: RwSignal<
 // ---- minigames -------------------------------------------------------------------
 
 #[component]
-fn MinigamesBoard(payload: RwSignal<Value>, loading: RwSignal<bool>, page: RwSignal<i64>) -> impl IntoView {
+fn MinigamesBoard(
+    payload: RwSignal<Value>,
+    loading: RwSignal<bool>,
+    page: RwSignal<i64>,
+) -> impl IntoView {
     view! {
         <div>
             {move || payload.get()["user_context"]["position"].as_i64().map(|pos| {
@@ -783,7 +838,11 @@ fn Pagination(page: RwSignal<i64>, last: i64, total: i64) -> impl IntoView {
 // ---- season --------------------------------------------------------------------
 
 #[component]
-fn SeasonBoard(payload: RwSignal<Value>, loading: RwSignal<bool>, page: RwSignal<i64>) -> impl IntoView {
+fn SeasonBoard(
+    payload: RwSignal<Value>,
+    loading: RwSignal<bool>,
+    page: RwSignal<i64>,
+) -> impl IntoView {
     let me_id = Signal::derive(move || crate::auth::use_auth().user.get().map(|u| u.id));
     view! {
         <div>

@@ -153,8 +153,7 @@ impl Realtime {
                     Some("presence") => {
                         let channel = v["channel"].as_str().unwrap_or_default();
                         let kind = v["kind"].as_str().unwrap_or_default();
-                        let users: Vec<Value> =
-                            v["users"].as_array().cloned().unwrap_or_default();
+                        let users: Vec<Value> = v["users"].as_array().cloned().unwrap_or_default();
                         if let Some(cbs) = inner.presence.borrow().get(channel) {
                             for cb in cbs {
                                 cb(kind, &users);
@@ -162,10 +161,7 @@ impl Realtime {
                         }
                     }
                     Some("error") => {
-                        leptos::logging::warn!(
-                            "ws error op {}",
-                            v["code"].as_str().unwrap_or("?")
-                        );
+                        leptos::logging::warn!("ws error op {}", v["code"].as_str().unwrap_or("?"));
                     }
                     _ => {} // ack / pong
                 }
@@ -231,7 +227,10 @@ impl Realtime {
 
     pub fn leave(&self, channel: &str) {
         self.0.channels.borrow_mut().remove(channel);
-        self.0.listeners.borrow_mut().retain(|(c, _), _| c != channel);
+        self.0
+            .listeners
+            .borrow_mut()
+            .retain(|(c, _), _| c != channel);
         self.0.presence.borrow_mut().remove(channel);
         self.send(&json!({"op": "unsubscribe", "channel": channel}));
     }

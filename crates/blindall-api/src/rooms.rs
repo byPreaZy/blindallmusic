@@ -723,17 +723,27 @@ pub async fn live_state(
         standings = rows;
     }
 
+    let can_control = match &user.0 {
+        Some(u) => u.is_administrator || state.rooms.is_moderator(id, u.id).await,
+        None => false,
+    };
+    let paused = snapshot.as_ref().map(|s| s.paused).unwrap_or(false);
     let mut phase = "idle";
     let mut out = json!({
         "room_id": id,
         "name": cfg.name,
+        "venue_name": cfg.venue_name,
         "is_playing": playing,
+        "can_control": can_control,
         "member_count": count,
         "current_index": round.map(|r| r.current).unwrap_or(0),
         "tracks_total": cfg.tracks_by_round,
         "standings": standings,
     });
-    if playing {
+    if paused {
+        // Never reveal answers while the host has the room paused.
+        phase = "paused";
+    } else if playing {
         if let (Some(t), Some(started)) = (
             snapshot.as_ref().and_then(|s| s.current_track.as_ref()),
             round.and_then(|r| r.current_track_started_at),
@@ -799,6 +809,7 @@ fn room_json(r: &blindall_db::RoomRow) -> Value {
         "is_active": r.is_active,
         "is_featured": r.is_featured,
         "color": r.color,
+        "venue_name": r.venue_name,
         "has_password": r.has_password,
         "user_count": r.user_count,
         "deleted_at": r.deleted_at,
@@ -1006,6 +1017,7 @@ pub struct UpdateOptions {
     is_random: bool,
     is_active: Option<bool>,
     color: Option<String>,
+    venue_name: Option<String>,
     is_featured: Option<bool>,
 }
 
@@ -1053,6 +1065,18 @@ pub async fn update_options(
             "The pause between rounds field must be between 0 and 60.",
         );
     }
+    let venue_name = body
+        .venue_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(str::to_string);
+    if venue_name.as_deref().map(str::len).unwrap_or(0) > 80 {
+        return validation(
+            "venue_name",
+            "The venue name field must be at most 80 characters.",
+        );
+    }
     let options = RoomOptions {
         password: body.password,
         has_password: body.has_password.unwrap_or(false),
@@ -1065,6 +1089,7 @@ pub async fn update_options(
         is_random: body.is_random,
         is_active: body.is_active,
         color: body.color,
+        venue_name,
         is_featured: user.is_administrator.then_some(body.is_featured).flatten(),
     };
     match state.rooms.update_options(id, &options).await {
@@ -1105,6 +1130,9 @@ pub async fn destroy(
             state.storage.delete(p).await;
         }
     }
+    // Kill the actor while the room config still loads — a deleted room must
+    // not keep timers/broadcasts alive (Shutdown was dead code before this).
+    let _ = state.manager.send(id, RoomCommand::Shutdown).await;
     match state.rooms.soft_delete(id).await {
         Ok(()) => Json(json!({"ok": true})).into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
@@ -1410,6 +1438,18 @@ pub async fn update_user_count(
 ) -> Response {
     if let Some(r) = require_not_guest(&user) {
         return r;
+    }
+    // PHP throttle:10,1 on update-user-count.
+    if let Some(secs) =
+        state
+            .presence_rate
+            .retry_after(&format!("ucount|{id}|{}", user.id), 10, 60)
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({"error": "rate_limited", "retry_after": secs})),
+        )
+            .into_response();
     }
     match state.rooms.update_user_count(id, body.count).await {
         Ok(()) => Json(json!({"ok": true})).into_response(),
@@ -1849,14 +1889,15 @@ pub async fn search_room_tracks(
         .unwrap_or_default();
     let mut out = Vec::with_capacity(ids.len());
     for tid in ids {
-        let answers = state.playlists.track_answers(tid).await.unwrap_or_default();
+        // PHP renders `answer.type.name : answer.value` — keep labeled answers.
+        let answers = state
+            .playlists
+            .track_answers_labeled(tid)
+            .await
+            .unwrap_or_default();
         out.push(json!({
             "id": tid,
-            "answers": answers.iter().map(|a| json!({
-                "id": a.id,
-                "answer_type_id": a.answer_type_id,
-                "value": a.value,
-            })).collect::<Vec<_>>(),
+            "answers": answers,
         }));
     }
     Json(json!(out)).into_response()

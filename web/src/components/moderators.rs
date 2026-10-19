@@ -77,9 +77,7 @@ pub fn ModeratorsSection(
 }
 
 #[component]
-fn UserSearchPicker(
-    on_pick: impl Fn(IdName) + 'static + Copy + Send + Sync,
-) -> impl IntoView {
+fn UserSearchPicker(on_pick: impl Fn(IdName) + 'static + Copy + Send + Sync) -> impl IntoView {
     let term = RwSignal::new(String::new());
     let results = RwSignal::new(Vec::<IdName>::new());
     let searching = RwSignal::new(false);

@@ -11,6 +11,37 @@ use blindall_game::store::GameStore;
 use serde::Deserialize;
 use serde_json::json;
 
+/// Cheap MP3 signature check — ID3v2 tag or MPEG frame sync. `mp3_duration`
+/// already requires decodable frames; this rejects polyglot junk earlier.
+fn looks_like_mp3(b: &[u8]) -> bool {
+    b.starts_with(b"ID3") || (b.len() >= 2 && b[0] == 0xFF && (b[1] & 0xE0) == 0xE0)
+}
+
+/// Parses `Range: bytes=start-end|start-|-suffix` into an inclusive pair.
+fn parse_range(header: &str, total: u64) -> Option<(u64, u64)> {
+    let spec = header.strip_prefix("bytes=")?.split(',').next()?.trim();
+    let (a, b) = spec.split_once('-')?;
+    let (start, end) = if a.is_empty() {
+        let suffix: u64 = b.parse().ok()?;
+        if suffix == 0 || total == 0 {
+            return None;
+        }
+        (total.saturating_sub(suffix), total - 1)
+    } else {
+        let start: u64 = a.parse().ok()?;
+        let end: u64 = if b.is_empty() {
+            total - 1
+        } else {
+            b.parse().ok()?
+        };
+        (start, end.min(total.saturating_sub(1)))
+    };
+    if start > end || start >= total {
+        return None;
+    }
+    Some((start, end))
+}
+
 fn err(field: &str, msg: &str) -> Response {
     (
         StatusCode::UNPROCESSABLE_ENTITY,
@@ -72,6 +103,9 @@ pub async fn store(
     let (Some(audio), Some(artwork)) = (audio, artwork) else {
         return err("audio", "validation");
     };
+    if !looks_like_mp3(&audio) {
+        return err("audio", "Le fichier doit être un MP3.");
+    }
 
     let duration = mp3_duration::from_read(&mut std::io::Cursor::new(&audio))
         .map(|d| d.as_secs_f64())
@@ -135,17 +169,7 @@ pub async fn store(
     }
 }
 
-pub async fn audio(State(state): State<AppState>, Path(id): Path<i64>) -> Response {
-    let paths = match state.local_tracks.paths(id).await {
-        Ok(Some(p)) => p,
-        _ => return StatusCode::NOT_FOUND.into_response(),
-    };
-    let bytes = match state.storage.read(&paths.0).await {
-        Ok(b) => b,
-        Err(_) => return StatusCode::NOT_FOUND.into_response(),
-    };
-    let mut res = Body::from(bytes).into_response();
-    let h = res.headers_mut();
+fn audio_headers(h: &mut axum::http::HeaderMap) {
     h.insert(header::CONTENT_TYPE, HeaderValue::from_static("audio/mpeg"));
     h.insert(
         header::ACCESS_CONTROL_ALLOW_ORIGIN,
@@ -163,6 +187,38 @@ pub async fn audio(State(state): State<AppState>, Path(id): Path<i64>) -> Respon
         header::CACHE_CONTROL,
         HeaderValue::from_static("public, max-age=60"),
     );
+    h.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+}
+
+pub async fn audio(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: axum::http::HeaderMap,
+) -> Response {
+    let paths = match state.local_tracks.paths(id).await {
+        Ok(Some(p)) => p,
+        _ => return StatusCode::NOT_FOUND.into_response(),
+    };
+    let bytes = match state.storage.read(&paths.0).await {
+        Ok(b) => b,
+        Err(_) => return StatusCode::NOT_FOUND.into_response(),
+    };
+    let total = bytes.len() as u64;
+    // iOS/Safari <audio> refuses plain 200 responses — honour byte ranges.
+    if let Some(range) = headers.get(header::RANGE).and_then(|v| v.to_str().ok()) {
+        let Some((start, end)) = parse_range(range, total) else {
+            return StatusCode::RANGE_NOT_SATISFIABLE.into_response();
+        };
+        let slice = bytes[start as usize..=end as usize].to_vec();
+        let mut res = (StatusCode::PARTIAL_CONTENT, Body::from(slice)).into_response();
+        audio_headers(res.headers_mut());
+        if let Ok(v) = HeaderValue::from_str(&format!("bytes {start}-{end}/{total}")) {
+            res.headers_mut().insert(header::CONTENT_RANGE, v);
+        }
+        return res;
+    }
+    let mut res = Body::from(bytes).into_response();
+    audio_headers(res.headers_mut());
     res
 }
 

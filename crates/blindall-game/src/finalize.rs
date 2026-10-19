@@ -225,9 +225,12 @@ async fn finalize(
             &channel,
             "UserEloUpdated",
             json!({
+                // PHP contract {user_id, elo} kept top-level; `user`/`room`
+                // are Rust-side extras for richer clients.
+                "user_id": uid,
+                "elo": elo_after,
                 "user": podium_user_json(*uid, &users, photo_prefix),
                 "room": room_v,
-                "elo": elo_after,
             }),
             None,
         )

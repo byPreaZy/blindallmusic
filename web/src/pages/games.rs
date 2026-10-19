@@ -9,17 +9,33 @@ use serde_json::{json, Value};
 const QUESTIONS_PER_ROUND: usize = 5;
 
 const WRONG_MESSAGES: &[&str] = &[
-    "Not quite!", "Almost!", "Good try!", "Next time!", "Keep going!",
-    "No worries!", "Close one!", "Not this time!", "You'll get the next one!",
+    "Not quite!",
+    "Almost!",
+    "Good try!",
+    "Next time!",
+    "Keep going!",
+    "No worries!",
+    "Close one!",
+    "Not this time!",
+    "You'll get the next one!",
 ];
 
 fn game_meta(ty: &str) -> (&'static str, &'static str) {
     match ty {
         "quiz" => ("Quiz à 4 choix", "Guess the track title from 4 choices."),
-        "who_sang" => ("Qui a chanté ?", "Guess who sang this track from 4 choices."),
+        "who_sang" => (
+            "Qui a chanté ?",
+            "Guess who sang this track from 4 choices.",
+        ),
         "album_cover" => ("Pochette d'album", "Find the artist from the album cover."),
-        "first_letter" => ("Première lettre", "Listen and complete the title from the first letter of each word."),
-        "anagram" => ("Anagramme", "Unscramble the letters to find the artist name."),
+        "first_letter" => (
+            "Première lettre",
+            "Listen and complete the title from the first letter of each word.",
+        ),
+        "anagram" => (
+            "Anagramme",
+            "Unscramble the letters to find the artist name.",
+        ),
         _ => ("Mini-jeu", ""),
     }
 }
@@ -141,7 +157,13 @@ struct RoundResult {
 pub fn GamePlayPage() -> impl IntoView {
     crate::auth::require_registered(crate::auth::use_auth());
     let params = use_params_map();
-    let game = move || params.get().get("type").unwrap_or_default().replace('-', "_");
+    let game = move || {
+        params
+            .get()
+            .get("type")
+            .unwrap_or_default()
+            .replace('-', "_")
+    };
     let questions = RwSignal::new(Vec::<Question>::new());
     let index = RwSignal::new(0usize);
     let result = RwSignal::new(Option::<Value>::None);
@@ -196,8 +218,13 @@ pub fn GamePlayPage() -> impl IntoView {
                         track_id: v["track"]["id"].as_i64(),
                         preview_url: v["track"]["preview_url"].as_str().map(str::to_string),
                         artwork_url: v["track"]["artwork_url"].as_str().map(str::to_string),
-                        choices: v["choices"].as_array().cloned().unwrap_or_default()
-                            .iter().filter_map(|c| c.as_str().map(str::to_string)).collect(),
+                        choices: v["choices"]
+                            .as_array()
+                            .cloned()
+                            .unwrap_or_default()
+                            .iter()
+                            .filter_map(|c| c.as_str().map(str::to_string))
+                            .collect(),
                         question_id: v["question_id"].as_str().map(str::to_string),
                         scrambled_artist: v["scrambled_artist"].as_str().map(str::to_string),
                         correct_value: v["correct_value"].as_str().map(str::to_string),
@@ -218,13 +245,17 @@ pub fn GamePlayPage() -> impl IntoView {
 
     let finish_wrong = move |correct_value: Option<String>| {
         wrong_msg.set(pick_wrong());
-        result.set(Some(json!({"correct": false, "correct_value": correct_value, "points": 0})));
-        results.update(|r| r.push(RoundResult {
-            artwork_url: current(questions, index).and_then(|q| q.artwork_url.clone()),
-            correct_value,
-            chosen_value: None,
-            correct: false,
-        }));
+        result.set(Some(
+            json!({"correct": false, "correct_value": correct_value, "points": 0}),
+        ));
+        results.update(|r| {
+            r.push(RoundResult {
+                artwork_url: current(questions, index).and_then(|q| q.artwork_url.clone()),
+                correct_value,
+                chosen_value: None,
+                correct: false,
+            })
+        });
     };
 
     let submit_choice = move |chosen: String| {
@@ -232,7 +263,9 @@ pub fn GamePlayPage() -> impl IntoView {
             return;
         }
         let g = game_type.get_untracked();
-        let Some(q) = current(questions, index) else { return };
+        let Some(q) = current(questions, index) else {
+            return;
+        };
         checking.set(true);
         leptos::task::spawn_local(async move {
             let body = json!({
@@ -249,12 +282,14 @@ pub fn GamePlayPage() -> impl IntoView {
             } else {
                 session_score.update(|s| *s += data["points"].as_i64().unwrap_or(0));
             }
-            results.update(|r| r.push(RoundResult {
-                artwork_url: q.artwork_url.clone(),
-                correct_value: data["correct_value"].as_str().map(str::to_string),
-                chosen_value: Some(chosen.clone()),
-                correct,
-            }));
+            results.update(|r| {
+                r.push(RoundResult {
+                    artwork_url: q.artwork_url.clone(),
+                    correct_value: data["correct_value"].as_str().map(str::to_string),
+                    chosen_value: Some(chosen.clone()),
+                    correct,
+                })
+            });
             result.set(Some(data));
             checking.set(false);
         });
@@ -271,9 +306,7 @@ pub fn GamePlayPage() -> impl IntoView {
                 if let Ok(v) =
                     api::get::<Value>(&format!("/api/v1/minigames/{g}/leaderboard")).await
                 {
-                    game_lb.set(
-                        v["leaderboard"].as_array().cloned().unwrap_or_default(),
-                    );
+                    game_lb.set(v["leaderboard"].as_array().cloned().unwrap_or_default());
                 }
             });
         } else {
@@ -290,7 +323,9 @@ pub fn GamePlayPage() -> impl IntoView {
     };
 
     let hint_text = move || {
-        let cv = current(questions, index).and_then(|q| q.correct_value).unwrap_or_default();
+        let cv = current(questions, index)
+            .and_then(|q| q.correct_value)
+            .unwrap_or_default();
         cv.trim()
             .split_whitespace()
             .map(|w| {

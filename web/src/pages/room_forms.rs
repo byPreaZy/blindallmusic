@@ -11,12 +11,19 @@ async fn put(path: &str, body: Value) -> Result<(), String> {
         Some(tok) => req.header("Authorization", &format!("Bearer {tok}")),
         None => req,
     };
-    let fut = req.body(body.to_string()).map_err(|e| e.to_string())?.send();
+    let fut = req
+        .body(body.to_string())
+        .map_err(|e| e.to_string())?
+        .send();
     match fut.await {
         Ok(resp) if resp.ok() => Ok(()),
         Ok(resp) => {
             let v: Value = resp.json().await.unwrap_or_default();
-            Err(v["message"].as_str().or_else(|| v["error"].as_str()).unwrap_or("Update failed").to_string())
+            Err(v["message"]
+                .as_str()
+                .or_else(|| v["error"].as_str())
+                .unwrap_or("Update failed")
+                .to_string())
         }
         Err(e) => Err(e.to_string()),
     }
@@ -61,7 +68,8 @@ pub fn RoomCreatePage() -> impl IntoView {
         error.set(None);
         let navigate = navigate.clone();
         leptos::task::spawn_local(async move {
-            let body = json!({"name": name.get_untracked(), "category_id": category.get_untracked()});
+            let body =
+                json!({"name": name.get_untracked(), "category_id": category.get_untracked()});
             match api::post::<Value, _>("/api/v1/rooms", &body).await {
                 Ok(v) => {
                     let slug = v["room"]["slug"].as_str().unwrap_or_default().to_string();
@@ -136,6 +144,7 @@ pub fn RoomEditPage() -> impl IntoView {
     let random = RwSignal::new(false);
     let active = RwSignal::new(true);
     let color = RwSignal::new(String::new());
+    let venue_name = RwSignal::new(String::new());
     let has_password = RwSignal::new(false);
     let password = RwSignal::new(String::new());
     let attach_id = RwSignal::new(0i64);
@@ -169,6 +178,7 @@ pub fn RoomEditPage() -> impl IntoView {
                 random.set(r["is_random"].as_bool().unwrap_or(false));
                 active.set(r["is_active"].as_bool().unwrap_or(true));
                 color.set(r["color"].as_str().unwrap_or_default().to_string());
+                venue_name.set(r["venue_name"].as_str().unwrap_or_default().to_string());
                 has_password.set(r["has_password"].as_bool().unwrap_or(false));
                 photo_path.set(r["photo_path"].as_str().map(str::to_string));
                 mods.set(
@@ -243,6 +253,7 @@ pub fn RoomEditPage() -> impl IntoView {
                     "is_random": random.get_untracked(),
                     "is_active": active.get_untracked(),
                     "color": color.get_untracked(),
+                    "venue_name": venue_name.get_untracked(),
                 }),
             )
             .await
@@ -267,7 +278,11 @@ pub fn RoomEditPage() -> impl IntoView {
             .await
             {
                 Ok(_) => {
-                    if let Some(p) = available.get().iter().find(|p| p["id"].as_i64() == Some(pid)) {
+                    if let Some(p) = available
+                        .get()
+                        .iter()
+                        .find(|p| p["id"].as_i64() == Some(pid))
+                    {
                         playlists.update(|l| {
                             if !l.iter().any(|x| x.id == pid) {
                                 l.push(IdName {
@@ -287,15 +302,16 @@ pub fn RoomEditPage() -> impl IntoView {
     let detach = move |pid: i64| {
         let id = room_id.get();
         leptos::task::spawn_local(async move {
-            let req = gloo_net::http::Request::delete(&format!(
-                "/api/v1/rooms/{id}/playlists/detach"
-            ))
-            .header("Content-Type", "application/json");
+            let req =
+                gloo_net::http::Request::delete(&format!("/api/v1/rooms/{id}/playlists/detach"))
+                    .header("Content-Type", "application/json");
             let req = match api::stored_token() {
                 Some(tok) => req.header("Authorization", &format!("Bearer {tok}")),
                 None => req,
             };
-            let ok = req.body(json!({"playlist_id": pid}).to_string()).map(|r| r.send());
+            let ok = req
+                .body(json!({"playlist_id": pid}).to_string())
+                .map(|r| r.send());
             if let Ok(f) = ok {
                 match f.await {
                     Ok(resp) if resp.ok() => {
@@ -310,7 +326,10 @@ pub fn RoomEditPage() -> impl IntoView {
 
     let delete_room = move |_| {
         if !web_sys::window()
-            .and_then(|w| w.confirm_with_message("Supprimer définitivement ce salon ?").ok())
+            .and_then(|w| {
+                w.confirm_with_message("Supprimer définitivement ce salon ?")
+                    .ok()
+            })
             .unwrap_or(false)
         {
             return;
@@ -454,6 +473,11 @@ pub fn RoomEditPage() -> impl IntoView {
                                 <input type="number" min="0" max="60" class="w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white"
                                     prop:value=pause_rounds on:input=move |ev| pause_rounds.set(event_target_value(&ev).parse().unwrap_or(30))/>
                             </div>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-xs text-white/60">{t("Venue name (shown on the TV screen)")}</label>
+                            <input type="text" maxlength="80" placeholder=t("e.g. Le Comptoir — jeudi soir") class="w-full max-w-md rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white"
+                                prop:value=venue_name on:input=move |ev| venue_name.set(event_target_value(&ev))/>
                         </div>
                         <div class="flex flex-wrap gap-5 text-sm text-white/70">
                             <label class="flex items-center gap-2">

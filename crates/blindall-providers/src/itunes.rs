@@ -22,15 +22,25 @@ impl ItunesClient {
         if term.trim().is_empty() {
             return Ok(vec![]);
         }
-        let query = deunicode::deunicode(term.trim()).replace(' ', "+");
-        let url = format!(
-            "https://itunes.apple.com/search?term={}&country={}&media=music&limit=10&output=json",
-            query, self.country
-        );
-        let resp = self.http.get(&url).send().await.map_err(|e| {
-            tracing::error!(term, error = %e, "itunes search failed");
-            ProviderError::new("itunes", format!("iTunes : {e}"), 500)
-        })?;
+        // Let reqwest encode — a raw `&`/`#`/`=` in the term used to break
+        // or inject into the query string.
+        let query = deunicode::deunicode(term.trim());
+        let resp = self
+            .http
+            .get("https://itunes.apple.com/search")
+            .query(&[
+                ("term", query.as_str()),
+                ("country", self.country.as_str()),
+                ("media", "music"),
+                ("limit", "10"),
+                ("output", "json"),
+            ])
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::error!(term, error = %e, "itunes search failed");
+                ProviderError::new("itunes", format!("iTunes : {e}"), 500)
+            })?;
         if !resp.status().is_success() {
             return Err(ProviderError::new(
                 "itunes",

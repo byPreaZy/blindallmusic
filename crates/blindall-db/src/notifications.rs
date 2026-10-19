@@ -155,30 +155,18 @@ impl NotificationRepo {
             .and_then(|d| serde_json::from_str(&d).ok())
             .unwrap_or(json!({}));
         let message = data["message"].as_str().unwrap_or("").to_string();
-        let rows = sqlx::query(
-            "SELECT id, data FROM notifications \
-             WHERE notifiable_id = $1 AND type = $2 AND read_at IS NULL",
+        // Single UPDATE matching the JSON message — replaces the
+        // fetch-all + per-row UPDATE loop.
+        let res = sqlx::query(
+            "UPDATE notifications SET read_at = NOW(), updated_at = NOW() \
+             WHERE notifiable_id = $1 AND type = $2 AND read_at IS NULL \
+             AND data::jsonb ->> 'message' = $3",
         )
         .bind(user_id)
         .bind(&type_)
-        .fetch_all(&self.pool)
+        .bind(&message)
+        .execute(&self.pool)
         .await?;
-        let mut done = 0u64;
-        for r in rows {
-            let d: Value = r
-                .get::<Option<String>, _>("data")
-                .and_then(|d| serde_json::from_str(&d).ok())
-                .unwrap_or(json!({}));
-            if d["message"].as_str().unwrap_or("") == message {
-                let res = sqlx::query(
-                    "UPDATE notifications SET read_at = NOW(), updated_at = NOW() WHERE id = $1",
-                )
-                .bind(r.get::<String, _>("id"))
-                .execute(&self.pool)
-                .await?;
-                done += res.rows_affected();
-            }
-        }
-        Ok(done)
+        Ok(res.rows_affected())
     }
 }

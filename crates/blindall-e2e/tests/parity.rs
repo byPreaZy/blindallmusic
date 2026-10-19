@@ -547,7 +547,7 @@ async fn track_delete_public_playlist_sends_no_notification() {
         .await
         .put(
             &format!("/api/v1/admin/playlists/{pl_id}"),
-            json!({"name": "pub", "is_public": true}),
+            json!({"name": uniq_name("pub"), "is_public": true}),
         )
         .await
         .expect_ok("publish");

@@ -62,7 +62,11 @@ pub fn AdminShell(active: &'static str, children: ChildrenFn) -> impl IntoView {
 
 // ---- helpers -----------------------------------------------------------------
 
-fn pager(page: RwSignal<i64>, last_page: RwSignal<i64>, reload: impl Fn() + Copy + Send + Sync + 'static) -> impl IntoView {
+fn pager(
+    page: RwSignal<i64>,
+    last_page: RwSignal<i64>,
+    reload: impl Fn() + Copy + Send + Sync + 'static,
+) -> impl IntoView {
     view! {
         <Show when=move || { last_page.get() > 1 }>
             <div class="mt-4 flex items-center justify-center gap-3">
@@ -122,9 +126,18 @@ fn badge(ok: bool, yes: &'static str, no: &'static str) -> impl IntoView {
 
 fn role_badge(role: &str) -> impl IntoView {
     let (label, cls) = match role {
-        "admin" => ("Admin", "rounded bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300"),
-        "moderator" => ("Moderator", "rounded bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-300"),
-        _ => ("Player", "rounded bg-white/10 px-2 py-0.5 text-xs text-white/60"),
+        "admin" => (
+            "Admin",
+            "rounded bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300",
+        ),
+        "moderator" => (
+            "Moderator",
+            "rounded bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-300",
+        ),
+        _ => (
+            "Player",
+            "rounded bg-white/10 px-2 py-0.5 text-xs text-white/60",
+        ),
     };
     view! { <span class=cls>{t(label)}</span> }
 }
@@ -200,7 +213,9 @@ pub fn AdminUsers() -> impl IntoView {
     let trashed = RwSignal::new(String::new());
     let role = RwSignal::new(String::new());
     let editing = RwSignal::new(Option::<i64>::None);
-    let form = RwSignal::new(json!({"name":"","email":"","team_id":null,"is_administrator":false,"password":""}));
+    let form = RwSignal::new(
+        json!({"name":"","email":"","team_id":null,"is_administrator":false,"password":""}),
+    );
     let creating = RwSignal::new(false);
 
     let load = move || {
@@ -210,8 +225,12 @@ pub fn AdminUsers() -> impl IntoView {
         let p = page.get_untracked();
         leptos::task::spawn_local(async move {
             let mut q = format!("/api/v1/admin/users?page={p}&search={}", urlencoding(&s));
-            if !tr.is_empty() { q += &format!("&trashed={tr}"); }
-            if !ro.is_empty() { q += &format!("&role={ro}"); }
+            if !tr.is_empty() {
+                q += &format!("&trashed={tr}");
+            }
+            if !ro.is_empty() {
+                q += &format!("&role={ro}");
+            }
             match api::get::<Value>(&q).await {
                 Ok(v) => {
                     last_page.set(v["users"]["last_page"].as_i64().unwrap_or(1));
@@ -432,7 +451,11 @@ pub fn AdminUsers() -> impl IntoView {
 }
 
 fn urlencoding(s: &str) -> String {
-    s.replace('%', "%25").replace('&', "%26").replace('=', "%3D").replace(' ', "%20").replace('#', "%23")
+    s.replace('%', "%25")
+        .replace('&', "%26")
+        .replace('=', "%3D")
+        .replace(' ', "%20")
+        .replace('#', "%23")
 }
 
 // ---- generic list pages (teams / rooms / playlists) ---------------------------
@@ -455,9 +478,14 @@ pub fn AdminTeams() -> impl IntoView {
         let p = page.get_untracked();
         leptos::task::spawn_local(async move {
             let mut q = format!("/api/v1/admin/teams?page={p}&search={}", urlencoding(&s));
-            if !tr.is_empty() { q += &format!("&trashed={tr}"); }
+            if !tr.is_empty() {
+                q += &format!("&trashed={tr}");
+            }
             match api::get::<Value>(&q).await {
-                Ok(v) => { last_page.set(v["teams"]["last_page"].as_i64().unwrap_or(1)); data.set(v["teams"].clone()); }
+                Ok(v) => {
+                    last_page.set(v["teams"]["last_page"].as_i64().unwrap_or(1));
+                    data.set(v["teams"].clone());
+                }
                 Err(e) => error.set(Some(e.message)),
             }
             loading.set(false);
@@ -579,9 +607,14 @@ pub fn AdminRooms() -> impl IntoView {
         let p = page.get_untracked();
         leptos::task::spawn_local(async move {
             let mut q = format!("/api/v1/admin/rooms?page={p}&search={}", urlencoding(&s));
-            if !tr.is_empty() { q += &format!("&trashed={tr}"); }
+            if !tr.is_empty() {
+                q += &format!("&trashed={tr}");
+            }
             match api::get::<Value>(&q).await {
-                Ok(v) => { last_page.set(v["rooms"]["last_page"].as_i64().unwrap_or(1)); data.set(v["rooms"].clone()); }
+                Ok(v) => {
+                    last_page.set(v["rooms"]["last_page"].as_i64().unwrap_or(1));
+                    data.set(v["rooms"].clone());
+                }
                 Err(e) => error.set(Some(e.message)),
             }
             loading.set(false);
@@ -790,8 +823,16 @@ pub fn AdminPlaylists() -> impl IntoView {
         let s = search.get_untracked();
         let p = page.get_untracked();
         leptos::task::spawn_local(async move {
-            match api::get::<Value>(&format!("/api/v1/admin/playlists?page={p}&search={}", urlencoding(&s))).await {
-                Ok(v) => { last_page.set(v["playlists"]["last_page"].as_i64().unwrap_or(1)); data.set(v["playlists"].clone()); }
+            match api::get::<Value>(&format!(
+                "/api/v1/admin/playlists?page={p}&search={}",
+                urlencoding(&s)
+            ))
+            .await
+            {
+                Ok(v) => {
+                    last_page.set(v["playlists"]["last_page"].as_i64().unwrap_or(1));
+                    data.set(v["playlists"].clone());
+                }
                 Err(e) => error.set(Some(e.message)),
             }
             loading.set(false);
@@ -914,11 +955,13 @@ pub fn AdminCategories() -> impl IntoView {
     let editing = RwSignal::new(Option::<i64>::None);
     let edit_name = RwSignal::new(String::new());
 
-    let load = move || leptos::task::spawn_local(async move {
-        if let Ok(v) = api::get::<Value>("/api/v1/admin/categories").await {
-            items.set(v["categories"].as_array().cloned().unwrap_or_default());
-        }
-    });
+    let load = move || {
+        leptos::task::spawn_local(async move {
+            if let Ok(v) = api::get::<Value>("/api/v1/admin/categories").await {
+                items.set(v["categories"].as_array().cloned().unwrap_or_default());
+            }
+        })
+    };
     load();
 
     view! {
@@ -993,11 +1036,13 @@ pub fn AdminAnswerTypes() -> impl IntoView {
     let form = RwSignal::new(json!({"name":"","pronoun":"","svg_icon":""}));
     let editing = RwSignal::new(Option::<i64>::None);
 
-    let load = move || leptos::task::spawn_local(async move {
-        if let Ok(v) = api::get::<Value>("/api/v1/admin/answer-types").await {
-            items.set(v["answer_types"].as_array().cloned().unwrap_or_default());
-        }
-    });
+    let load = move || {
+        leptos::task::spawn_local(async move {
+            if let Ok(v) = api::get::<Value>("/api/v1/admin/answer-types").await {
+                items.set(v["answer_types"].as_array().cloned().unwrap_or_default());
+            }
+        })
+    };
     load();
 
     view! {
@@ -1081,11 +1126,13 @@ pub fn AdminPages() -> impl IntoView {
     let editing = RwSignal::new(Option::<i64>::None);
     let show_form = RwSignal::new(false);
 
-    let load = move || leptos::task::spawn_local(async move {
-        if let Ok(v) = api::get::<Value>("/api/v1/admin/pages").await {
-            items.set(v["pages"].as_array().cloned().unwrap_or_default());
-        }
-    });
+    let load = move || {
+        leptos::task::spawn_local(async move {
+            if let Ok(v) = api::get::<Value>("/api/v1/admin/pages").await {
+                items.set(v["pages"].as_array().cloned().unwrap_or_default());
+            }
+        })
+    };
     load();
 
     view! {
@@ -1166,11 +1213,13 @@ pub fn AdminFaqs() -> impl IntoView {
     let editing = RwSignal::new(Option::<i64>::None);
     let show_form = RwSignal::new(false);
 
-    let load = move || leptos::task::spawn_local(async move {
-        if let Ok(v) = api::get::<Value>("/api/v1/admin/faqs").await {
-            items.set(v["faqs"].as_array().cloned().unwrap_or_default());
-        }
-    });
+    let load = move || {
+        leptos::task::spawn_local(async move {
+            if let Ok(v) = api::get::<Value>("/api/v1/admin/faqs").await {
+                items.set(v["faqs"].as_array().cloned().unwrap_or_default());
+            }
+        })
+    };
     load();
 
     view! {
@@ -1273,12 +1322,7 @@ pub fn AdminDataQuality() -> impl IntoView {
 #[component]
 pub fn DataQualityBody() -> impl IntoView {
     let auth = use_auth();
-    let is_admin = move || {
-        auth.user
-            .get()
-            .map(|u| u.is_administrator)
-            .unwrap_or(false)
-    };
+    let is_admin = move || auth.user.get().map(|u| u.is_administrator).unwrap_or(false);
     let rooms = RwSignal::new(Vec::<Value>::new());
     let selected = RwSignal::new(Option::<(i64, String)>::None); // (room_id, room_name)
     let type_id = RwSignal::new(0i64);
@@ -1324,7 +1368,9 @@ pub fn DataQualityBody() -> impl IntoView {
     });
 
     let load = move || {
-        let Some((room_id, _)) = selected.get_untracked() else { return };
+        let Some((room_id, _)) = selected.get_untracked() else {
+            return;
+        };
         let p = page.get_untracked();
         let s = search.get_untracked();
         loading.set(true);
@@ -1853,7 +1899,9 @@ fn ArtistQueue() -> impl IntoView {
 
     let remove_row = move |tid: i64| {
         items.update(|ts| ts.retain(|r| r["id"].as_i64().unwrap_or(0) != tid));
-        drafts.update(|d| { d.remove(&tid); });
+        drafts.update(|d| {
+            d.remove(&tid);
+        });
     };
 
     view! {
@@ -1974,7 +2022,9 @@ fn FeaturingQueue() -> impl IntoView {
 
     let remove_row = move |tid: i64| {
         items.update(|ts| ts.retain(|r| r["id"].as_i64().unwrap_or(0) != tid));
-        drafts.update(|d| { d.remove(&tid); });
+        drafts.update(|d| {
+            d.remove(&tid);
+        });
     };
 
     view! {

@@ -219,6 +219,7 @@ impl GameStore for DbGameStore {
             is_autostart: row.is_autostart,
             is_random: row.is_random,
             discord_webhook_url: row.discord_webhook_url,
+            venue_name: row.venue_name,
         })
     }
 

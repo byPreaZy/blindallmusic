@@ -13,15 +13,51 @@ struct Tone {
 
 fn tones(kind: &str) -> Vec<Tone> {
     match kind {
-        "send" => vec![Tone { frequency: 720.0, duration: 0.055, delay: 0.0, kind: "sine", envelope: 1.0 }],
+        "send" => vec![Tone {
+            frequency: 720.0,
+            duration: 0.055,
+            delay: 0.0,
+            kind: "sine",
+            envelope: 1.0,
+        }],
         "good" => vec![
-            Tone { frequency: 740.0, duration: 0.08, delay: 0.0, kind: "sine", envelope: 1.0 },
-            Tone { frequency: 988.0, duration: 0.1, delay: 0.07, kind: "sine", envelope: 1.0 },
+            Tone {
+                frequency: 740.0,
+                duration: 0.08,
+                delay: 0.0,
+                kind: "sine",
+                envelope: 1.0,
+            },
+            Tone {
+                frequency: 988.0,
+                duration: 0.1,
+                delay: 0.07,
+                kind: "sine",
+                envelope: 1.0,
+            },
         ],
-        "almost" => vec![Tone { frequency: 520.0, duration: 0.11, delay: 0.0, kind: "triangle", envelope: 1.0 }],
+        "almost" => vec![Tone {
+            frequency: 520.0,
+            duration: 0.11,
+            delay: 0.0,
+            kind: "triangle",
+            envelope: 1.0,
+        }],
         "bad" => vec![
-            Tone { frequency: 360.0, duration: 0.085, delay: 0.0, kind: "bite", envelope: 2.4 },
-            Tone { frequency: 250.0, duration: 0.095, delay: 0.075, kind: "bite", envelope: 2.4 },
+            Tone {
+                frequency: 360.0,
+                duration: 0.085,
+                delay: 0.0,
+                kind: "bite",
+                envelope: 2.4,
+            },
+            Tone {
+                frequency: 250.0,
+                duration: 0.095,
+                delay: 0.075,
+                kind: "bite",
+                envelope: 2.4,
+            },
         ],
         _ => vec![],
     }
@@ -40,7 +76,9 @@ fn gain_params(kind: &str) -> (f64, f64) {
 fn render_tone(ctx: &AudioContext, tone: &Tone) -> Option<AudioBuffer> {
     let sample_rate = ctx.sample_rate() as f64;
     let frames = ((tone.delay + tone.duration) * sample_rate).ceil().max(1.0) as usize;
-    let buffer = ctx.create_buffer(1, frames as u32, sample_rate as f32).ok()?;
+    let buffer = ctx
+        .create_buffer(1, frames as u32, sample_rate as f32)
+        .ok()?;
     let mut channel = vec![0f32; frames];
     let delay_frames = (tone.delay * sample_rate) as usize;
     let tone_frames = (tone.duration * sample_rate).ceil().max(1.0) as usize;
@@ -52,7 +90,9 @@ fn render_tone(ctx: &AudioContext, tone: &Tone) -> Option<AudioBuffer> {
         .enumerate()
     {
         let t = i as f64 / sample_rate;
-        let env = (1.0 - i as f64 / tone_frames as f64).max(0.0).powf(tone.envelope);
+        let env = (1.0 - i as f64 / tone_frames as f64)
+            .max(0.0)
+            .powf(tone.envelope);
         let ph = 2.0 * PI * tone.frequency * t;
         let s = ph.sin();
         let sample = match tone.kind {

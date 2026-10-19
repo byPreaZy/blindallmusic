@@ -159,12 +159,7 @@ fn Podium(list: Vec<Value>) -> impl IntoView {
             (2, list[1].clone()),
         ],
     };
-    let extra: Vec<(usize, Value)> = list
-        .into_iter()
-        .skip(3)
-        .take(2)
-        .enumerate()
-        .collect();
+    let extra: Vec<(usize, Value)> = list.into_iter().skip(3).take(2).enumerate().collect();
     let has_extra = !extra.is_empty();
 
     view! {

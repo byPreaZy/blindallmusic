@@ -14,6 +14,7 @@ pub struct RoomConfig {
     pub is_autostart: bool,
     pub is_random: bool,
     pub discord_webhook_url: Option<String>,
+    pub venue_name: Option<String>,
 }
 
 #[derive(Debug, Clone)]

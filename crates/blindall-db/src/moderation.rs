@@ -472,12 +472,18 @@ impl ModerationRepo {
         }))
     }
 
+    /// Non-admin users attached to public rooms (not soft-deleted) or public
+    /// playlists, each with their room/playlist assignments. PHP parity:
+    /// `ModerationModeratorService::publicModeratorIds` + assignments.
     pub async fn moderators(&self, page: i64, per_page: i64) -> Result<Page, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT DISTINCT u.id, u.name, u.photo_path, u.created_at FROM users u \
              JOIN moderables m ON m.user_id = u.id \
-             JOIN rooms r ON r.id = m.moderable_id AND m.moderable_type = 'App\\Models\\Room' \
-             WHERE r.is_public = true ORDER BY u.name LIMIT $1 OFFSET $2",
+             LEFT JOIN rooms r ON r.id = m.moderable_id AND m.moderable_type = 'App\\Models\\Room' \
+             LEFT JOIN playlists p ON p.id = m.moderable_id AND m.moderable_type = 'App\\Models\\Playlist' \
+             WHERE u.is_administrator = false \
+             AND ((r.is_public = true AND r.deleted_at IS NULL) OR p.is_public = true) \
+             ORDER BY u.name LIMIT $1 OFFSET $2",
         )
         .bind(per_page)
         .bind(offset(page, per_page))
@@ -486,19 +492,26 @@ impl ModerationRepo {
         let total: i64 = sqlx::query_scalar(
             "SELECT COUNT(DISTINCT u.id) FROM users u \
              JOIN moderables m ON m.user_id = u.id \
-             JOIN rooms r ON r.id = m.moderable_id AND m.moderable_type = 'App\\Models\\Room' \
-             WHERE r.is_public = true",
+             LEFT JOIN rooms r ON r.id = m.moderable_id AND m.moderable_type = 'App\\Models\\Room' \
+             LEFT JOIN playlists p ON p.id = m.moderable_id AND m.moderable_type = 'App\\Models\\Playlist' \
+             WHERE u.is_administrator = false \
+             AND ((r.is_public = true AND r.deleted_at IS NULL) OR p.is_public = true)",
         )
         .fetch_one(&self.pool)
         .await?;
+        let ids: Vec<i64> = rows.iter().map(|r| r.get::<i64, _>("id")).collect();
+        let (room_map, playlist_map) = self.moderator_assignments(&ids).await?;
         let items = rows
             .iter()
             .map(|r| {
+                let id = r.get::<i64, _>("id");
                 json!({
-                    "id": r.get::<i64, _>("id"),
+                    "id": id,
                     "name": r.get::<String, _>("name"),
                     "photo": r.get::<Option<String>, _>("photo_path"),
                     "created_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("created_at"),
+                    "rooms": room_map.get(&id).cloned().unwrap_or_default(),
+                    "playlists": playlist_map.get(&id).cloned().unwrap_or_default(),
                 })
             })
             .collect();
@@ -508,5 +521,111 @@ impl ModerationRepo {
             page,
             per_page,
         })
+    }
+
+    async fn moderator_assignments(
+        &self,
+        ids: &[i64],
+    ) -> Result<
+        (
+            std::collections::HashMap<i64, Vec<Value>>,
+            std::collections::HashMap<i64, Vec<Value>>,
+        ),
+        sqlx::Error,
+    > {
+        let mut rooms: std::collections::HashMap<i64, Vec<Value>> = std::collections::HashMap::new();
+        let mut playlists: std::collections::HashMap<i64, Vec<Value>> =
+            std::collections::HashMap::new();
+        if ids.is_empty() {
+            return Ok((rooms, playlists));
+        }
+        let room_rows = sqlx::query(
+            "SELECT m.user_id, r.id, r.name, (r.user_id = m.user_id) AS is_owner \
+             FROM moderables m \
+             JOIN rooms r ON r.id = m.moderable_id AND m.moderable_type = 'App\\Models\\Room' \
+             WHERE r.is_public = true AND r.deleted_at IS NULL AND m.user_id = ANY($1) \
+             ORDER BY r.name",
+        )
+        .bind(ids)
+        .fetch_all(&self.pool)
+        .await?;
+        for r in room_rows {
+            let entry = json!({
+                "id": r.get::<i64, _>("id"),
+                "name": r.get::<String, _>("name"),
+                "is_owner": r.get::<bool, _>("is_owner"),
+            });
+            rooms
+                .entry(r.get::<i64, _>("user_id"))
+                .or_default()
+                .push(entry);
+        }
+        let playlist_rows = sqlx::query(
+            "SELECT m.user_id, p.id, p.name, (p.user_id = m.user_id) AS is_owner \
+             FROM moderables m \
+             JOIN playlists p ON p.id = m.moderable_id AND m.moderable_type = 'App\\Models\\Playlist' \
+             WHERE p.is_public = true AND m.user_id = ANY($1) \
+             ORDER BY p.name",
+        )
+        .bind(ids)
+        .fetch_all(&self.pool)
+        .await?;
+        for r in playlist_rows {
+            let entry = json!({
+                "id": r.get::<i64, _>("id"),
+                "name": r.get::<String, _>("name"),
+                "is_owner": r.get::<bool, _>("is_owner"),
+            });
+            playlists
+                .entry(r.get::<i64, _>("user_id"))
+                .or_default()
+                .push(entry);
+        }
+        Ok((rooms, playlists))
+    }
+
+    /// Public rooms/playlists with no non-admin moderable attached (PHP:
+    /// `coverageOverview`), capped at 30 entries each like the PHP service.
+    pub async fn moderators_coverage(&self) -> Result<Value, sqlx::Error> {
+        let rooms = sqlx::query(
+            "SELECT r.id, r.name, u.name AS owner_name, r.created_at FROM rooms r \
+             LEFT JOIN users u ON u.id = r.user_id \
+             WHERE r.is_public = true AND r.deleted_at IS NULL \
+             AND NOT EXISTS ( \
+                 SELECT 1 FROM moderables m JOIN users mu ON mu.id = m.user_id \
+                 WHERE m.moderable_id = r.id AND m.moderable_type = 'App\\Models\\Room' \
+                 AND mu.is_administrator = false \
+             ) ORDER BY r.name LIMIT 30",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let playlists = sqlx::query(
+            "SELECT p.id, p.name, u.name AS owner_name, p.created_at FROM playlists p \
+             LEFT JOIN users u ON u.id = p.user_id \
+             WHERE p.is_public = true \
+             AND NOT EXISTS ( \
+                 SELECT 1 FROM moderables m JOIN users mu ON mu.id = m.user_id \
+                 WHERE m.moderable_id = p.id AND m.moderable_type = 'App\\Models\\Playlist' \
+                 AND mu.is_administrator = false \
+             ) ORDER BY p.name LIMIT 30",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let map = |rows: &[sqlx::postgres::PgRow]| -> Vec<Value> {
+            rows.iter()
+                .map(|r| {
+                    json!({
+                        "id": r.get::<i64, _>("id"),
+                        "name": r.get::<String, _>("name"),
+                        "owner_name": r.get::<Option<String>, _>("owner_name"),
+                        "created_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("created_at"),
+                    })
+                })
+                .collect()
+        };
+        Ok(json!({
+            "rooms_without_moderators": map(&rooms),
+            "playlists_without_moderators": map(&playlists),
+        }))
     }
 }

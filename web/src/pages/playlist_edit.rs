@@ -11,7 +11,13 @@ use wasm_bindgen::JsCast;
 pub fn PlaylistEditPage() -> impl IntoView {
     crate::auth::require_registered(crate::auth::use_auth());
     let params = use_params_map();
-    let playlist_id = move || params.get().get("id").and_then(|v| v.parse::<i64>().ok()).unwrap_or(0);
+    let playlist_id = move || {
+        params
+            .get()
+            .get("id")
+            .and_then(|v| v.parse::<i64>().ok())
+            .unwrap_or(0)
+    };
     let id = playlist_id();
 
     let detail = RwSignal::new(Option::<PlaylistDetail>::None);
@@ -190,23 +196,26 @@ fn MetaForm(
                 Some(tok) => req.header("Authorization", &format!("Bearer {tok}")),
                 None => req,
             };
-            let ok = req
-                .body(body.to_string())
-                .map(|r| async move {
-                    match r.send().await {
-                        Ok(resp) if resp.ok() => on_saved("Playlist updated"),
-                        Ok(_) => on_err("Update failed".into()),
-                        Err(e) => on_err(e.to_string()),
-                    }
-                });
-            if let Ok(f) = ok { f.await; }
+            let ok = req.body(body.to_string()).map(|r| async move {
+                match r.send().await {
+                    Ok(resp) if resp.ok() => on_saved("Playlist updated"),
+                    Ok(_) => on_err("Update failed".into()),
+                    Err(e) => on_err(e.to_string()),
+                }
+            });
+            if let Ok(f) = ok {
+                f.await;
+            }
             busy.set(false);
         });
     };
 
     let delete_playlist = move |_| {
         if !web_sys::window()
-            .and_then(|w| w.confirm_with_message("Supprimer définitivement cette playlist ?").ok())
+            .and_then(|w| {
+                w.confirm_with_message("Supprimer définitivement cette playlist ?")
+                    .ok()
+            })
             .unwrap_or(false)
         {
             return;
@@ -307,10 +316,8 @@ fn TrackList(
             return;
         }
         leptos::task::spawn_local(async move {
-            match api::delete::<Value>(&format!(
-                "/api/v1/playlists/{playlist_id}/tracks/clear"
-            ))
-            .await
+            match api::delete::<Value>(&format!("/api/v1/playlists/{playlist_id}/tracks/clear"))
+                .await
             {
                 Ok(_) => on_changed(()),
                 Err(e) => on_err(e.message),
@@ -418,10 +425,9 @@ fn TrackEditor(
     let save_answer = move |answer_id: i64, type_id: i64, value: String, score: f64| {
         leptos::task::spawn_local(async move {
             let body = json!({"answer_type_id": type_id, "value": value, "score": score});
-            let req = gloo_net::http::Request::put(&format!(
-                "/api/v1/tracks/{tid}/answers/{answer_id}"
-            ))
-            .header("Content-Type", "application/json");
+            let req =
+                gloo_net::http::Request::put(&format!("/api/v1/tracks/{tid}/answers/{answer_id}"))
+                    .header("Content-Type", "application/json");
             let req = match api::stored_token() {
                 Some(tok) => req.header("Authorization", &format!("Bearer {tok}")),
                 None => req,
@@ -550,10 +556,14 @@ fn ProviderSearch(
     let busy = RwSignal::new(false);
     let _ = answer_types;
 
-    let all_providers = ["deezer", "spotify", "itunes", "audius"];
+    // PHP offers a 'local' provider (uploaded Blind'All MP3s).
+    let all_providers = ["deezer", "spotify", "itunes", "audius", "local"];
     let auth = crate::auth::use_auth();
     let can_upload = Memo::new(move |_| {
-        auth.user.get().map(|u| u.is_public_moderator).unwrap_or(false)
+        auth.user
+            .get()
+            .map(|u| u.is_public_moderator)
+            .unwrap_or(false)
     });
 
     let search = move |ev: leptos::ev::SubmitEvent| {
@@ -605,7 +615,9 @@ fn ProviderSearch(
                 "preview_url": r.preview_url.unwrap_or_default(),
                 "artwork_url": r.artwork_url.unwrap_or_default(),
             });
-            match api::post::<Value, _>(&format!("/api/v1/playlists/{playlist_id}/tracks"), &body).await {
+            match api::post::<Value, _>(&format!("/api/v1/playlists/{playlist_id}/tracks"), &body)
+                .await
+            {
                 Ok(_) => on_added(()),
                 Err(e) => on_err(e.message),
             }
@@ -634,7 +646,7 @@ fn ProviderSearch(
                                         }
                                     });
                                 }/>
-                            {p}
+                            {if p == "local" { "Blind'All" } else { p }}
                         </label>
                     })}
                 </div>

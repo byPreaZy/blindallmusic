@@ -55,6 +55,9 @@ pub async fn index(
     user: CurrentUser,
     Query(q): Query<IndexParams>,
 ) -> impl IntoResponse {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     if q.scope.as_deref() == Some("public") {
         return match state.playlists.list_public().await {
             Ok(rows) => Json(json!({
@@ -87,6 +90,9 @@ pub async fn show(
     user: CurrentUser,
     Path(id): Path<i64>,
 ) -> impl IntoResponse {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     let p = match state
         .playlists
         .find(id)
@@ -101,6 +107,11 @@ pub async fn show(
         .playlists
         .can_edit(&p, user.id(), user.0.is_administrator)
         .await;
+    // PHP `edit()` aborts 403 — this JSON feeds the edit page only, so a
+    // non-editor must not read private playlist metadata (room slugs…).
+    if !can_edit {
+        return err(StatusCode::FORBIDDEN, "unauthorized");
+    }
     let owned = p.user_id == user.id() || user.0.is_administrator;
     let moderators = state.playlists.moderators(id).await.unwrap_or_default();
     let rooms = state
@@ -155,6 +166,21 @@ pub async fn store(
     if name.is_empty() || name.chars().count() > 50 {
         return err(StatusCode::UNPROCESSABLE_ENTITY, "invalid_name");
     }
+    // PHP: 'name' => required|max:50|unique:playlists + Reserved rule.
+    if crate::auth_session::validate_name(name, &[]).is_err() {
+        return err(StatusCode::UNPROCESSABLE_ENTITY, "validation.reserved");
+    }
+    if state
+        .playlists
+        .name_taken(name, None)
+        .await
+        .unwrap_or(false)
+    {
+        return err(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "The name has already been taken.",
+        );
+    }
     match state.playlists.create(user.id(), name).await {
         Ok(id) => {
             state
@@ -191,6 +217,26 @@ pub async fn update(
     };
     if body.name.trim().is_empty() || body.name.chars().count() > 50 {
         return err(StatusCode::UNPROCESSABLE_ENTITY, "invalid_name");
+    }
+    if crate::auth_session::validate_name(body.name.trim(), &[]).is_err() {
+        return err(StatusCode::UNPROCESSABLE_ENTITY, "validation.reserved");
+    }
+    if state
+        .playlists
+        .name_taken(body.name.trim(), Some(p.id))
+        .await
+        .unwrap_or(false)
+    {
+        return err(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "The name has already been taken.",
+        );
+    }
+    if !state.rooms.user_exists(body.user_id).await.unwrap_or(false) {
+        return err(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "The selected user id is invalid.",
+        );
     }
     match state
         .playlists
@@ -249,6 +295,9 @@ pub async fn tracks(
     Path(id): Path<i64>,
     Query(q): Query<PageParams>,
 ) -> impl IntoResponse {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     if let Err(r) = editable(&state.playlists, id, &user).await {
         return r;
     }
@@ -266,6 +315,26 @@ pub async fn tracks(
             tracing::error!(error = %e, "playlists.tracks failed");
             err(StatusCode::INTERNAL_SERVER_ERROR, "db_error")
         }
+    }
+}
+
+/// Remote URLs stored on tracks are probed server-side (`probe_audio`) and
+/// broadcast to every player — restrict to http(s) and refuse literal
+/// private/loopback IPs.
+fn valid_remote_url(u: &str) -> bool {
+    let Ok(url) = url::Url::parse(u) else {
+        return false;
+    };
+    if !matches!(url.scheme(), "http" | "https") {
+        return false;
+    }
+    match url.host() {
+        Some(url::Host::Ipv4(ip)) => {
+            !(ip.is_private() || ip.is_loopback() || ip.is_link_local() || ip.is_unspecified())
+        }
+        Some(url::Host::Ipv6(ip)) => !(ip.is_loopback() || ip.is_unspecified()),
+        Some(url::Host::Domain(_)) => true,
+        None => false,
     }
 }
 
@@ -305,7 +374,10 @@ pub async fn store_track(
         && !b.preview_url.is_empty()
         && b.preview_url.len() <= 2048
         && !b.artwork_url.is_empty()
-        && b.artwork_url.len() <= 255;
+        && b.artwork_url.len() <= 2048
+        && valid_remote_url(&b.provider_url)
+        && valid_remote_url(&b.preview_url)
+        && valid_remote_url(&b.artwork_url);
     if !ok {
         return err(StatusCode::UNPROCESSABLE_ENTITY, "validation_failed");
     }
@@ -479,6 +551,9 @@ pub async fn search_tracks(
     Path(id): Path<i64>,
     Query(q): Query<SearchParams>,
 ) -> impl IntoResponse {
+    if let Some(r) = crate::rooms::require_not_guest(&user.0) {
+        return r;
+    }
     if let Err(r) = editable(&state.playlists, id, &user).await {
         return r;
     }
@@ -496,13 +571,40 @@ pub async fn search_tracks(
     }
 
     let is_mod = state.auth.is_public_moderator(user.id()).await;
-    let (results, errors) = state.providers.search(&term, &providers, is_mod).await;
+    let remote: Vec<&str> = providers
+        .iter()
+        .copied()
+        .filter(|p| *p != "local")
+        .collect();
+    let (mut results, errors) = state.providers.search(&term, &remote, is_mod).await;
+    if providers.contains(&"local") {
+        // Uploaded Blinest tracks — same ProviderTrack shape so the UI
+        // treats them like any provider result.
+        if let Ok(rows) = state.local_tracks.search(&term).await {
+            let app_url = state.app_url.trim_end_matches('/');
+            results.extend(rows.iter().map(|(lid, artist, track, artwork)| {
+                let url = format!("{app_url}/api/v1/local-tracks/{lid}/audio");
+                blindall_providers::ProviderTrack {
+                    provider: "local".to_string(),
+                    provider_id: lid.to_string(),
+                    provider_url: Some(url.clone()),
+                    provider_popularity: 0,
+                    artist_name: Some(artist.clone()),
+                    track_name: track.clone(),
+                    album_name: None,
+                    preview_url: Some(url),
+                    release_date: None,
+                    artwork_url: Some(state.storage.url(artwork)),
+                }
+            }));
+        }
+    }
 
     let mut tracks = Vec::with_capacity(results.len());
     for t in &results {
         let added = state
             .playlists
-            .provider_track_id(id, &t.provider_id)
+            .provider_track_id(id, &t.provider, &t.provider_id)
             .await
             .ok()
             .flatten();
@@ -715,7 +817,16 @@ pub async fn find_provider_playlist(
     if let Err(r) = editable(&state.playlists, id, &user).await {
         return r;
     }
-    if b.playlist_id.trim().is_empty() && b.provider != "blindall" {
+    if b.provider != "blindall"
+        && (b.playlist_id.trim().is_empty()
+            || !b
+                .playlist_id
+                .trim()
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric()))
+    {
+        // PHP 'playlist_id' => alpha_num — keeps the id safe to interpolate
+        // into provider API URLs.
         return err(StatusCode::UNPROCESSABLE_ENTITY, "invalid_playlist_id");
     }
     if b.provider == "blindall" {
@@ -762,6 +873,16 @@ pub async fn import_provider_playlist(
     if let Err(r) = editable(&state.playlists, id, &user).await {
         return r;
     }
+    if b.provider != "blindall"
+        && (b.playlist_id.trim().is_empty()
+            || !b
+                .playlist_id
+                .trim()
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric()))
+    {
+        return err(StatusCode::UNPROCESSABLE_ENTITY, "invalid_playlist_id");
+    }
     let mut imported = 0u64;
     if b.provider == "blindall" {
         let ids = state
@@ -796,6 +917,16 @@ pub async fn import_provider_playlist(
             let provider_url = t.provider_url.unwrap_or_default();
             let artist = t.artist_name.unwrap_or_default();
             if artist.is_empty() || t.track_name.is_empty() || provider_url.is_empty() {
+                continue;
+            }
+            // PHP parity (ProcessImportTrack::doesntExist → skip): re-imports
+            // never overwrite answers fixed by hand — new tracks only.
+            if state
+                .playlists
+                .track_exists(id, &t.provider, &t.provider_id)
+                .await
+                .unwrap_or(false)
+            {
                 continue;
             }
             if state

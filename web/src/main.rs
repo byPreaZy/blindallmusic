@@ -1,11 +1,11 @@
 mod ads;
-mod seo;
 mod api;
 mod app;
 mod auth;
 mod components;
 mod i18n;
 mod pages;
+mod seo;
 mod types;
 mod ws;
 

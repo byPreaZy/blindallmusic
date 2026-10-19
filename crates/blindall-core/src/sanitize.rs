@@ -102,19 +102,15 @@ pub fn clean_import_title(input: &str) -> (String, Vec<String>, Vec<String>) {
     let mut title = input.trim().to_string();
     let mut feats: Vec<String> = Vec::new();
 
-    // extrait les featurings avant tout stripping de parentheses
+    // extrait les featurings avant tout stripping de parentheses.
+    // la capture brute est rendue telle quelle — l'éclatement en artistes
+    // individuels se fait a l'import, la ou on peut verifier qu'une forme
+    // jointe ("Earth, Wind & Fire") existe deja comme artiste.
     while let Some(c) = IMPORT_FEAT.captures(&title.clone()) {
         let cap = c.get(0).unwrap().range();
-        let inner = c.get(1).unwrap().as_str().to_string();
-        for f in inner
-            .split(|ch: char| ch == ',' || ch == '&')
-            .flat_map(|p| p.split(" et "))
-            .flat_map(|p| p.split(" and "))
-        {
-            let f = f.trim();
-            if f.len() > 1 && !feats.iter().any(|x| x.eq_ignore_ascii_case(f)) {
-                feats.push(f.to_string());
-            }
+        let inner = c.get(1).unwrap().as_str().trim().to_string();
+        if inner.len() > 1 && !feats.iter().any(|x| x.eq_ignore_ascii_case(&inner)) {
+            feats.push(inner);
         }
         title = format!("{}{}", &title[..cap.start], &title[cap.end..]);
     }
@@ -152,6 +148,41 @@ pub fn clean_import_title(input: &str) -> (String, Vec<String>, Vec<String>) {
 
     let title = WHITESPACE_RUN.replace_all(title.trim(), " ").into_owned();
     (title, feats, medley)
+}
+
+static FEAT_PAREN: Lazy<Regex> = Lazy::new(|| Regex::new(r"[\(\[][^\)\]]*[\)\]]").unwrap());
+
+/// Eclate une capture "feat. A & B, C" en noms d'artistes candidats.
+/// Les annotations entre parentheses/crochets ("Olly Alexander (Years & Years)")
+/// sont retirees d'abord pour ne pas produire de fragments orphelins.
+/// La decision de garder une forme jointe ("Earth, Wind & Fire") revient a
+/// l'appelant, qui peut verifier son existence comme artiste dans le catalogue.
+pub fn split_feat_artists(raw: &str) -> Vec<String> {
+    let stripped = FEAT_PAREN.replace_all(raw, "").trim().to_string();
+    let has_parens = FEAT_PAREN.is_match(raw);
+    let basis = if stripped.len() > 1 {
+        stripped
+    } else if has_parens {
+        // le feat n'etait qu'une annotation parenthetique — rien d'exploitable
+        return Vec::new();
+    } else {
+        raw.trim().to_string()
+    };
+    let mut out: Vec<String> = Vec::new();
+    for seg in basis
+        .split(|ch: char| ch == ',' || ch == '&')
+        .flat_map(|p| p.split(" et "))
+        .flat_map(|p| p.split(" and "))
+    {
+        let seg = seg.trim();
+        if seg.len() > 1 && !out.iter().any(|x| x.eq_ignore_ascii_case(seg)) {
+            out.push(seg.to_string());
+        }
+    }
+    if out.is_empty() && basis.trim().len() > 1 {
+        out.push(basis.trim().to_string());
+    }
+    out
 }
 
 pub fn str_slug(title: &str, separator: char) -> String {
@@ -239,7 +270,7 @@ mod tests {
     fn import_title_strips_provider_junk() {
         let (t, f, m) = clean_import_title("Yeah! [feat. Lil Jon & Ludacris]");
         assert_eq!(t, "Yeah!");
-        assert_eq!(f, vec!["Lil Jon", "Ludacris"]);
+        assert_eq!(f, vec!["Lil Jon & Ludacris"]);
         assert!(m.len() <= 1);
 
         let (t, f, _) = clean_import_title("Song (Remastered 2011) (Radio Edit)");
@@ -249,6 +280,30 @@ mod tests {
         let (t, f, _) = clean_import_title("Defeat at Midnight");
         assert_eq!(t, "Defeat at Midnight");
         assert!(f.is_empty());
+    }
+
+    #[test]
+    fn split_feat_artists_segments() {
+        assert_eq!(
+            split_feat_artists("Lil Jon & Ludacris"),
+            vec!["Lil Jon", "Ludacris"]
+        );
+        assert_eq!(
+            split_feat_artists("Ciara & Fat Man Scoop"),
+            vec!["Ciara", "Fat Man Scoop"]
+        );
+        assert_eq!(
+            split_feat_artists("Pharrell Williams, Katy Perry & Big Sean"),
+            vec!["Pharrell Williams", "Katy Perry", "Big Sean"]
+        );
+        // les annotations entre parentheses ne produisent pas de fragments
+        assert_eq!(
+            split_feat_artists("Olly Alexander (Years & Years)"),
+            vec!["Olly Alexander"]
+        );
+        assert!(split_feat_artists("(Years & Years)").is_empty());
+        // un nom simple revient tel quel
+        assert_eq!(split_feat_artists("Mase"), vec!["Mase"]);
     }
 
     #[test]

@@ -65,10 +65,18 @@ pub fn ModShell(active: &'static str, children: ChildrenFn) -> impl IntoView {
 }
 
 fn enc(s: &str) -> String {
-    s.replace('%', "%25").replace('&', "%26").replace('=', "%3D").replace(' ', "%20").replace('#', "%23")
+    s.replace('%', "%25")
+        .replace('&', "%26")
+        .replace('=', "%3D")
+        .replace(' ', "%20")
+        .replace('#', "%23")
 }
 
-fn pager(page: RwSignal<i64>, last_page: RwSignal<i64>, reload: impl Fn() + Copy + Send + Sync + 'static) -> impl IntoView {
+fn pager(
+    page: RwSignal<i64>,
+    last_page: RwSignal<i64>,
+    reload: impl Fn() + Copy + Send + Sync + 'static,
+) -> impl IntoView {
     view! {
         <Show when=move || { last_page.get() > 1 }>
             <div class="mt-4 flex items-center justify-center gap-3">
@@ -84,7 +92,10 @@ fn pager(page: RwSignal<i64>, last_page: RwSignal<i64>, reload: impl Fn() + Copy
     }
 }
 
-fn search_bar(search: RwSignal<String>, reload: impl Fn() + Copy + Send + Sync + 'static) -> impl IntoView {
+fn search_bar(
+    search: RwSignal<String>,
+    reload: impl Fn() + Copy + Send + Sync + 'static,
+) -> impl IntoView {
     view! {
         <form class="mb-4 flex gap-2" on:submit=move |ev| { ev.prevent_default(); reload(); }>
             <input type="text" placeholder=t("Search")
@@ -105,7 +116,9 @@ fn ErrLine(error: RwSignal<Option<String>>) -> impl IntoView {
 }
 
 fn fmt_date(v: &Value) -> String {
-    v.as_str().map(|s| s.chars().take(10).collect()).unwrap_or_else(|| "—".to_string())
+    v.as_str()
+        .map(|s| s.chars().take(10).collect())
+        .unwrap_or_else(|| "—".to_string())
 }
 
 // ---- dashboard ---------------------------------------------------------------
@@ -159,8 +172,16 @@ pub fn ModTrashedMessages() -> impl IntoView {
         let s = search.get_untracked();
         let p = page.get_untracked();
         leptos::task::spawn_local(async move {
-            match api::get::<Value>(&format!("/api/v1/moderation/trashed-messages?page={p}&search={}", enc(&s))).await {
-                Ok(v) => { last_page.set(v["last_page"].as_i64().unwrap_or(1)); data.set(v); }
+            match api::get::<Value>(&format!(
+                "/api/v1/moderation/trashed-messages?page={p}&search={}",
+                enc(&s)
+            ))
+            .await
+            {
+                Ok(v) => {
+                    last_page.set(v["last_page"].as_i64().unwrap_or(1));
+                    data.set(v);
+                }
                 Err(e) => error.set(Some(e.message)),
             }
             loading.set(false);
@@ -232,8 +253,16 @@ pub fn ModBannedUsers() -> impl IntoView {
         let s = search.get_untracked();
         let p = page.get_untracked();
         leptos::task::spawn_local(async move {
-            match api::get::<Value>(&format!("/api/v1/moderation/banned-users?page={p}&search={}", enc(&s))).await {
-                Ok(v) => { last_page.set(v["bannedUsers"]["last_page"].as_i64().unwrap_or(1)); data.set(v["bannedUsers"].clone()); }
+            match api::get::<Value>(&format!(
+                "/api/v1/moderation/banned-users?page={p}&search={}",
+                enc(&s)
+            ))
+            .await
+            {
+                Ok(v) => {
+                    last_page.set(v["bannedUsers"]["last_page"].as_i64().unwrap_or(1));
+                    data.set(v["bannedUsers"].clone());
+                }
                 Err(e) => error.set(Some(e.message)),
             }
             loading.set(false);
@@ -412,7 +441,10 @@ fn RematchPanel(track_id: i64) -> impl IntoView {
         let path = if q.trim().is_empty() {
             format!("/api/v1/moderation/tracks/{track_id}/rematch")
         } else {
-            format!("/api/v1/moderation/tracks/{track_id}/rematch?q={}", js_sys::encode_uri_component(&q))
+            format!(
+                "/api/v1/moderation/tracks/{track_id}/rematch?q={}",
+                js_sys::encode_uri_component(&q)
+            )
         };
         leptos::task::spawn_local(async move {
             match api::get::<Value>(&path).await {
@@ -532,8 +564,16 @@ pub fn ModUsers() -> impl IntoView {
         let s = search.get_untracked();
         let p = page.get_untracked();
         leptos::task::spawn_local(async move {
-            match api::get::<Value>(&format!("/api/v1/moderation/users?page={p}&search={}", enc(&s))).await {
-                Ok(v) => { last_page.set(v["users"]["last_page"].as_i64().unwrap_or(1)); data.set(v["users"].clone()); }
+            match api::get::<Value>(&format!(
+                "/api/v1/moderation/users?page={p}&search={}",
+                enc(&s)
+            ))
+            .await
+            {
+                Ok(v) => {
+                    last_page.set(v["users"]["last_page"].as_i64().unwrap_or(1));
+                    data.set(v["users"].clone());
+                }
                 Err(e) => error.set(Some(e.message)),
             }
             loading.set(false);
@@ -787,6 +827,7 @@ pub fn ModUserShow() -> impl IntoView {
 #[component]
 pub fn ModModerators() -> impl IntoView {
     let data = RwSignal::new(Value::Null);
+    let coverage = RwSignal::new(Value::Null);
     let loading = RwSignal::new(true);
     let error = RwSignal::new(Option::<String>::None);
     let page = RwSignal::new(1i64);
@@ -798,6 +839,7 @@ pub fn ModModerators() -> impl IntoView {
             match api::get::<Value>(&format!("/api/v1/moderation/moderators?page={p}")).await {
                 Ok(v) => {
                     last_page.set(v["moderators"]["last_page"].as_i64().unwrap_or(1));
+                    coverage.set(v["coverage"].clone());
                     data.set(v["moderators"].clone());
                 }
                 Err(e) => error.set(Some(e.message)),
@@ -807,22 +849,93 @@ pub fn ModModerators() -> impl IntoView {
     };
     load();
 
+    let revoke = move |kind: &'static str, target: i64, uid: i64| {
+        leptos::task::spawn_local(async move {
+            let url = format!("/api/v1/moderation/moderators/{kind}/{target}/users/{uid}");
+            match api::delete::<Value>(&url).await {
+                Ok(_) => load(),
+                Err(e) => error.set(Some(e.message)),
+            }
+        });
+    };
+
     view! {
         <ModShell active="/moderation/moderators">
             <ErrLine error=error/>
             <Show when=move || !loading.get() fallback=move || view! {
                 <div class="py-16 text-center text-white/60">{t("Loading")}"…"</div>
             }>
+                {move || {
+                    let cov = coverage.get();
+                    let unmod = |key: &str| cov[key].as_array().cloned().unwrap_or_default();
+                    let rooms_unmod = unmod("rooms_without_moderators");
+                    let pl_unmod = unmod("playlists_without_moderators");
+                    if rooms_unmod.is_empty() && pl_unmod.is_empty() {
+                        return ().into_any();
+                    }
+                    let panel = |title: String, items: Vec<Value>, href: fn(i64) -> String| {
+                        view! {
+                            <div class="card p-4">
+                                <div class="mb-2 text-sm font-semibold text-white">{title}</div>
+                                <div class="flex flex-wrap gap-2">
+                                    {items.into_iter().map(|it| {
+                                        let id = it["id"].as_i64().unwrap_or(0);
+                                        let name = it["name"].as_str().unwrap_or("").to_string();
+                                        let owner = it["owner_name"].as_str().unwrap_or("").to_string();
+                                        view! {
+                                            <A href=href(id) attr:class="rounded-lg border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-xs text-amber-200 hover:bg-amber-400/20">
+                                                {name} {move || if owner.is_empty() { String::new() } else { format!(" · {owner}") }}
+                                            </A>
+                                        }
+                                    }).collect::<Vec<_>>()}
+                                </div>
+                            </div>
+                        }.into_any()
+                    };
+                    view! {
+                        <div class="mb-4 grid gap-3 md:grid-cols-2">
+                            {if rooms_unmod.is_empty() { ().into_any() } else { panel(t("Public rooms without moderators").to_string(), rooms_unmod, |id| format!("/rooms/{id}")) }}
+                            {if pl_unmod.is_empty() { ().into_any() } else { panel(t("Public playlists without moderators").to_string(), pl_unmod, |id| format!("/playlists/{id}")) }}
+                        </div>
+                    }.into_any()
+                }}
                 <div class="card">
                     {move || data.get()["data"].as_array().cloned().unwrap_or_default()
                         .into_iter().map(|u| {
                             let uid = u["id"].as_i64().unwrap_or(0);
                             let name = u["name"].as_str().unwrap_or("").to_string();
                             let created = fmt_date(&u["created_at"]);
+                            let rooms = u["rooms"].as_array().cloned().unwrap_or_default();
+                            let playlists = u["playlists"].as_array().cloned().unwrap_or_default();
+                            let chip = move |a: Value, kind: &'static str| {
+                                let tid = a["id"].as_i64().unwrap_or(0);
+                                let aname = a["name"].as_str().unwrap_or("").to_string();
+                                let is_owner = a["is_owner"].as_bool().unwrap_or(false);
+                                view! {
+                                    <span class="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-white/80">
+                                        {aname}
+                                        {if is_owner {
+                                            view! { <span class="text-white/30">{t("owner")}</span> }.into_any()
+                                        } else {
+                                            view! {
+                                                <button type="button" title=t("Revoke")
+                                                    class="ml-0.5 text-red-300/70 hover:text-red-300"
+                                                    on:click=move |_| revoke(kind, tid, uid)>"×"</button>
+                                            }.into_any()
+                                        }}
+                                    </span>
+                                }
+                            };
                             view! {
-                                <div class="flex items-center justify-between border-b border-white/5 px-4 py-3 last:border-0">
-                                    <A href=format!("/profile/{uid}") attr:class="font-medium text-white hover:text-brand-accent-light">{name}</A>
-                                    <span class="text-xs text-white/40">{t("since")} " " {created}</span>
+                                <div class="border-b border-white/5 px-4 py-3 last:border-0">
+                                    <div class="flex items-center justify-between">
+                                        <A href=format!("/profile/{uid}") attr:class="font-medium text-white hover:text-brand-accent-light">{name}</A>
+                                        <span class="text-xs text-white/40">{t("since")} " " {created}</span>
+                                    </div>
+                                    <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                        {rooms.into_iter().map(|a| chip(a, "rooms")).collect::<Vec<_>>()}
+                                        {playlists.into_iter().map(|a| chip(a, "playlists")).collect::<Vec<_>>()}
+                                    </div>
                                 </div>
                             }
                         }).collect::<Vec<_>>()}
@@ -850,7 +963,12 @@ pub fn ModTracks() -> impl IntoView {
         let s = search.get_untracked();
         let p = page.get_untracked();
         leptos::task::spawn_local(async move {
-            match api::get::<Value>(&format!("/api/v1/moderation/tracks?page={p}&search={}", enc(&s))).await {
+            match api::get::<Value>(&format!(
+                "/api/v1/moderation/tracks?page={p}&search={}",
+                enc(&s)
+            ))
+            .await
+            {
                 Ok(v) => {
                     let total = v["total"].as_i64().unwrap_or(0);
                     last_page.set((total + 19) / 20);

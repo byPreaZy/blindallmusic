@@ -33,7 +33,11 @@ pub fn SettingsPage() -> impl IntoView {
                     name.set(a["name"].as_str().unwrap_or("").to_string());
                     email.set(a["email"].as_str().unwrap_or("").to_string());
                     tag.set(a["custom_tag"].as_str().unwrap_or("").to_string());
-                    show_donations.set(a["show_donation_history_on_profile"].as_bool().unwrap_or(true));
+                    show_donations.set(
+                        a["show_donation_history_on_profile"]
+                            .as_bool()
+                            .unwrap_or(true),
+                    );
                     account.set(v);
                 }
                 Err(e) if e.status == 401 => {
@@ -47,7 +51,11 @@ pub fn SettingsPage() -> impl IntoView {
     reload();
 
     let user_id = move || account.get()["account"]["id"].as_i64().unwrap_or(0);
-    let has_password = move || account.get()["account"]["has_password"].as_bool().unwrap_or(false);
+    let has_password = move || {
+        account.get()["account"]["has_password"]
+            .as_bool()
+            .unwrap_or(false)
+    };
 
     let save_profile = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -86,7 +94,9 @@ pub fn SettingsPage() -> impl IntoView {
                 "password": new_pw.get_untracked(),
                 "password_confirmation": new_pw2.get_untracked(),
             });
-            match api::put::<Value, _>(&format!("/api/v1/users/{}/password", user_id()), &body).await {
+            match api::put::<Value, _>(&format!("/api/v1/users/{}/password", user_id()), &body)
+                .await
+            {
                 Ok(_) => {
                     cur_pw.set(String::new());
                     new_pw.set(String::new());
@@ -94,17 +104,24 @@ pub fn SettingsPage() -> impl IntoView {
                     msg.set(Some(t("Password updated").to_string()));
                 }
                 Err(e) => err.set(Some(
-                    e.first("password").or(e.first("current_password")).unwrap_or(e.message),
+                    e.first("password")
+                        .or(e.first("current_password"))
+                        .unwrap_or(e.message),
                 )),
             }
         });
     };
 
     let upload_photo = move |ev: leptos::ev::Event| {
-        let Some(input) = ev.target().and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok()) else {
+        let Some(input) = ev
+            .target()
+            .and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok())
+        else {
             return;
         };
-        let Some(file) = input.files().and_then(|f| f.get(0)) else { return };
+        let Some(file) = input.files().and_then(|f| f.get(0)) else {
+            return;
+        };
         err.set(None);
         leptos::task::spawn_local(async move {
             match upload(user_id(), file).await {
@@ -120,7 +137,10 @@ pub fn SettingsPage() -> impl IntoView {
     let remove_photo = move |_| {
         err.set(None);
         leptos::task::spawn_local(async move {
-            if api::delete::<Value>(&format!("/api/v1/users/{}/photo", user_id())).await.is_ok() {
+            if api::delete::<Value>(&format!("/api/v1/users/{}/photo", user_id()))
+                .await
+                .is_ok()
+            {
                 msg.set(Some(t("Photo removed").to_string()));
                 reload();
             }
@@ -133,13 +153,17 @@ pub fn SettingsPage() -> impl IntoView {
             let _ = api::patch::<Value, _>(
                 &format!("/api/v1/users/{}/donation-preferences", user_id()),
                 &json!({"show_donation_history_on_profile": v}),
-            ).await;
+            )
+            .await;
         });
     };
 
     let delete_account = move |_| {
         leptos::task::spawn_local(async move {
-            if api::delete::<Value>(&format!("/api/v1/users/{}", user_id())).await.is_ok() {
+            if api::delete::<Value>(&format!("/api/v1/users/{}", user_id()))
+                .await
+                .is_ok()
+            {
                 auth.logout();
                 navigate.get_value()("/", Default::default());
             } else {
@@ -448,12 +472,13 @@ async fn upload(user_id: i64, file: web_sys::File) -> Result<(), ApiError> {
         errors: Default::default(),
         body: serde_json::Value::Null,
     })?;
-    form.append_with_blob("photo", &file).map_err(|e| ApiError {
-        status: 0,
-        message: format!("{e:?}"),
-        errors: Default::default(),
-        body: serde_json::Value::Null,
-    })?;
+    form.append_with_blob("photo", &file)
+        .map_err(|e| ApiError {
+            status: 0,
+            message: format!("{e:?}"),
+            errors: Default::default(),
+            body: serde_json::Value::Null,
+        })?;
     let token = api::stored_token();
     let req = gloo_net::http::Request::post(&format!("/api/v1/users/{user_id}/photo"));
     let req = if let Some(t) = token {
@@ -461,12 +486,16 @@ async fn upload(user_id: i64, file: web_sys::File) -> Result<(), ApiError> {
     } else {
         req
     };
-    let resp = req.body(form).map_err(|e| ApiError {
-        status: 0,
-        message: e.to_string(),
-        errors: Default::default(),
-        body: serde_json::Value::Null,
-    })?.send().await;
+    let resp = req
+        .body(form)
+        .map_err(|e| ApiError {
+            status: 0,
+            message: e.to_string(),
+            errors: Default::default(),
+            body: serde_json::Value::Null,
+        })?
+        .send()
+        .await;
     api::finish(resp).await?;
     Ok(())
 }

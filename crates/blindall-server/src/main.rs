@@ -177,6 +177,12 @@ async fn main() -> anyhow::Result<()> {
                     &["DISCORD_APP_SECRET"][..],
                     "DISCORD_REDIRECT_URI",
                 ),
+                (
+                    "deezer",
+                    &["DEEZER_CLIENT_ID"][..],
+                    &["DEEZER_CLIENT_SECRET"][..],
+                    "DEEZER_REDIRECT_URI",
+                ),
             ] {
                 let env_first = |names: &[&str]| {
                     names

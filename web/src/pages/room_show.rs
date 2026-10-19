@@ -1,10 +1,10 @@
 use crate::api;
 use crate::auth::use_auth;
-use crate::components::navbar::Spinner;
-use crate::components::player::Player;
 use crate::components::answer_input::AnswerInput;
 use crate::components::answers_grid::{apply_track_voted, PlaylistPanel};
 use crate::components::chat::RoomChat;
+use crate::components::navbar::Spinner;
+use crate::components::player::Player;
 use crate::components::ranking::RankingPanel;
 use crate::i18n::{t, tr};
 use crate::types::{JoinedPayload, RoomConfig, RoomUser, Round, Track};
@@ -14,7 +14,7 @@ use leptos_router::components::A;
 use leptos_router::hooks::{use_navigate, use_params};
 use leptos_router::params::Params;
 use send_wrapper::SendWrapper;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -27,7 +27,11 @@ fn parse_scores(v: &Value) -> HashMap<i64, f64> {
     match v {
         Value::Object(m) => m
             .iter()
-            .filter_map(|(k, s)| k.parse::<i64>().ok().map(|id| (id, s.as_f64().unwrap_or(0.0))))
+            .filter_map(|(k, s)| {
+                k.parse::<i64>()
+                    .ok()
+                    .map(|id| (id, s.as_f64().unwrap_or(0.0)))
+            })
             .collect(),
         Value::Array(arr) => arr
             .iter()
@@ -92,10 +96,7 @@ fn apply_room_head(room: &RoomConfig, seo: Option<&Value>, password_protected: b
         }
     };
 
-    let slug = room
-        .slug
-        .clone()
-        .unwrap_or_else(|| room.id.to_string());
+    let slug = room.slug.clone().unwrap_or_else(|| room.id.to_string());
     let path = format!("/rooms/{slug}");
     let url = crate::seo::canonical_url(&path);
     let title = format!("{} : {}", room.name, t("Room title suffix"));
@@ -150,7 +151,12 @@ fn apply_room_head(room: &RoomConfig, seo: Option<&Value>, password_protected: b
         .and_then(|s| s["content"]["intro"].as_str())
         .map(str::to_string)
         .or_else(|| room.description.clone())
-        .unwrap_or_else(|| tr("Room schema default description", &[("room", room.name.clone())]));
+        .unwrap_or_else(|| {
+            tr(
+                "Room schema default description",
+                &[("room", room.name.clone())],
+            )
+        });
     let genre = room
         .category
         .as_ref()
@@ -264,20 +270,46 @@ fn seo_tokens(room: &RoomConfig, s: &Value) -> Vec<(&'static str, String)> {
                 .map(|n| t(n).to_string())
                 .unwrap_or_default(),
         ),
-        ("rounds", s["stats"]["rounds"].as_i64().unwrap_or_default().to_string()),
-        ("tracks", s["stats"]["tracks"].as_i64().unwrap_or_default().to_string()),
-        ("players", s["stats"]["players_online"].as_i64().unwrap_or_default().to_string()),
+        (
+            "rounds",
+            s["stats"]["rounds"]
+                .as_i64()
+                .unwrap_or_default()
+                .to_string(),
+        ),
+        (
+            "tracks",
+            s["stats"]["tracks"]
+                .as_i64()
+                .unwrap_or_default()
+                .to_string(),
+        ),
+        (
+            "players",
+            s["stats"]["players_online"]
+                .as_i64()
+                .unwrap_or_default()
+                .to_string(),
+        ),
     ]
 }
 
 fn resolved_intro(room: &RoomConfig, s: &Value, secondary: bool) -> String {
-    let field = if secondary { "intro_secondary" } else { "intro" };
+    let field = if secondary {
+        "intro_secondary"
+    } else {
+        "intro"
+    };
     if crate::i18n::locale() == "fr" {
         if let Some(txt) = s["content"][field].as_str() {
             return txt.to_string();
         }
     }
-    let key = if secondary { "Room page intro secondary" } else { "Room page intro" };
+    let key = if secondary {
+        "Room page intro secondary"
+    } else {
+        "Room page intro"
+    };
     tr(key, &seo_tokens(room, s))
 }
 
@@ -451,7 +483,8 @@ pub fn RoomPage() -> impl IntoView {
             leptos::task::spawn_local({
                 let nav = nav.clone();
                 async move {
-                    match api::post_empty::<crate::types::AuthResponse>("/api/v1/auth/guest").await {
+                    match api::post_empty::<crate::types::AuthResponse>("/api/v1/auth/guest").await
+                    {
                         Ok(resp) => auth.complete_oauth(resp),
                         Err(_) => nav("/login", Default::default()),
                     }
@@ -466,7 +499,9 @@ pub fn RoomPage() -> impl IntoView {
     // ---- hydrate + wire events once we have a token -----------------------
     let hydrate = Rc::new(move |room_id: i64| {
         leptos::task::spawn_local(async move {
-            let Ok(data) = api::get::<JoinedPayload>(&format!("/api/v1/rooms/{room_id}/joined")).await else {
+            let Ok(data) =
+                api::get::<JoinedPayload>(&format!("/api/v1/rooms/{room_id}/joined")).await
+            else {
                 return;
             };
             if round_id.is_disposed() {
@@ -548,9 +583,11 @@ pub fn RoomPage() -> impl IntoView {
                         t("Room title suffix")
                     )));
                     apply_room_head(&resp.room, resp.seo.as_ref(), !pwd.is_empty());
-                    if let Some(n) = resp.seo.as_ref().and_then(|s| {
-                        s["stats"]["players_online"].as_i64()
-                    }) {
+                    if let Some(n) = resp
+                        .seo
+                        .as_ref()
+                        .and_then(|s| s["stats"]["players_online"].as_i64())
+                    {
                         players_online.set(n);
                     }
                     seo_data.set(resp.seo);
@@ -598,29 +635,32 @@ pub fn RoomPage() -> impl IntoView {
         rt.set(Some(realtime.clone()));
 
         let ch = channel.clone();
-        realtime.on_presence(&ch, Rc::new(move |kind, list| {
-            let parsed: Vec<RoomUser> = list
-                .iter()
-                .filter_map(|v| serde_json::from_value(v.clone()).ok())
-                .collect();
-            match kind {
-                "sync" => users.set(parsed),
-                "join" => {
-                    for u in parsed {
-                        users.update(|us| {
-                            if !us.iter().any(|x| x.id == u.id) {
-                                us.push(u.clone());
-                            }
-                        });
+        realtime.on_presence(
+            &ch,
+            Rc::new(move |kind, list| {
+                let parsed: Vec<RoomUser> = list
+                    .iter()
+                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                    .collect();
+                match kind {
+                    "sync" => users.set(parsed),
+                    "join" => {
+                        for u in parsed {
+                            users.update(|us| {
+                                if !us.iter().any(|x| x.id == u.id) {
+                                    us.push(u.clone());
+                                }
+                            });
+                        }
                     }
+                    "leave" => {
+                        let ids: Vec<i64> = parsed.iter().map(|u| u.id).collect();
+                        users.update(|us| us.retain(|x| !ids.contains(&x.id)));
+                    }
+                    _ => {}
                 }
-                "leave" => {
-                    let ids: Vec<i64> = parsed.iter().map(|u| u.id).collect();
-                    users.update(|us| us.retain(|x| !ids.contains(&x.id)));
-                }
-                _ => {}
-            }
-        }));
+            }),
+        );
 
         macro_rules! on {
             ($event:literal, $body:expr) => {{
@@ -636,7 +676,11 @@ pub fn RoomPage() -> impl IntoView {
             }
         });
         on!("NewScore", move |e| {
-            let score = if e["score"].is_object() { &e["score"] } else { e };
+            let score = if e["score"].is_object() {
+                &e["score"]
+            } else {
+                e
+            };
             if let Some(uid) = score["user_id"].as_i64() {
                 let total = score["total"].as_f64().unwrap_or(0.0);
                 scores.update(|m| {
@@ -673,6 +717,17 @@ pub fn RoomPage() -> impl IntoView {
             teams_podium.set(e["teams_podium"].as_array().cloned().unwrap_or_default());
             finalizing.set(false);
             round_finished.set(true);
+            // PHP reconciles the scoreboard from the API at round end (events
+            // may have been missed). Same fallback here.
+            if let Some(rid) = e["round"]["id"].as_i64() {
+                let _ = leptos::task::spawn_local(async move {
+                    if let Ok(v) =
+                        api::get::<Value>(&format!("/api/v1/rounds/{rid}/scores")).await
+                    {
+                        scores.set(parse_scores(&v["scores"]));
+                    }
+                });
+            }
         });
         on!("TrackPlayed", move |e| {
             if let Ok(r) = serde_json::from_value::<Round>(e["round"].clone()) {
@@ -727,14 +782,19 @@ pub fn RoomPage() -> impl IntoView {
         });
         on!("UserHasFoundAllTheAnswers", move |e| {
             found_all_markers.update(|v| {
-                let u = if e["user"].is_object() { e["user"].clone() } else { e.clone() };
-                if !v.iter().any(|x: &Value| x["id"].as_i64() == u["id"].as_i64()) {
+                let u = if e["user"].is_object() {
+                    e["user"].clone()
+                } else {
+                    e.clone()
+                };
+                if !v
+                    .iter()
+                    .any(|x: &Value| x["id"].as_i64() == u["id"].as_i64())
+                {
                     v.push(u);
                 }
             });
         });
-        on!("UserLevelUpdated", move |_| {});
-        on!("PartyStarted", move |_| {});
         on!("PartyQuestion", move |e| {
             party_feedback.set(None);
             party.set(Some(e.clone()));
@@ -745,7 +805,9 @@ pub fn RoomPage() -> impl IntoView {
         on!("PartyScore", move |e| {
             party.update(|p| {
                 let Some(p) = p.as_mut() else { return };
-                let Some(arr) = p["scores"].as_array_mut() else { return };
+                let Some(arr) = p["scores"].as_array_mut() else {
+                    return;
+                };
                 let uid = e["user_id"].as_i64().unwrap_or(0);
                 let sc = e["score"].as_i64().unwrap_or(0);
                 if let Some(row) = arr.iter_mut().find(|r| r["user_id"].as_i64() == Some(uid)) {
@@ -759,11 +821,15 @@ pub fn RoomPage() -> impl IntoView {
         realtime.join(&channel);
         let pub_channel = format!("room.public:{rid}");
         realtime.subscribe(&pub_channel);
-        realtime.listen(&pub_channel, "RoomPublicState", Rc::new(move |e: &Value| {
-            if let Some(n) = e["memberCount"].as_i64() {
-                players_online.set(n);
-            }
-        }));
+        realtime.listen(
+            &pub_channel,
+            "RoomPublicState",
+            Rc::new(move |e: &Value| {
+                if let Some(n) = e["memberCount"].as_i64() {
+                    players_online.set(n);
+                }
+            }),
+        );
         {
             let hb = SendWrapper::new(realtime.start_heartbeat());
             on_cleanup(move || drop(hb));
@@ -772,10 +838,7 @@ pub fn RoomPage() -> impl IntoView {
         let hydrate2 = hydrate.clone();
         leptos::task::spawn_local(async move {
             hydrate2(rid);
-            let _ = api::post_empty::<Value>(&format!(
-                "/api/v1/rooms/{rid}/presence-joined"
-            ))
-            .await;
+            let _ = api::post_empty::<Value>(&format!("/api/v1/rooms/{rid}/presence-joined")).await;
         });
         {
             let rt2 = realtime.clone();
@@ -810,10 +873,8 @@ pub fn RoomPage() -> impl IntoView {
                 realtime.leave(&format!("room.public:{rid}"));
             }
             leptos::task::spawn_local(async move {
-                let _ = api::post_empty::<Value>(&format!(
-                    "/api/v1/rooms/{rid}/presence-left"
-                ))
-                .await;
+                let _ =
+                    api::post_empty::<Value>(&format!("/api/v1/rooms/{rid}/presence-left")).await;
             });
         });
     }
@@ -1225,9 +1286,13 @@ fn RoomActions(
         let saved = room.get_untracked().is_bookmarked;
         leptos::task::spawn_local(async move {
             let ok = if saved {
-                api::delete::<Value>(&format!("/api/v1/rooms/{rid}/bookmark")).await.is_ok()
+                api::delete::<Value>(&format!("/api/v1/rooms/{rid}/bookmark"))
+                    .await
+                    .is_ok()
             } else {
-                api::post_empty::<Value>(&format!("/api/v1/rooms/{rid}/bookmark")).await.is_ok()
+                api::post_empty::<Value>(&format!("/api/v1/rooms/{rid}/bookmark"))
+                    .await
+                    .is_ok()
             };
             if ok {
                 room.try_update(|r| r.is_bookmarked = !saved);
@@ -1354,6 +1419,37 @@ fn SuggestionModal(
     let sent = RwSignal::new(false);
     let sending = RwSignal::new(false);
     let failed = RwSignal::new(false);
+    // PHP: "Check if the song is already in the playlist" track lookup
+    let search = RwSignal::new(String::new());
+    let found = RwSignal::new(Vec::<Value>::new());
+    let search_timeout = StoredValue::new(SendWrapper::new(
+        Option::<gloo_timers::callback::Timeout>::None,
+    ));
+    let on_search_input = move |ev| {
+        let v = event_target_value(&ev);
+        search.set(v.clone());
+        let rid = room_id.get_untracked();
+        search_timeout.update_value(|t| **t = None);
+        search_timeout.update_value(|t| {
+            **t = Some(gloo_timers::callback::Timeout::new(300, move || {
+                if v.trim().is_empty() {
+                    found.set(Vec::new());
+                    return;
+                }
+                leptos::task::spawn_local(async move {
+                    let q = js_sys::encode_uri_component(&v);
+                    match api::get::<Value>(&format!(
+                        "/api/v1/rooms/{rid}/tracks/search?search={q}"
+                    ))
+                    .await
+                    {
+                        Ok(list) => found.set(list.as_array().cloned().unwrap_or_default()),
+                        Err(_) => found.set(Vec::new()),
+                    }
+                });
+            }))
+        });
+    };
     let submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let text = body.get().trim().to_string();
@@ -1422,6 +1518,35 @@ fn SuggestionModal(
                                     <textarea bind:value=body rows="4" maxlength="500"
                                         class="form-input w-full"
                                         placeholder=t("Suggest a track, an artist, a playlist…")></textarea>
+                                    <input type="text" prop:value=search on:input=on_search_input
+                                        class="form-input mt-3 w-full"
+                                        placeholder=t("Check if the song is already in the playlist")/>
+                                    {move || {
+                                        let items = found.get();
+                                        if items.is_empty() { return ().into_any(); }
+                                        view! {
+                                            <ul class="mt-3 max-h-48 w-full overflow-y-auto rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm">
+                                                {items.into_iter().map(|tr| {
+                                                    let answers = tr["answers"].as_array().cloned().unwrap_or_default();
+                                                    view! {
+                                                        <li class="my-2 flex gap-3 border-b border-white/5 pb-2 last:border-0">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-5 w-5 shrink-0 text-green-500">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                            </svg>
+                                                            <ul>
+                                                                {answers.into_iter().map(|a| {
+                                                                    let ty = a["type"].as_str().unwrap_or("").to_string();
+                                                                    let val = a["value"].as_str().unwrap_or("").to_string();
+                                                                    view! { <li class="text-white/70"><span class="text-white/40">{t(&ty).to_string()}" : "</span>{val}</li> }
+                                                                }).collect::<Vec<_>>()}
+                                                            </ul>
+                                                        </li>
+                                                    }
+                                                }).collect::<Vec<_>>()}
+                                            </ul>
+                                        }.into_any()
+                                    }}
+                                    <p class="mt-3 text-xs text-white/40">{t("No need to send suggestions separately. Gather them in a single suggestion, to give better readability for moderators")}</p>
                                     <button type="submit" class="btn-primary mt-3" disabled=move || sending.get()>
                                         {t("Send")}
                                     </button>
@@ -1500,10 +1625,16 @@ fn RoomOptionsModal(
                 .is_ok()
             {
                 room.try_update(|r| {
-                    r.tracks_by_round = body["tracks_by_round"].as_i64().unwrap_or(r.tracks_by_round);
+                    r.tracks_by_round = body["tracks_by_round"]
+                        .as_i64()
+                        .unwrap_or(r.tracks_by_round);
                     r.track_duration = body["track_duration"].as_f64().unwrap_or(r.track_duration);
-                    r.pause_between_tracks = body["pause_between_tracks"].as_f64().unwrap_or(r.pause_between_tracks);
-                    r.pause_between_rounds = body["pause_between_rounds"].as_f64().unwrap_or(r.pause_between_rounds);
+                    r.pause_between_tracks = body["pause_between_tracks"]
+                        .as_f64()
+                        .unwrap_or(r.pause_between_tracks);
+                    r.pause_between_rounds = body["pause_between_rounds"]
+                        .as_f64()
+                        .unwrap_or(r.pause_between_rounds);
                     r.is_chat_active = body["is_chat_active"].as_bool().unwrap_or(r.is_chat_active);
                     r.is_random = body["is_random"].as_bool().unwrap_or(r.is_random);
                     r.is_autostart = body["is_autostart"].as_bool().unwrap_or(r.is_autostart);
@@ -1516,7 +1647,11 @@ fn RoomOptionsModal(
         });
     };
 
-    let slider = move |label: &'static str, val: RwSignal<i64>, min: i64, max: i64, suffix: &'static str| {
+    let slider = move |label: &'static str,
+                       val: RwSignal<i64>,
+                       min: i64,
+                       max: i64,
+                       suffix: &'static str| {
         view! {
             <div>
                 <div class="mb-2 flex justify-between">
@@ -1620,15 +1755,15 @@ fn PartyPanel(
     };
     let stop_party = move |_| {
         leptos::task::spawn_local(async move {
-            let _ = api::post::<Value, _>(
-                &format!("/api/v1/rooms/{room_id}/party/stop"),
-                &json!({}),
-            )
-            .await;
+            let _ =
+                api::post::<Value, _>(&format!("/api/v1/rooms/{room_id}/party/stop"), &json!({}))
+                    .await;
         });
     };
     let submit = Callback::new(move |value: String| {
-        let Some(p) = party.get_untracked() else { return };
+        let Some(p) = party.get_untracked() else {
+            return;
+        };
         let idx = p["idx"].as_i64().unwrap_or(-1);
         answering.set(true);
         leptos::task::spawn_local(async move {

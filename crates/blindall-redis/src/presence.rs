@@ -70,27 +70,31 @@ impl RoomPresenceStore {
     }
 
     pub async fn has_participation(&self, room_id: i64, user_id: i64) -> Result<bool> {
-        self.client
-            .sismember(keys::room_players(room_id), user_id)
-            .await
-            .map_err(Into::into)
+        // Sliding TTL: PHP keeps participation in the session (refreshed on
+        // every request); without the refresh a long-running autostart room
+        // evicts active players 2h after their last `joined` call.
+        // Sequential calls — a partially-awaited fred pipeline is ambiguous.
+        let key = keys::room_players(room_id);
+        let ok: bool = self.client.sismember(&key, user_id).await?;
+        if ok {
+            self.client
+                .expire::<(), _>(&key, keys::PRESENCE_TTL_SECONDS, None)
+                .await?;
+        }
+        Ok(ok)
     }
 
     pub async fn member_counts(&self, room_ids: &[i64], now_unix: i64) -> Result<Vec<(i64, i64)>> {
         let cutoff = now_unix - keys::PRESENCE_PRUNE_SECONDS;
-        let pipe = self.client.pipeline();
+        let mut out = Vec::with_capacity(room_ids.len());
         for id in room_ids {
             let key = keys::room_members(*id);
-            let _ = pipe
+            self.client
                 .zremrangebyscore::<(), _, _, _>(&key, f64::NEG_INFINITY, cutoff as f64)
                 .await?;
-            let _ = pipe.zcard::<i64, _>(&key).await?;
+            let n: i64 = self.client.zcard(&key).await?;
+            out.push((*id, n));
         }
-        let results: Vec<i64> = pipe.all().await?;
-        Ok(room_ids
-            .iter()
-            .copied()
-            .zip(results.into_iter().skip(1).step_by(2))
-            .collect())
+        Ok(out)
     }
 }

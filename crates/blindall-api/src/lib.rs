@@ -564,6 +564,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/rooms/{id}/start", post(round::start))
         .route("/api/v1/rooms/{id}/pause", post(round::pause))
         .route("/api/v1/rooms/{id}/resume", post(round::resume))
+        .route("/api/v1/rooms/{id}/next", post(round::next))
         .route("/api/v1/rooms/{id}/stop", post(round::stop))
         .route(
             "/api/v1/rounds/{round}/tracks/{track}/check",

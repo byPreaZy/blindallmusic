@@ -62,19 +62,12 @@ pub fn AnswerInput(
     let settings_open = RwSignal::new(false);
     let auto_focus = RwSignal::new(stored_flag("autoFocus", true));
     let answer_sounds = RwSignal::new(stored_flag("answerSounds", true));
-    let found_ids = Memo::new(move |_| {
-        found
-            .get()
-            .iter()
-            .map(|a| a.id)
-            .collect::<HashSet<i64>>()
-    });
+    let found_ids = Memo::new(move |_| found.get().iter().map(|a| a.id).collect::<HashSet<i64>>());
 
     let blurred = RwSignal::new(false);
 
-    let disabled = Memo::new(move |_| {
-        round.get().is_none() || track.get().is_none() || blurred.get()
-    });
+    let disabled =
+        Memo::new(move |_| round.get().is_none() || track.get().is_none() || blurred.get());
 
     // Anti-triche : masquer la page (autre onglet, minimise, switch d'app)
     // pendant une piste bloque la saisie jusqu'à la piste suivante. Les
@@ -229,9 +222,7 @@ pub fn AnswerInput(
                             }
                             words.set(resp.words);
                             if !resp.good_answers.is_empty() {
-                                flash_chips(
-                                    resp.good_answers.iter().map(|a| a.id).collect(),
-                                );
+                                flash_chips(resp.good_answers.iter().map(|a| a.id).collect());
                                 found.update(|f| f.extend(resp.good_answers));
                             }
                             if let Some(msg) = resp.message {
@@ -292,9 +283,9 @@ pub fn AnswerInput(
             let gen = generation.get();
             {
                 let mut q = queue.borrow_mut();
-                if q.iter().any(|it| {
-                    it.text == submitted && it.generation == gen && it.track_id == tr.id
-                }) {
+                if q.iter()
+                    .any(|it| it.text == submitted && it.generation == gen && it.track_id == tr.id)
+                {
                     return;
                 }
                 q.push_back(QueueItem {
@@ -306,7 +297,11 @@ pub fn AnswerInput(
                 });
                 pending_count.set(q.len() + if processing.get() { 1 } else { 0 });
             }
-            play_feedback("send", answer_sounds.get_untracked(), volume.get_untracked());
+            play_feedback(
+                "send",
+                answer_sounds.get_untracked(),
+                volume.get_untracked(),
+            );
             process_queue();
             if let Some(el) = input_ref.get() {
                 let _ = el.focus();

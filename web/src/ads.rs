@@ -54,7 +54,11 @@ pub fn euros(cents: i64) -> String {
 
 // :goal replacement for donation i18n — defaults to the historical 150 until loaded
 pub fn goal_or(goal: &str) -> String {
-    if goal.is_empty() { "150".into() } else { goal.to_string() }
+    if goal.is_empty() {
+        "150".into()
+    } else {
+        goal.to_string()
+    }
 }
 
 const ADS_STATE_TTL_MS: f64 = 60_000.0;
@@ -111,7 +115,9 @@ fn ensure_adsense_script(client: &str) {
         );
         return;
     }
-    let Ok(el) = doc.create_element("script") else { return };
+    let Ok(el) = doc.create_element("script") else {
+        return;
+    };
     el.set_attribute("async", "").ok();
     el.set_attribute(
         "src",
@@ -152,14 +158,10 @@ fn push_adsense_slot() {
 
 #[component]
 pub fn Adsense(
-    #[prop(optional)]
-    ad_slot: Option<&'static str>,
-    #[prop(optional, default = false)]
-    compact: bool,
-    #[prop(optional, default = "")]
-    wrapper_class: &'static str,
-    #[prop(optional, default = false)]
-    force_serve: bool,
+    #[prop(optional)] ad_slot: Option<&'static str>,
+    #[prop(optional, default = false)] compact: bool,
+    #[prop(optional, default = "")] wrapper_class: &'static str,
+    #[prop(optional, default = false)] force_serve: bool,
 ) -> impl IntoView {
     let auth = use_auth();
     let location = use_location();

@@ -4,7 +4,8 @@ use leptos::prelude::*;
 use leptos_router::components::A;
 use serde_json::Value;
 
-const CARD: &str = "rounded-2xl border border-slate-700 bg-gradient-to-br from-slate-800 to-slate-900 p-6";
+const CARD: &str =
+    "rounded-2xl border border-slate-700 bg-gradient-to-br from-slate-800 to-slate-900 p-6";
 const H2: &str = "mb-4 text-2xl font-bold";
 const TXT: &str = "text-neutral-300";
 
@@ -26,15 +27,32 @@ fn bullet_list(items: &[&'static str]) -> impl IntoView {
         .collect::<Vec<_>>()
 }
 
-fn link_card(href: &'static str, title: &'static str, sub: &'static str, color: &'static str) -> impl IntoView {
+fn link_card(
+    href: &'static str,
+    title: &'static str,
+    sub: &'static str,
+    color: &'static str,
+) -> impl IntoView {
     let (icon_bg, icon_fg) = match color {
         "blue" => ("bg-blue-500/20 group-hover:bg-blue-500/30", "text-blue-400"),
-        "purple" => ("bg-purple-500/20 group-hover:bg-purple-500/30", "text-purple-400"),
-        "green" => ("bg-green-500/20 group-hover:bg-green-500/30", "text-green-400"),
-        "orange" => ("bg-orange-500/20 group-hover:bg-orange-500/30", "text-orange-400"),
+        "purple" => (
+            "bg-purple-500/20 group-hover:bg-purple-500/30",
+            "text-purple-400",
+        ),
+        "green" => (
+            "bg-green-500/20 group-hover:bg-green-500/30",
+            "text-green-400",
+        ),
+        "orange" => (
+            "bg-orange-500/20 group-hover:bg-orange-500/30",
+            "text-orange-400",
+        ),
         "teal" => ("bg-teal-500/20 group-hover:bg-teal-500/30", "text-teal-400"),
         "pink" => ("bg-pink-500/20 group-hover:bg-pink-500/30", "text-pink-400"),
-        _ => ("bg-slate-500/20 group-hover:bg-slate-500/30", "text-slate-400"),
+        _ => (
+            "bg-slate-500/20 group-hover:bg-slate-500/30",
+            "text-slate-400",
+        ),
     };
     view! {
         <A href=href attr:class="group flex items-center gap-4 rounded-lg border border-slate-700 bg-slate-800/50 p-4 transition-all hover:bg-slate-800/70">
@@ -224,10 +242,16 @@ pub fn DocsLevelPage() -> impl IntoView {
         ("Consecutive days streak", "Reward for daily connection. Your streak resets if you miss a day.", "10 XP per day", "300 XP (30 days maximum)", "text-amber-500"),
     ];
     let progression: &[(i64, i64, &str)] = &[
-        (1, 100, "0-99"), (2, 150, "100-249"), (3, 200, "250-449"),
-        (4, 250, "450-699"), (5, 300, "700-999"), (10, 500, "~3,000-3,499"),
-        (20, 1000, "~15,000-15,999"), (30, 1500, "~40,000-40,999"),
-        (50, 2500, "~100,000-100,999"), (100, 5000, "~400,000+"),
+        (1, 100, "0-99"),
+        (2, 150, "100-249"),
+        (3, 200, "250-449"),
+        (4, 250, "450-699"),
+        (5, 300, "700-999"),
+        (10, 500, "~3,000-3,499"),
+        (20, 1000, "~15,000-15,999"),
+        (30, 1500, "~40,000-40,999"),
+        (50, 2500, "~100,000-100,999"),
+        (100, 5000, "~400,000+"),
     ];
     view! {
         <div class="mx-auto max-w-4xl space-y-8 px-4 py-8">
@@ -324,7 +348,11 @@ pub fn DocsLevelPage() -> impl IntoView {
 
 // ---- /docs/elo -------------------------------------------------------------------
 
-fn elo_section(id: &'static str, title: &'static str, children: impl IntoView + 'static) -> impl IntoView {
+fn elo_section(
+    id: &'static str,
+    title: &'static str,
+    children: impl IntoView + 'static,
+) -> impl IntoView {
     view! {
         <section id=id class=CARD>
             <h2 class=H2>{title}</h2>
@@ -1007,13 +1035,25 @@ fn euros(cents: i64) -> String {
 
 fn month_label(key: &str) -> String {
     const MONTHS: &[&str] = &[
-        "janvier", "février", "mars", "avril", "mai", "juin",
-        "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+        "janvier",
+        "février",
+        "mars",
+        "avril",
+        "mai",
+        "juin",
+        "juillet",
+        "août",
+        "septembre",
+        "octobre",
+        "novembre",
+        "décembre",
     ];
     let mut it = key.split('-');
     let year = it.next().unwrap_or("");
     let m = it.next().and_then(|m| m.parse::<usize>().ok()).unwrap_or(0);
-    if m == 0 || m > 12 { return key.to_string(); }
+    if m == 0 || m > 12 {
+        return key.to_string();
+    }
     format!("{} {}", MONTHS[m - 1], year)
 }
 

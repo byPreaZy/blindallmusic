@@ -124,10 +124,7 @@ pub async fn get<T: DeserializeOwned>(path: &str) -> Result<T, ApiError> {
     parse(resp).await
 }
 
-pub async fn post<T: DeserializeOwned, B: Serialize>(
-    path: &str,
-    body: &B,
-) -> Result<T, ApiError> {
+pub async fn post<T: DeserializeOwned, B: Serialize>(path: &str, body: &B) -> Result<T, ApiError> {
     let body = serde_json::to_string(body).map_err(|e| ApiError {
         status: 0,
         body: Value::Null,
@@ -139,7 +136,7 @@ pub async fn post<T: DeserializeOwned, B: Serialize>(
         .body(body)
         .map_err(|e| ApiError {
             status: 0,
-        body: Value::Null,
+            body: Value::Null,
             message: e.to_string(),
             errors: HashMap::new(),
         })?;
@@ -151,10 +148,7 @@ pub async fn post_empty<T: DeserializeOwned>(path: &str) -> Result<T, ApiError> 
     post(path, &serde_json::json!({})).await
 }
 
-pub async fn put<T: DeserializeOwned, B: Serialize>(
-    path: &str,
-    body: &B,
-) -> Result<T, ApiError> {
+pub async fn put<T: DeserializeOwned, B: Serialize>(path: &str, body: &B) -> Result<T, ApiError> {
     let body = serde_json::to_string(body).map_err(|e| ApiError {
         status: 0,
         body: Value::Null,
@@ -166,7 +160,7 @@ pub async fn put<T: DeserializeOwned, B: Serialize>(
         .body(body)
         .map_err(|e| ApiError {
             status: 0,
-        body: Value::Null,
+            body: Value::Null,
             message: e.to_string(),
             errors: HashMap::new(),
         })?;
@@ -174,10 +168,7 @@ pub async fn put<T: DeserializeOwned, B: Serialize>(
     parse(resp).await
 }
 
-pub async fn patch<T: DeserializeOwned, B: Serialize>(
-    path: &str,
-    body: &B,
-) -> Result<T, ApiError> {
+pub async fn patch<T: DeserializeOwned, B: Serialize>(path: &str, body: &B) -> Result<T, ApiError> {
     let body = serde_json::to_string(body).map_err(|e| ApiError {
         status: 0,
         body: Value::Null,
@@ -189,7 +180,7 @@ pub async fn patch<T: DeserializeOwned, B: Serialize>(
         .body(body)
         .map_err(|e| ApiError {
             status: 0,
-        body: Value::Null,
+            body: Value::Null,
             message: e.to_string(),
             errors: HashMap::new(),
         })?;
@@ -214,7 +205,7 @@ pub async fn post_no_content<B: Serialize>(path: &str, body: &B) -> Result<(), A
         .body(body)
         .map_err(|e| ApiError {
             status: 0,
-        body: Value::Null,
+            body: Value::Null,
             message: e.to_string(),
             errors: HashMap::new(),
         })?;
@@ -242,7 +233,7 @@ pub async fn delete_with_body<T: DeserializeOwned, B: Serialize>(
         .body(body)
         .map_err(|e| ApiError {
             status: 0,
-        body: Value::Null,
+            body: Value::Null,
             message: e.to_string(),
             errors: HashMap::new(),
         })?;

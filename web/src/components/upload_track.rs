@@ -342,7 +342,9 @@ async fn audio_buffer(f: &web_sys::File) -> Result<web_sys::AudioBuffer, String>
     )
     .await
     .map_err(|e| format!("{e:?}"))?;
-    decoded.dyn_into::<web_sys::AudioBuffer>().map_err(|_| "decode".into())
+    decoded
+        .dyn_into::<web_sys::AudioBuffer>()
+        .map_err(|_| "decode".into())
 }
 
 async fn extract_segment(f: &web_sys::File, start: f64, dur: f64) -> Result<web_sys::Blob, String> {
@@ -394,13 +396,17 @@ async fn extract_segment(f: &web_sys::File, start: f64, dur: f64) -> Result<web_
         let n = block.min(dur_s - i);
         let lc = js_sys::Int16Array::new_with_length(n as u32);
         let rc = js_sys::Int16Array::new_with_length(n as u32);
-        let li: Vec<i16> = left[i..i + n].iter().map(|v| (v * 0x7fff as f32) as i16).collect();
-        let ri: Vec<i16> = right[i..i + n].iter().map(|v| (v * 0x7fff as f32) as i16).collect();
+        let li: Vec<i16> = left[i..i + n]
+            .iter()
+            .map(|v| (v * 0x7fff as f32) as i16)
+            .collect();
+        let ri: Vec<i16> = right[i..i + n]
+            .iter()
+            .map(|v| (v * 0x7fff as f32) as i16)
+            .collect();
         lc.copy_from(&li);
         rc.copy_from(&ri);
-        let chunk = encode
-            .call2(&enc, &lc, &rc)
-            .map_err(|e| format!("{e:?}"))?;
+        let chunk = encode.call2(&enc, &lc, &rc).map_err(|e| format!("{e:?}"))?;
         mp3.extend(int8_to_vec(&chunk));
         i += n;
     }

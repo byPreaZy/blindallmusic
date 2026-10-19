@@ -29,6 +29,7 @@ pub struct RoomRow {
     pub is_autostart: bool,
     pub is_featured: bool,
     pub color: Option<String>,
+    pub venue_name: Option<String>,
     pub has_password: bool,
     pub user_count: i64,
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -47,6 +48,7 @@ pub struct RoomOptions {
     pub is_random: bool,
     pub is_active: Option<bool>,
     pub color: Option<String>,
+    pub venue_name: Option<String>,
     pub is_featured: Option<bool>,
 }
 
@@ -77,6 +79,7 @@ impl RoomRepo {
             is_autostart: r.get("is_autostart"),
             is_featured: r.get("is_featured"),
             color: r.get("color"),
+            venue_name: r.get("venue_name"),
             has_password: r.get::<Option<String>, _>("password").is_some(),
             user_count: r.get("user_count"),
             deleted_at: r.get("deleted_at"),
@@ -86,7 +89,7 @@ impl RoomRepo {
     const COLS: &'static str = "id, user_id, name, slug, description, category_id, \
         photo_path, tracks_by_round, track_duration, pause_between_tracks, \
         pause_between_rounds, is_public, is_pro, is_random, is_active, \
-        is_chat_active, is_playing, is_autostart, is_featured, color, password, \
+        is_chat_active, is_playing, is_autostart, is_featured, color, venue_name, password, \
         user_count, deleted_at";
 
     pub async fn password_of(&self, id: i64) -> Result<Option<String>, sqlx::Error> {
@@ -205,8 +208,8 @@ impl RoomRepo {
         sqlx::query(
             "UPDATE rooms SET tracks_by_round = $1, track_duration = $2, \
              pause_between_tracks = $3, pause_between_rounds = $4, \
-             is_chat_active = $5, is_autostart = $6, is_random = $7, color = $8 \
-             WHERE id = $9",
+             is_chat_active = $5, is_autostart = $6, is_random = $7, color = $8, \
+             venue_name = $10 WHERE id = $9",
         )
         .bind(o.tracks_by_round)
         .bind(o.track_duration)
@@ -217,6 +220,7 @@ impl RoomRepo {
         .bind(o.is_random)
         .bind(&o.color)
         .bind(id)
+        .bind(&o.venue_name)
         .execute(&self.pool)
         .await?;
         if let Some(featured) = o.is_featured {

@@ -3,8 +3,8 @@ use crate::i18n::t;
 use leptos::prelude::*;
 use leptos_router::components::A;
 use leptos_router::hooks::use_params_map;
-use serde_json::Value;
 use send_wrapper::SendWrapper;
+use serde_json::Value;
 use std::cell::RefCell;
 use std::rc::Rc;
 use web_sys::HtmlAudioElement;
@@ -65,22 +65,19 @@ pub fn RoomLivePage() -> impl IntoView {
                             let key = format!("{idx}:{started}");
                             if key != last_key.get_untracked() {
                                 last_key.set(key);
-                                track_dur
-                                    .set(ct["duration"].as_f64().unwrap_or(30.0).max(1.0));
+                                track_dur.set(ct["duration"].as_f64().unwrap_or(30.0).max(1.0));
                                 let url = ct["audio"]
                                     .as_str()
                                     .or_else(|| ct["preview_url"].as_str())
                                     .unwrap_or("")
                                     .to_string();
-                                let started_epoch =
-                                    js_sys::Date::parse(started) / 1000.0;
+                                let started_epoch = js_sys::Date::parse(started) / 1000.0;
                                 last_started.set(started_epoch);
                                 if sound_on.get_untracked() && !url.is_empty() {
                                     if let Some(a) = audio.borrow().as_ref() {
                                         a.set_src(&url);
-                                        let offset = (js_sys::Date::now() / 1000.0
-                                            - started_epoch)
-                                            .max(0.0);
+                                        let offset =
+                                            (js_sys::Date::now() / 1000.0 - started_epoch).max(0.0);
                                         a.set_current_time(offset);
                                         let _ = a.play();
                                     }
@@ -121,6 +118,19 @@ pub fn RoomLivePage() -> impl IntoView {
         }));
         on_cleanup(move || drop(iv));
     }
+
+    let host_cmd = {
+        move |action: &'static str| {
+            let rid = room_id.get_untracked();
+            leptos::task::spawn_local(async move {
+                let _ = api::post::<Value, _>(
+                    &format!("/api/v1/rooms/{rid}/{action}"),
+                    &serde_json::json!({}),
+                )
+                .await;
+            });
+        }
+    };
 
     let enable_sound = {
         let audio = audio.clone();
@@ -181,6 +191,8 @@ pub fn RoomLivePage() -> impl IntoView {
                         let members = v["member_count"].as_i64().unwrap_or(0);
                         let standings = v["standings"].as_array().cloned().unwrap_or_default();
                         let reveal = v.get("reveal_track").cloned();
+                        let venue = v["venue_name"].as_str().unwrap_or("").to_string();
+                        let can_control = v["can_control"].as_bool().unwrap_or(false);
                         let rid = room_id.get();
                         view! {
                             <div class="mx-auto max-w-5xl">
@@ -192,6 +204,9 @@ pub fn RoomLivePage() -> impl IntoView {
                                         </h1>
                                         <p class="mt-1 text-sm text-white/50">
                                             {t("Live")}" · "{members}" "{t("players")}
+                                            {(!venue.is_empty()).then(|| view! {
+                                                <span>" · 📍 "{venue.clone()}</span>
+                                            })}
                                         </p>
                                     </div>
                                     <div class="flex items-center gap-3">
@@ -234,6 +249,14 @@ pub fn RoomLivePage() -> impl IntoView {
                                                 </div>
                                             }.into_any()
                                         }
+                                        "paused" => view! {
+                                            <div class="py-6">
+                                                <p class="text-xs font-bold uppercase tracking-[0.3em] text-amber-300">
+                                                    {t("Paused")}
+                                                </p>
+                                                <p class="mt-4 text-lg font-semibold text-white/70">{t("The game is paused by the host.")}</p>
+                                            </div>
+                                        }.into_any(),
                                         "reveal" => {
                                             let rt = reveal.clone().unwrap_or_default();
                                             let art = rt["artwork_url"].as_str().unwrap_or("").to_string();
@@ -264,6 +287,35 @@ pub fn RoomLivePage() -> impl IntoView {
                                     }}
                                 </div>
 
+                                {can_control.then(|| {
+                                    let host = host_cmd.clone();
+                                    view! {
+                                        <div class="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/5 px-5 py-3">
+                                            <span class="text-xs font-bold uppercase tracking-widest text-amber-300/80">{t("Host controls")}</span>
+                                            {if phase == "paused" {
+                                                view! {
+                                                    <button type="button" class="rounded-lg bg-teal-500/20 px-4 py-1.5 text-sm font-semibold text-teal-200 hover:bg-teal-500/30"
+                                                        on:click=move |_| host("resume")>
+                                                        "▶ "{t("Resume")}
+                                                    </button>
+                                                }.into_any()
+                                            } else {
+                                                view! {
+                                                    <button type="button" class="rounded-lg bg-white/10 px-4 py-1.5 text-sm font-semibold text-white hover:bg-white/20"
+                                                        on:click=move |_| host("pause")>
+                                                        "⏸ "{t("Pause")}
+                                                    </button>
+                                                }.into_any()
+                                            }}
+                                            {(phase == "playing").then(|| view! {
+                                                <button type="button" class="rounded-lg bg-white/10 px-4 py-1.5 text-sm font-semibold text-white hover:bg-white/20"
+                                                    on:click=move |_| host("next")>
+                                                    "⏭ "{t("Next track")}
+                                                </button>
+                                            })}
+                                        </div>
+                                    }
+                                })}
                                 <div class="grid gap-6 lg:grid-cols-[1fr_260px]">
                                     // podium live
                                     <div class="rounded-2xl border border-white/10 bg-neutral-900/80 p-6">

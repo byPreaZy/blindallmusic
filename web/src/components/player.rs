@@ -62,7 +62,8 @@ fn install_wake_lock() -> Option<SendWrapper<Rc<dyn Fn()>>> {
             };
             let sentinel2 = sentinel.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                if let Ok(s) = wasm_bindgen_futures::JsFuture::from(js_sys::Promise::from(v)).await {
+                if let Ok(s) = wasm_bindgen_futures::JsFuture::from(js_sys::Promise::from(v)).await
+                {
                     *sentinel2.borrow_mut() = Some(s);
                 }
             });
@@ -84,9 +85,13 @@ fn install_wake_lock() -> Option<SendWrapper<Rc<dyn Fn()>>> {
             }
         }
     }) as Box<dyn FnMut()>);
-    let _ = doc.add_event_listener_with_callback("visibilitychange", vis_cb.as_ref().unchecked_ref());
+    let _ =
+        doc.add_event_listener_with_callback("visibilitychange", vis_cb.as_ref().unchecked_ref());
     let release = Rc::new(move || {
-        let _ = doc.remove_event_listener_with_callback("visibilitychange", vis_cb.as_ref().unchecked_ref());
+        let _ = doc.remove_event_listener_with_callback(
+            "visibilitychange",
+            vis_cb.as_ref().unchecked_ref(),
+        );
         if let Some(s) = sentinel.borrow_mut().take() {
             let _ = js_sys::Reflect::get(&s, &JsValue::from_str("release"))
                 .ok()
@@ -145,9 +150,8 @@ pub fn Player(
                             if let Some(a) = audio.borrow().as_ref() {
                                 let t = a.current_time();
                                 current_time.set(t);
-                                percent.set(
-                                    (100.0 / track_duration * (t + 0.25)).min(100.0).round(),
-                                );
+                                percent
+                                    .set((100.0 / track_duration * (t + 0.25)).min(100.0).round());
                             }
                         });
                         let _ = a.add_event_listener_with_callback(
@@ -215,8 +219,7 @@ pub fn Player(
             if start > 0.0 {
                 a.set_current_time(start);
                 current_time.set(start);
-                percent
-                    .set((100.0 / track_duration * (start + 0.25)).min(100.0).round());
+                percent.set((100.0 / track_duration * (start + 0.25)).min(100.0).round());
             }
             let promise = a.play();
             match promise {
@@ -307,8 +310,8 @@ pub fn Player(
                         return;
                     }
                     if let Some(a) = audio.borrow().as_ref() {
-                        let buffered = *preloaded_id.borrow() == Some(tr.id)
-                            && a.ready_state() >= 2;
+                        let buffered =
+                            *preloaded_id.borrow() == Some(tr.id) && a.ready_state() >= 2;
                         if buffered {
                             *preloaded_id.borrow_mut() = None;
                             a.set_muted(false);
@@ -396,14 +399,9 @@ pub fn Player(
     let yt_embed = Memo::new(move |_| {
         track.get().and_then(|t| {
             if t.provider == "youtube" {
-                t.preview_url
-                    .as_deref()
-                    .and_then(youtube_id)
-                    .map(|id| {
-                        format!(
-                            "https://www.youtube.com/embed/{id}?autoplay=1&controls=0&disablekb=1"
-                        )
-                    })
+                t.preview_url.as_deref().and_then(youtube_id).map(|id| {
+                    format!("https://www.youtube.com/embed/{id}?autoplay=1&controls=0&disablekb=1")
+                })
             } else {
                 None
             }
@@ -452,9 +450,8 @@ pub fn Player(
 
     let gesture_play = play_now.clone();
     let markers_empty = move || found_all.get().is_empty();
-    let countdown_pct = move || {
-        (countdown.get() as f64 / pause_between_tracks.max(1.0) * 100.0).min(100.0)
-    };
+    let countdown_pct =
+        move || (countdown.get() as f64 / pause_between_tracks.max(1.0) * 100.0).min(100.0);
 
     view! {
         <div class="room-player-shell room-player-shell--mobile">
