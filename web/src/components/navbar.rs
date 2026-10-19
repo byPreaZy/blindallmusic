@@ -125,6 +125,14 @@ fn LanguageSwitcher() -> impl IntoView {
     }
 }
 
+fn gamepad_icon(cls: &'static str) -> impl IntoView {
+    view! {
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class=cls aria-hidden="true">
+            <path d="M7.5 6.5A4.5 4.5 0 003 11v3.5a4.5 4.5 0 008.6 1.9l.5-.9h-.2l.5.9a4.5 4.5 0 008.6-1.9V11a4.5 4.5 0 00-4.5-4.5h-9zM8 9.5a.75.75 0 01.75.75v.75h.75a.75.75 0 010 1.5h-.75v.75a.75.75 0 01-1.5 0v-.75H6.5a.75.75 0 010-1.5h.75v-.75A.75.75 0 018 9.5zm7.5 1a1 1 0 110 2 1 1 0 010-2zm2.5 2.5a1 1 0 110 2 1 1 0 010-2z"/>
+        </svg>
+    }
+}
+
 fn trophy_icon(cls: &'static str) -> impl IntoView {
     view! {
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class=cls aria-hidden="true">
@@ -279,6 +287,10 @@ fn MobileBottomNav() -> impl IntoView {
                 {move || {
                     let path = location.pathname.get();
                     let home_active = path == "/" || path.starts_with("/rooms");
+                    let games_active = path.starts_with("/minigames")
+                        || path.starts_with("/duels")
+                        || path.starts_with("/daily")
+                        || path.starts_with("/games");
                     let rankings_active = path.starts_with("/rankings");
                     let profile_active = path.starts_with("/profile") || path.starts_with("/settings");
                     let u = auth.user.get();
@@ -287,6 +299,10 @@ fn MobileBottomNav() -> impl IntoView {
                         <A href="/" attr:class=tab_cls(home_active)>
                             {home_icon("h-5 w-5")}
                             <span class="text-[10px] font-semibold leading-tight">{t("Home")}</span>
+                        </A>
+                        <A href="/minigames" attr:class=tab_cls(games_active)>
+                            {gamepad_icon("h-5 w-5")}
+                            <span class="text-[10px] font-semibold leading-tight">{t("Games")}</span>
                         </A>
                         <A href="/rankings" attr:class=tab_cls(rankings_active)>
                             {trophy_icon("h-5 w-5")}
@@ -374,6 +390,10 @@ pub fn Navbar() -> impl IntoView {
                         <HelpDropdown/>
                     </div>
                     <div class="flex items-center gap-3">
+                        <A href="/minigames" attr:title=t("Mini-games")
+                            attr:class="retro-icon-btn text-brand-secondary hover:text-brand-secondary">
+                            {gamepad_icon("h-5 w-5 drop-shadow-[0_0_8px_rgb(242_201_76/0.5)]")}
+                        </A>
                         <A href="/rankings" attr:title=t("Rankings")
                             attr:class="retro-icon-btn text-brand-secondary hover:text-brand-secondary">
                             {trophy_icon("h-5 w-5 drop-shadow-[0_0_8px_rgb(242_201_76/0.5)]")}

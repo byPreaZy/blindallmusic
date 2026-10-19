@@ -976,6 +976,7 @@ pub fn HomePage() -> impl IntoView {
         let mut v = vec![
             ("official", t("Official rooms").to_string()),
             ("community", t("Private rooms").to_string()),
+            ("minigames", t("Mini-games").to_string()),
         ];
         if logged_in.get() {
             v.push(("mine", t("My rooms").to_string()));
