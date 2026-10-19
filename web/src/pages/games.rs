@@ -377,6 +377,10 @@ pub fn GamePlayPage() -> impl IntoView {
                             {t("Back")}
                         </A>
                     </div>
+                    <A href="/duels" attr:class="group mt-4 flex items-center justify-between rounded-xl border border-purple-500/30 bg-purple-600/10 px-4 py-3 transition hover:border-purple-400/60">
+                        <span class="text-sm font-bold text-purple-300">{t("Play this game against a friend")}</span>
+                        <span class="text-purple-300 group-hover:translate-x-0.5 transition">"→"</span>
+                    </A>
                 </div>
             </Show>
 
@@ -402,8 +406,17 @@ pub fn GamePlayPage() -> impl IntoView {
                             };
                             view! {
                                 <div class="flex flex-col items-center gap-4">
-                                    {q.artwork_url.clone().map(|a| view! {
-                                        <img src=a class="h-32 w-32 rounded-xl shadow-lg" alt=""/>
+                                    {(game() == "album_cover").then(|| {
+                                        // PHP parity: cover is the puzzle — blurred or
+                                        // zoomed until the answer, never readable.
+                                        let cls = match index.get() % 3 {
+                                            0 => "h-32 w-32 rounded-xl object-cover shadow-lg blur-md scale-110",
+                                            1 => "h-32 w-32 rounded-xl object-cover shadow-lg scale-[2.2]",
+                                            _ => "h-32 w-32 rounded-xl object-cover shadow-lg blur-md scale-[2.2]",
+                                        };
+                                        q.artwork_url.clone().map(|a| view! {
+                                            <div class="overflow-hidden rounded-xl"><img src=a class=cls alt=""/></div>
+                                        })
                                     })}
                                     {q.preview_url.clone().map(|url| view! {
                                         <audio controls autoplay class="w-full" src=url

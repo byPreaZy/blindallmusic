@@ -24,13 +24,18 @@ pub fn QuestionView(
     q: Value,
     #[prop(into)] on_answer: Callback<String>,
     #[prop(default = false)] disabled: bool,
+    #[prop(into, default = String::new())] game_type: String,
 ) -> impl IntoView {
     let input = RwSignal::new(String::new());
     let choices: Vec<String> = q["choices"]
         .as_array()
         .map(|a| a.iter().filter_map(|c| c.as_str().map(str::to_string)).collect())
         .unwrap_or_default();
-    let artwork = q["track"]["artwork_url"].as_str().map(str::to_string);
+    // Cover art only for the album_cover game (and it stays blurred/zoomed —
+    // it IS the puzzle). Elsewhere it can spoil the artist/title printed on it.
+    let artwork = (game_type == "album_cover")
+        .then(|| q["track"]["artwork_url"].as_str().map(str::to_string))
+        .flatten();
     let preview = q["track"]["preview_url"].as_str().map(str::to_string);
     let scrambled = q["scrambled_artist"].as_str().map(str::to_string);
     let hint = q["hint"].as_str().map(str::to_string);
@@ -39,7 +44,11 @@ pub fn QuestionView(
     view! {
         <div class="flex flex-col gap-5">
             <div class="flex flex-col items-center gap-4">
-                {artwork.map(|a| view! { <img src=a class="h-32 w-32 rounded-xl shadow-lg" alt=""/> })}
+                {artwork.map(|a| view! {
+                    <div class="overflow-hidden rounded-xl">
+                        <img src=a class="h-32 w-32 rounded-xl object-cover blur-md scale-110 shadow-lg" alt=""/>
+                    </div>
+                })}
                 {preview.map(|url| view! {
                     <audio controls autoplay class="w-full" src=url
                         on:ended=move |_| audio_ended.set(true)/>
@@ -489,6 +498,7 @@ pub fn DuelPlayPage() -> impl IntoView {
                                 } else {
                                     view! {
                                         <QuestionView q=cur["question"].clone()
+                                            game_type=d["game_type"].as_str().unwrap_or("").to_string()
                                             disabled=checking.get()
                                             on_answer=submit/>
                                     }.into_any()
@@ -641,6 +651,7 @@ pub fn DailyPage() -> impl IntoView {
                                 } else {
                                     view! {
                                         <QuestionView q=cur["question"].clone()
+                                            game_type="quiz".to_string()
                                             disabled=checking.get()
                                             on_answer=submit/>
                                     }.into_any()

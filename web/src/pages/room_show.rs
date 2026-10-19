@@ -1728,6 +1728,7 @@ fn PartyPanel(
                             view! {
                                 <crate::pages::duels::QuestionView
                                     q=q
+                                    game_type="quiz".to_string()
                                     disabled=answering.get()
                                     on_answer=submit/>
                             }.into_any()
