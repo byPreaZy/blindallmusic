@@ -57,8 +57,11 @@ impl SeasonRepo {
     /// weekly window when needed (lazy lifecycle — no scheduler required).
     /// The second tuple item lists users who just received season rewards so
     /// the caller can refresh their computed level.
-    pub async fn ensure_current(&self) -> Result<(Value, Vec<i64>), sqlx::Error> {
-        let rewarded = self.finalize_expired().await?;
+    pub async fn ensure_current(
+        &self,
+        notifications: &crate::NotificationRepo,
+    ) -> Result<(Value, Vec<i64>), sqlx::Error> {
+        let rewarded = self.finalize_expired(notifications).await?;
 
         let now = Utc::now();
         if let Some(r) = sqlx::query(
@@ -113,7 +116,10 @@ impl SeasonRepo {
 
     /// Snapshot the podium and grant XP + notifications for every season that
     /// ended without being finalized yet. Returns the rewarded user ids.
-    async fn finalize_expired(&self) -> Result<Vec<i64>, sqlx::Error> {
+    async fn finalize_expired(
+        &self,
+        notifications: &crate::NotificationRepo,
+    ) -> Result<Vec<i64>, sqlx::Error> {
         let mut rewarded = Vec::new();
         let expired = sqlx::query(
             "SELECT id, name, starts_at, ends_at FROM seasons \
@@ -203,7 +209,7 @@ impl SeasonRepo {
                 .execute(&self.pool)
                 .await?;
                 rewarded.push(uid);
-                let _ = crate::NotificationRepo::new(self.pool.clone())
+                let _ = notifications
                     .notify(
                         uid,
                         "App\\Notifications\\SeasonResult",

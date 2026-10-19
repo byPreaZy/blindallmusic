@@ -714,6 +714,7 @@ pub fn RoomPage() -> impl IntoView {
         });
         on!("TrackResumed", move |_| {
             room.update(|c| c.is_playing = true);
+            paused.set(false);
         });
         on!("UserEloUpdated", move |e| {
             if let (Some(uid), Some(elo)) = (e["user_id"].as_i64(), e["elo"].as_i64()) {

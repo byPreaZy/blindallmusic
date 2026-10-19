@@ -28,7 +28,8 @@ pub async fn store(
         return r;
     }
 
-    if !state.auth.is_public_moderator(user.id).await {
+    // PHP auth.moderator accepts admins OR public moderators.
+    if !(user.is_administrator || state.auth.is_public_moderator(user.id).await) {
         return StatusCode::FORBIDDEN.into_response();
     }
     let mut multipart = match axum::extract::Multipart::from_request(request, &state).await {

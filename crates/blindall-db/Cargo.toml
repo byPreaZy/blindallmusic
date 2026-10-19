@@ -8,6 +8,7 @@ description = "MySQL persistence layer (sqlx). Entities and queries mirroring th
 [dependencies]
 blindall-core = { path = "../blindall-core" }
 blindall-game = { path = "../blindall-game" }
+blindall-realtime = { path = "../blindall-realtime" }
 sqlx.workspace = true
 serde.workspace = true
 serde_json.workspace = true

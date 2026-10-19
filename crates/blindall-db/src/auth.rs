@@ -29,6 +29,7 @@ impl AuthRepo {
              JOIN users u ON u.id = pat.tokenable_id \
              WHERE pat.id = $1 AND pat.token = $2 \
              AND pat.tokenable_type = 'App\\Models\\User' \
+             AND u.deleted_at IS NULL \
              LIMIT 1",
         )
         .bind(id.parse::<i64>().unwrap_or_default())
@@ -62,6 +63,18 @@ impl AuthRepo {
              JOIN rooms r ON r.id = m.moderable_id \
              WHERE m.user_id = $1 AND m.moderable_type = 'App\\Models\\Room' \
              AND r.is_public = true)::int::bigint",
+        )
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await
+        .map(|v| v == 1)
+        .unwrap_or(false)
+    }
+
+    pub async fn is_email_verified(&self, user_id: i64) -> bool {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 \
+             AND email_verified_at IS NOT NULL)::int::bigint",
         )
         .bind(user_id)
         .fetch_one(&self.pool)
@@ -130,6 +143,18 @@ impl AuthRepo {
                 r.get::<i64, _>("banned") > 0,
             )
         }))
+    }
+
+    pub async fn is_user_banned(&self, user_id: i64) -> bool {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT EXISTS(SELECT 1 FROM bans WHERE bannable_id = $1 AND deleted_at IS NULL \
+             AND (expired_at IS NULL OR expired_at > NOW()))::int::bigint",
+        )
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await
+        .map(|v| v == 1)
+        .unwrap_or(false)
     }
 
     pub async fn is_ip_banned(&self, ip: &str) -> bool {

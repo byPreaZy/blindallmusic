@@ -21,7 +21,7 @@ pub async fn index(
     OptionalUser(user): OptionalUser,
     Query(q): Query<SeasonQuery>,
 ) -> Response {
-    let (current, rewarded) = match state.seasons.ensure_current().await {
+    let (current, rewarded) = match state.seasons.ensure_current(&state.notifications).await {
         Ok(v) => v,
         Err(e) => {
             tracing::warn!(error = %e, "season ensure_current failed");

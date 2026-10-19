@@ -117,6 +117,15 @@ self.addEventListener('fetch', (event) => {
       event.respondWith(cacheFirst(request));
       return;
     }
+    // Locally hosted tracks/artwork: same SWR audio cache so uploaded excerpts
+    // keep playing on flaky metro connections.
+    if (
+      url.pathname.startsWith('/storage/') &&
+      /\.(mp3|m4a|aac|ogg|wav|png|jpe?g|webp|svg)(\?|$)/i.test(url.pathname)
+    ) {
+      event.respondWith(staleWhileRevalidate(request));
+      return;
+    }
     // Other same-origin GETs (e.g. images referenced later): SWR-light.
     event.respondWith(
       caches.match(request).then((cached) => cached || fetch(request)),

@@ -158,11 +158,12 @@ pub fn DuelsPage() -> impl IntoView {
     let suggestions = RwSignal::new(Vec::<Value>::new());
     let creating = RwSignal::new(false);
 
-    let reload = move || {
+    let reload = move |silent: bool| {
         leptos::task::spawn_local(async move {
             match api::get::<Value>("/api/v1/duels").await {
                 Ok(v) => duels.set(v["duels"].as_array().cloned().unwrap_or_default()),
-                Err(e) => error.set(Some(e.message)),
+                Err(e) if !silent => error.set(Some(e.message)),
+                _ => {}
             }
             match api::get::<Value>("/api/v1/duels/leaderboard").await {
                 Ok(v) => leaderboard.set(v["leaderboard"].as_array().cloned().unwrap_or_default()),
@@ -171,7 +172,15 @@ pub fn DuelsPage() -> impl IntoView {
             loading.set(false);
         });
     };
-    reload();
+    reload(false);
+    // Keep the lobby fresh: new challenges / completed duels appear without reload.
+    {
+        let iv = send_wrapper::SendWrapper::new(gloo_timers::callback::Interval::new(
+            15_000,
+            move || reload(true),
+        ));
+        on_cleanup(move || drop(iv));
+    }
 
     let search_users = move |ev| {
         let v = event_target_value(&ev);
@@ -383,22 +392,46 @@ pub fn DuelPlayPage() -> impl IntoView {
     let wrong = RwSignal::new(false);
     let copied = RwSignal::new(false);
 
-    leptos::task::spawn_local(async move {
-        match api::get::<Value>(&format!("/api/v1/duels/{}", duel_id())).await {
-            Ok(v) => {
-                let answered: std::collections::HashSet<i64> = v["my_answers"]
-                    .as_array()
-                    .map(|a| a.iter().filter_map(|x| x["idx"].as_i64()).collect())
-                    .unwrap_or_default();
-                let total = v["questions"].as_array().map(|q| q.len()).unwrap_or(0);
-                let next = (0..total as i64).find(|i| !answered.contains(i)).unwrap_or(total as i64);
-                idx.set(next as usize);
-                duel.set(Some(v));
+    let fetch_duel = move |advance: bool| {
+        leptos::task::spawn_local(async move {
+            match api::get::<Value>(&format!("/api/v1/duels/{}", duel_id())).await {
+                Ok(v) => {
+                    if advance {
+                        let answered: std::collections::HashSet<i64> = v["my_answers"]
+                            .as_array()
+                            .map(|a| a.iter().filter_map(|x| x["idx"].as_i64()).collect())
+                            .unwrap_or_default();
+                        let total = v["questions"].as_array().map(|q| q.len()).unwrap_or(0);
+                        let next =
+                            (0..total as i64).find(|i| !answered.contains(i)).unwrap_or(total as i64);
+                        idx.set(next as usize);
+                    }
+                    duel.set(Some(v));
+                }
+                Err(e) => error.set(Some(e.message)),
             }
-            Err(e) => error.set(Some(e.message)),
-        }
-        loading.set(false);
-    });
+            loading.set(false);
+        });
+    };
+    fetch_duel(true);
+    // While waiting for the opponent (my side done), poll so the final
+    // result flips on its own instead of needing a manual reload.
+    {
+        let iv = send_wrapper::SendWrapper::new(gloo_timers::callback::Interval::new(
+            4_000,
+            move || {
+                let waiting = duel.get_untracked().is_some_and(|d| {
+                    d["status"].as_str() != Some("finished")
+                        && idx.get_untracked()
+                            >= d["question_count"].as_i64().unwrap_or(0) as usize
+                });
+                if waiting {
+                    fetch_duel(false);
+                }
+            },
+        ));
+        on_cleanup(move || drop(iv));
+    }
 
     let submit = move |value: String| {
         if checking.get() || result.get().is_some() {

@@ -288,6 +288,7 @@ dependencies = [
  "bcrypt",
  "blindall-core",
  "blindall-game",
+ "blindall-realtime",
  "chrono",
  "chrono-tz",
  "hex",

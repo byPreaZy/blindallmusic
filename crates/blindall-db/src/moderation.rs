@@ -305,7 +305,7 @@ impl ModerationRepo {
              (SELECT MAX(m.created_at) FROM messages m WHERE m.user_id = u.id) AS last_message_at \
              FROM users u \
              WHERE u.is_guest = false AND u.deleted_at IS NULL \
-             AND ($1 IS NULL OR u.name LIKE $2 OR u.email LIKE $3) \
+             AND ($1 IS NULL OR u.name LIKE $2 OR ($6 AND u.email LIKE $3)) \
              ORDER BY u.created_at DESC LIMIT $4 OFFSET $5",
         )
         .bind(&like)
@@ -313,16 +313,18 @@ impl ModerationRepo {
         .bind(&like)
         .bind(per_page)
         .bind(offset(page, per_page))
+        .bind(sensitive)
         .fetch_all(&self.pool)
         .await?;
         let total: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM users u \
              WHERE u.is_guest = false AND u.deleted_at IS NULL \
-             AND ($1 IS NULL OR u.name LIKE $2 OR u.email LIKE $3)",
+             AND ($1 IS NULL OR u.name LIKE $2 OR ($4 AND u.email LIKE $3))",
         )
         .bind(&like)
         .bind(&like)
         .bind(&like)
+        .bind(sensitive)
         .fetch_one(&self.pool)
         .await?;
         let items = rows
@@ -425,7 +427,8 @@ impl ModerationRepo {
         Ok(())
     }
 
-    pub async fn is_staff(&self, user_id: i64) -> Result<bool, sqlx::Error> {
+    /// `Ok(None)` when the user does not exist (caller → 404, not 500).
+    pub async fn is_staff(&self, user_id: i64) -> Result<Option<bool>, sqlx::Error> {
         sqlx::query_scalar::<_, i64>(
             "SELECT (is_administrator OR EXISTS(\
              SELECT 1 FROM moderables m JOIN rooms r ON r.id = m.moderable_id \
@@ -435,9 +438,9 @@ impl ModerationRepo {
         )
         .bind(user_id)
         .bind(user_id)
-        .fetch_one(&self.pool)
+        .fetch_optional(&self.pool)
         .await
-        .map(|n| n > 0)
+        .map(|o| o.map(|n| n > 0))
     }
 
     // ---- dashboard ----------------------------------------------------------

@@ -517,24 +517,15 @@ pub async fn accept_request(
                 "team": {"id": team.id, "name": team.name, "user_id": team.user_id},
                 "message": format!("Your request has been accepted!<br> Welcome to the team {}", team.name),
             });
-            if let Ok(nid) = state
+            // state.notifications is hub-aware: notify() broadcasts too.
+            let _ = state
                 .notifications
                 .notify(
                     requester_id,
                     "App\\Notifications\\TeamRequestApproved",
-                    data.clone(),
-                )
-                .await
-            {
-                crate::users::push_notification(
-                    &state,
-                    requester_id,
-                    "App\\Notifications\\TeamRequestApproved",
-                    &nid,
                     data,
                 )
                 .await;
-            }
             state
                 .levels
                 .dispatch(requester_id, blindall_db::LevelTrigger::Score);
@@ -574,24 +565,15 @@ pub async fn decline_request(
                 "team": {"id": team.id, "name": team.name, "user_id": team.user_id},
                 "message": "Your request has been declined",
             });
-            if let Ok(nid) = state
+            // state.notifications is hub-aware: notify() broadcasts too.
+            let _ = state
                 .notifications
                 .notify(
                     requester_id,
                     "App\\Notifications\\TeamRequestRejected",
-                    data.clone(),
-                )
-                .await
-            {
-                crate::users::push_notification(
-                    &state,
-                    requester_id,
-                    "App\\Notifications\\TeamRequestRejected",
-                    &nid,
                     data,
                 )
                 .await;
-            }
             Json(json!({"ok": true})).into_response()
         }
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),

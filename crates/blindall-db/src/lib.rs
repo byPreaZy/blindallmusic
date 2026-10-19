@@ -201,6 +201,13 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0022_minigame_duels_daily.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            23,
+            "level_metrics_backfill".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0023_level_metrics_backfill.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {

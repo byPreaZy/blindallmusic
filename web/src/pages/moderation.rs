@@ -42,7 +42,12 @@ pub fn ModShell(active: &'static str, children: ChildrenFn) -> impl IntoView {
                 }>
                 <h1 class="retro-title retro-title--white mb-6 text-3xl">{t("Moderation")}</h1>
                 <nav class="mb-8 flex flex-wrap gap-2">
-                    {SECTIONS.iter().map(|(href, label)| {
+                    {SECTIONS.iter().filter(|(href, _)| {
+                        // /moderation/moderators is admin-only server-side —
+                        // hide it from public moderators instead of a silent 403.
+                        *href != "/moderation/moderators"
+                            || auth.user.get().map(|u| u.is_administrator).unwrap_or(false)
+                    }).map(|(href, label)| {
                         let is = *href == active;
                         view! {
                             <A href=*href attr:class=move || if is {
@@ -176,8 +181,8 @@ pub fn ModTrashedMessages() -> impl IntoView {
                             let mid = m["id"].as_i64().unwrap_or(0);
                             let body = m["body"].as_str().unwrap_or("").to_string();
                             let uname = m["user_name"].as_str().or(m["user"]["name"].as_str()).unwrap_or("?").to_string();
-                            let uid = m["user_id"].as_i64().unwrap_or(0);
-                            let room = m["room_name"].as_str().unwrap_or("—").to_string();
+                            let uid = m["user_id"].as_i64().or(m["user"]["id"].as_i64()).unwrap_or(0);
+                            let room = m["room_name"].as_str().or(m["room"]["name"].as_str()).unwrap_or("—").to_string();
                             let deleted = fmt_date(&m["deleted_at"]);
                             view! {
                                 <div class="border-b border-white/5 px-4 py-3 last:border-0">
@@ -228,7 +233,7 @@ pub fn ModBannedUsers() -> impl IntoView {
         let p = page.get_untracked();
         leptos::task::spawn_local(async move {
             match api::get::<Value>(&format!("/api/v1/moderation/banned-users?page={p}&search={}", enc(&s))).await {
-                Ok(v) => { last_page.set(v["last_page"].as_i64().unwrap_or(1)); data.set(v); }
+                Ok(v) => { last_page.set(v["bannedUsers"]["last_page"].as_i64().unwrap_or(1)); data.set(v["bannedUsers"].clone()); }
                 Err(e) => error.set(Some(e.message)),
             }
             loading.set(false);
@@ -528,7 +533,7 @@ pub fn ModUsers() -> impl IntoView {
         let p = page.get_untracked();
         leptos::task::spawn_local(async move {
             match api::get::<Value>(&format!("/api/v1/moderation/users?page={p}&search={}", enc(&s))).await {
-                Ok(v) => { last_page.set(v["last_page"].as_i64().unwrap_or(1)); data.set(v); }
+                Ok(v) => { last_page.set(v["users"]["last_page"].as_i64().unwrap_or(1)); data.set(v["users"].clone()); }
                 Err(e) => error.set(Some(e.message)),
             }
             loading.set(false);
@@ -783,15 +788,19 @@ pub fn ModUserShow() -> impl IntoView {
 pub fn ModModerators() -> impl IntoView {
     let data = RwSignal::new(Value::Null);
     let loading = RwSignal::new(true);
+    let error = RwSignal::new(Option::<String>::None);
     let page = RwSignal::new(1i64);
     let last_page = RwSignal::new(1i64);
 
     let load = move || {
         let p = page.get_untracked();
         leptos::task::spawn_local(async move {
-            if let Ok(v) = api::get::<Value>(&format!("/api/v1/moderation/moderators?page={p}")).await {
-                last_page.set(v["last_page"].as_i64().unwrap_or(1));
-                data.set(v);
+            match api::get::<Value>(&format!("/api/v1/moderation/moderators?page={p}")).await {
+                Ok(v) => {
+                    last_page.set(v["moderators"]["last_page"].as_i64().unwrap_or(1));
+                    data.set(v["moderators"].clone());
+                }
+                Err(e) => error.set(Some(e.message)),
             }
             loading.set(false);
         });
@@ -800,6 +809,7 @@ pub fn ModModerators() -> impl IntoView {
 
     view! {
         <ModShell active="/moderation/moderators">
+            <ErrLine error=error/>
             <Show when=move || !loading.get() fallback=move || view! {
                 <div class="py-16 text-center text-white/60">{t("Loading")}"…"</div>
             }>

@@ -111,6 +111,17 @@ pub async fn verification_notification(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    // PHP parity: verification.send is throttle:6,1.
+    if let Some(secs) = state
+        .reset_rate
+        .retry_after(&format!("verify-notify|{}", user.id), 6, 60)
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({"retry_after": secs})),
+        )
+            .into_response();
+    }
     let Some(email) = state.auth.email_of(user.id).await.ok().flatten() else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -164,7 +175,20 @@ pub async fn verify_email(
     Path((user_id, hash)): Path<(i64, String)>,
     Query(q): Query<VerifyQuery>,
     headers: axum::http::HeaderMap,
+    axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<std::net::SocketAddr>,
 ) -> Response {
+    // PHP parity: verification.verify is throttle:6,1.
+    let ip = crate::auth_session::client_ip(&headers, &addr.ip().to_string());
+    if let Some(secs) = state
+        .reset_rate
+        .retry_after(&format!("verify-click|{ip}"), 6, 60)
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({"retry_after": secs})),
+        )
+            .into_response();
+    }
     let wants_html = headers
         .get(axum::http::header::ACCEPT)
         .and_then(|v| v.to_str().ok())

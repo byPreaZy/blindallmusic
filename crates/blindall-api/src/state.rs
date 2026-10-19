@@ -65,4 +65,5 @@ pub struct AppState {
     pub cache_prefix: String,
     pub oauth: crate::oauth::OAuthConfig,
     pub oauth_states: std::sync::Arc<crate::oauth::OAuthStates>,
+    pub pool: sqlx::PgPool,
 }

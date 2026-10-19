@@ -110,6 +110,23 @@ pub async fn update_user(
     if !validator::ValidateEmail::validate_email(&body.email) || body.email.len() > 50 {
         return err("email", "The email field must be a valid email address.");
     }
+    // PHP validates Rule::unique(...)->ignore(user) on both fields.
+    if state
+        .auth
+        .name_taken_ignore(body.name.trim(), user_id)
+        .await
+        .unwrap_or(false)
+    {
+        return err("name", "The name has already been taken.");
+    }
+    if state
+        .auth
+        .email_taken_ignore(&body.email, user_id)
+        .await
+        .unwrap_or(false)
+    {
+        return err("email", "The email has already been taken.");
+    }
     match state
         .admin
         .update_user(

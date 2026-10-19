@@ -256,7 +256,8 @@ pub async fn ban(
             .into_response();
     }
     match state.moderation.is_staff(user_id).await {
-        Ok(true) => {
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Ok(Some(true)) => {
             return (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 Json(json!({"error": "Moderation cannot ban staff"})),
@@ -264,7 +265,7 @@ pub async fn ban(
                 .into_response();
         }
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-        Ok(false) => {}
+        Ok(Some(false)) => {}
     }
     let ip = match state.moderation.user_detail(user_id, true).await {
         Ok(Some(v)) => v["ip"].as_str().map(|s| s.to_string()),

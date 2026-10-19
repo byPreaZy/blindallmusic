@@ -4,11 +4,20 @@ use sqlx::{PgPool, Row};
 #[derive(Clone)]
 pub struct NotificationRepo {
     pool: PgPool,
+    hub: Option<blindall_realtime::Hub>,
 }
 
 impl NotificationRepo {
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self { pool, hub: None }
+    }
+
+    /// PHP's ->notify() broadcasts BroadcastNotificationCreated in realtime;
+    /// wiring the hub here makes every notification live, whichever caller
+    /// persists it.
+    pub fn with_hub(mut self, hub: blindall_realtime::Hub) -> Self {
+        self.hub = Some(hub);
+        self
     }
 
     pub async fn notify(
@@ -31,6 +40,21 @@ impl NotificationRepo {
         .bind(now)
         .execute(&self.pool)
         .await?;
+        if let Some(hub) = &self.hub {
+            hub.broadcast(
+                &format!("user:{notifiable_id}"),
+                "Illuminate\\Notifications\\Events\\BroadcastNotificationCreated",
+                json!({
+                    "id": id,
+                    "type": type_,
+                    "notifiable_type": "App\\Models\\User",
+                    "notifiable_id": notifiable_id,
+                    "data": data,
+                }),
+                None,
+            )
+            .await;
+        }
         Ok(id)
     }
 

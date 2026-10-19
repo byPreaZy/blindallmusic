@@ -1418,7 +1418,7 @@ pub fn DataQualityBody() -> impl IntoView {
             </div>
 
             {move || show_history.get().then(|| view! {
-                <div class="overflow-hidden rounded-xl border border-white/10">
+                <div class="overflow-x-auto overflow-hidden rounded-xl border border-white/10">
                     <table class="w-full text-left text-sm">
                         <thead class="border-b border-white/10 text-xs uppercase text-white/50">
                             <tr>
@@ -1720,7 +1720,7 @@ pub fn DataQualityBody() -> impl IntoView {
             }}
 
             {move || (selected.get().is_none() && !show_history.get()).then(|| view! {
-                <div class="overflow-hidden rounded-xl border border-white/10">
+                <div class="overflow-x-auto overflow-hidden rounded-xl border border-white/10">
                     <table class="w-full text-left text-sm">
                         <thead class="border-b border-white/10 text-xs uppercase text-white/50">
                             <tr>

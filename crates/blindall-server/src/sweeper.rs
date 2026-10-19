@@ -11,12 +11,13 @@ pub fn spawn(
     manager: GameManager,
     storage_root: PathBuf,
     levels: Arc<LevelDispatcher>,
+    notifications: blindall_db::NotificationRepo,
 ) {
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(SWEEP_INTERVAL);
         loop {
             tick.tick().await;
-            sweep_once(&pool, &manager, &storage_root, &levels).await;
+            sweep_once(&pool, &manager, &storage_root, &levels, &notifications).await;
         }
     });
 }
@@ -26,6 +27,7 @@ async fn sweep_once(
     manager: &GameManager,
     storage_root: &Path,
     levels: &LevelDispatcher,
+    notifications: &blindall_db::NotificationRepo,
 ) {
     let live = manager.live_room_ids().await;
     match blindall_db::maintenance::reset_stuck_rounds(pool, &live).await {
@@ -70,7 +72,7 @@ async fn sweep_once(
         _ => {}
     }
     match blindall_db::SeasonRepo::new(pool.clone())
-        .ensure_current()
+        .ensure_current(notifications)
         .await
     {
         Ok((_, rewarded)) => {

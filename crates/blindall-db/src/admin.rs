@@ -398,7 +398,7 @@ impl AdminRepo {
 
     pub async fn pages(&self) -> Result<Vec<Value>, sqlx::Error> {
         let rows = sqlx::query(
-            "SELECT id, title, slug, original_id, parent_id, revised_at, created_at \
+            "SELECT id, title, slug, content, original_id, parent_id, revised_at, created_at \
              FROM pages ORDER BY title",
         )
         .fetch_all(&self.pool)
@@ -410,6 +410,7 @@ impl AdminRepo {
                     "id": r.get::<i64, _>("id"),
                     "title": r.get::<String, _>("title"),
                     "slug": r.get::<String, _>("slug"),
+                    "content": r.get::<Option<String>, _>("content"),
                     "original_id": r.get::<Option<i64>, _>("original_id"),
                     "parent_id": r.get::<Option<i64>, _>("parent_id"),
                     "revised_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("revised_at"),
@@ -651,7 +652,10 @@ impl AdminRepo {
         let offset = (page.max(1) - 1) * per_page.max(1);
         let sql = format!(
             "SELECT r.id, r.name, r.slug, r.description, r.is_public, r.photo_path, \
-             r.user_id, r.deleted_at, u.name AS owner_name \
+             r.user_id, r.deleted_at, u.name AS owner_name, \
+             r.category_id, r.tracks_by_round, r.track_duration, \
+             r.pause_between_tracks, r.pause_between_rounds, r.is_pro, \
+             r.is_random, r.is_active, r.is_chat_active, r.discord_webhook_url, r.color \
              FROM rooms r JOIN users u ON u.id = r.user_id \
              WHERE 1=1 {trashed_clause} \
              AND ($1 IS NULL OR r.name LIKE $2 OR u.name LIKE $3) \
@@ -709,6 +713,17 @@ impl AdminRepo {
                 "moderators": mods,
                 "playlists": playlists,
                 "is_public": r.get::<bool, _>("is_public"),
+                "category_id": r.get::<i64, _>("category_id"),
+                "tracks_by_round": r.get::<i64, _>("tracks_by_round"),
+                "track_duration": r.get::<i64, _>("track_duration"),
+                "pause_between_tracks": r.get::<i64, _>("pause_between_tracks"),
+                "pause_between_rounds": r.get::<i64, _>("pause_between_rounds"),
+                "is_pro": r.get::<bool, _>("is_pro"),
+                "is_random": r.get::<bool, _>("is_random"),
+                "is_active": r.get::<bool, _>("is_active"),
+                "is_chat_active": r.get::<bool, _>("is_chat_active"),
+                "discord_webhook_url": r.get::<Option<String>, _>("discord_webhook_url"),
+                "color": r.get::<Option<String>, _>("color"),
                 "deleted_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("deleted_at"),
             }));
         }

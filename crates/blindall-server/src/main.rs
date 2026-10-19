@@ -101,6 +101,7 @@ async fn main() -> anyhow::Result<()> {
             blindall_db::LevelRepo::new(pool.clone()),
             hub.clone(),
         )),
+        blindall_db::NotificationRepo::new(pool.clone()).with_hub(hub.clone()),
     );
 
     let state = AppState {
@@ -156,7 +157,7 @@ async fn main() -> anyhow::Result<()> {
         faqs: blindall_db::FaqRepo::new(pool.clone()),
         rankings: blindall_db::RankingsRepo::new(pool.clone()),
         seasons: blindall_db::SeasonRepo::new(pool.clone()),
-        notifications: blindall_db::NotificationRepo::new(pool.clone()),
+        notifications: blindall_db::NotificationRepo::new(pool.clone()).with_hub(hub.clone()),
         rankings_cache: std::sync::Arc::new(blindall_api::rankings::RankingsCache::default()),
         local_tracks: blindall_db::LocalTrackRepo::new(pool.clone()),
         redis: redis.clone(),
@@ -213,7 +214,7 @@ async fn main() -> anyhow::Result<()> {
             .split(',')
             .filter_map(|s| s.trim().parse::<i64>().ok())
             .collect(),
-        donations_repo: blindall_db::DonationRepo::new(pool),
+        donations_repo: blindall_db::DonationRepo::new(pool.clone()),
         donations: {
             let mut cfg = blindall_api::donations::DonationsConfig::default();
             if let Ok(v) = std::env::var("DONATIONS_MONTHLY_GOAL_CENTS") {
@@ -238,6 +239,7 @@ async fn main() -> anyhow::Result<()> {
         .iter()
         .map(|s| s.to_string())
         .collect(),
+        pool,
     };
 
     let slow_ms: u64 = std::env::var("SLOW_REQUEST_MS")
@@ -289,7 +291,8 @@ async fn main() -> anyhow::Result<()> {
             axum::http::HeaderValue::from_static(
                 "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' https://pagead2.googlesyndication.com https://www.googletagservices.com https://adservice.google.com https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google;                  style-src 'self' 'unsafe-inline' https://fonts.bunny.net;                  font-src 'self' https://fonts.bunny.net;                  img-src 'self' data: https:; media-src 'self' https:;                  connect-src 'self' wss: ws: https:;                  object-src 'none';                  frame-src 'self' https://*.googlesyndication.com https://*.doubleclick.net https://www.google.com https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google;                  base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
             ),
-        ));
+        ))
+        .layer(tower_http::compression::CompressionLayer::new().gzip(true));
 
     let listener = tokio::net::TcpListener::bind(&bind).await?;
     tracing::info!(%bind, "blindall-server listening");
@@ -297,6 +300,29 @@ async fn main() -> anyhow::Result<()> {
         listener,
         app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
     )
+    .with_graceful_shutdown(shutdown_signal())
     .await?;
     Ok(())
+}
+
+/// SIGTERM (docker stop / orchestrators) + Ctrl-C: stop accepting, drain
+/// in-flight requests so deploys don't 502 mid-request.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+    #[cfg(unix)]
+    let term = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut s) => s.recv().await,
+            Err(_) => std::future::pending::<Option<()>>().await,
+        }
+    };
+    #[cfg(not(unix))]
+    let term = std::future::pending::<Option<()>>();
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = term => {},
+    }
+    tracing::info!("shutdown signal received, draining");
 }

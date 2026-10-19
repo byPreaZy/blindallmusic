@@ -861,7 +861,7 @@ fn ScoresTab(data: RwSignal<Value>) -> impl IntoView {
                 }.into_any();
             }
             view! {
-                <div class="overflow-hidden rounded-xl border border-white/10 bg-surface-raised/60">
+                <div class="overflow-x-auto overflow-hidden rounded-xl border border-white/10 bg-surface-raised/60">
                     <table class="w-full text-sm">
                         <thead class="border-b border-white/10 text-left text-xs uppercase tracking-wider text-white/40">
                             <tr>

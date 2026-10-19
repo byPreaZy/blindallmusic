@@ -51,7 +51,7 @@ impl LoginThrottle {
 }
 
 fn throttle_key(email: &str, ip: &str) -> String {
-    format!("{}|{}", email.to_lowercase(), ip)
+    format!("{}|{}", email.trim().to_lowercase(), ip)
 }
 
 pub(crate) fn client_ip(headers: &HeaderMap, fallback: &str) -> String {

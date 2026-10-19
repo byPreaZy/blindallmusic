@@ -252,6 +252,9 @@ pub async fn callback(
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
 
+    if state.auth.is_user_banned(user.id).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "banned"}))).into_response();
+    }
     let t_resolve = t0.elapsed() - t_exchange - t_profile;
     let ip = client_ip(&headers, &addr.ip().to_string());
     state.auth.update_ip(user.id, &ip).await;

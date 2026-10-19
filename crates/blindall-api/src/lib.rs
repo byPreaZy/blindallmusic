@@ -36,7 +36,7 @@ pub use state::AppState;
 
 use axum::Json;
 use axum::Router;
-use axum::extract::DefaultBodyLimit;
+use axum::extract::{DefaultBodyLimit, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
@@ -626,6 +626,24 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/ws", get(ws::handler))
         .route("/healthz", get(|| async { "ok" }))
+        .route(
+            "/readyz",
+            get(|State(state): State<AppState>| async move {
+                let db = sqlx::query("SELECT 1").execute(&state.pool).await.is_ok();
+                let redis = fred::interfaces::ClientLike::ping::<()>(&state.redis, None)
+                    .await
+                    .is_ok();
+                if db && redis {
+                    (StatusCode::OK, "ready").into_response()
+                } else {
+                    (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(serde_json::json!({"db": db, "redis": redis})),
+                    )
+                        .into_response()
+                }
+            }),
+        )
         .route(
             "/api/v1/version",
             get(|| async {

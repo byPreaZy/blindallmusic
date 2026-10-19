@@ -23,6 +23,8 @@ struct Inner {
     last_rx: Cell<f64>,
     generation: Cell<u64>,
     ever_connected: Cell<bool>,
+    attempts: Cell<u32>,
+    stopped: Cell<bool>,
 }
 
 fn ws_url(ticket: &str) -> String {
@@ -50,12 +52,17 @@ impl Realtime {
             last_rx: Cell::new(js_sys::Date::now()),
             generation: Cell::new(0),
             ever_connected: Cell::new(false),
+            attempts: Cell::new(0),
+            stopped: Cell::new(false),
         }));
         rt.open();
         rt
     }
 
     fn open(&self) {
+        if self.0.stopped.get() {
+            return;
+        }
         let inner = self.0.clone();
         let generation = inner.generation.get() + 1;
         inner.generation.set(generation);
@@ -69,6 +76,12 @@ impl Realtime {
                     _ => {}
                 },
                 Err(e) => {
+                    // 401/403 = logged out or token revoked: retrying is pointless.
+                    if matches!(e.status, 401 | 403) {
+                        rt.0.stopped.set(true);
+                        rt.0.conn_state.set("offline");
+                        return;
+                    }
                     leptos::logging::warn!("ws ticket failed {:?}", e.message);
                     rt.schedule_reconnect();
                 }
@@ -95,6 +108,7 @@ impl Realtime {
             let ws2 = ws.clone();
             let onopen = Closure::<dyn FnMut()>::new(move || {
                 inner.conn_state.set("connected");
+                inner.attempts.set(0);
                 inner.last_rx.set(js_sys::Date::now());
                 let channels: Vec<String> = inner.channels.borrow().iter().cloned().collect();
                 for ch in channels {
@@ -175,8 +189,18 @@ impl Realtime {
     }
 
     fn schedule_reconnect(&self) {
+        if self.0.stopped.get() {
+            return;
+        }
+        // Exponential backoff with jitter: 1s, 2s, 4s… capped at 30s so a dead
+        // server isn't hammered and a subway dropout doesn't drain the radio.
+        let attempt = self.0.attempts.get();
+        self.0.attempts.set(attempt.saturating_add(1));
+        let base = 1_000u64.saturating_mul(1 << attempt.min(5));
+        let jitter = (js_sys::Math::random() * 500.0) as u64;
+        let delay = base.min(30_000) + jitter;
         let rt = self.clone();
-        gloo_timers::callback::Timeout::new(2_000, move || {
+        gloo_timers::callback::Timeout::new(delay as u32, move || {
             if rt.0.conn_state.get_untracked() != "connected" {
                 rt.open();
             }

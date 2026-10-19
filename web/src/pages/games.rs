@@ -154,6 +154,7 @@ pub fn GamePlayPage() -> impl IntoView {
     let loading = RwSignal::new(true);
     let error = RwSignal::new(Option::<String>::None);
     let summary = RwSignal::new(false);
+    let game_lb = RwSignal::new(Vec::<Value>::new());
 
     let game_type = RwSignal::new(game());
     let (name, _desc) = game_meta(&game_type.get_untracked());
@@ -265,6 +266,16 @@ pub fn GamePlayPage() -> impl IntoView {
         input.set(String::new());
         if results.get().len() >= QUESTIONS_PER_ROUND {
             summary.set(true);
+            let g = game_type.get_untracked();
+            leptos::task::spawn_local(async move {
+                if let Ok(v) =
+                    api::get::<Value>(&format!("/api/v1/minigames/{g}/leaderboard")).await
+                {
+                    game_lb.set(
+                        v["leaderboard"].as_array().cloned().unwrap_or_default(),
+                    );
+                }
+            });
         } else {
             index.update(|i| *i += 1);
         }
@@ -353,6 +364,23 @@ pub fn GamePlayPage() -> impl IntoView {
                         <span class="text-sm font-bold text-purple-300">{t("Play this game against a friend")}</span>
                         <span class="text-purple-300 group-hover:translate-x-0.5 transition">"→"</span>
                     </A>
+                    {move || (!game_lb.get().is_empty()).then(|| view! {
+                        <div class="mt-4">
+                            <h3 class="mb-2 text-sm font-bold text-white/60">{t("Leaderboard")}</h3>
+                            <div class="space-y-1">
+                                {move || game_lb.get().iter().take(5).enumerate().map(|(i, r)| {
+                                    let medal = ["🥇", "🥈", "🥉"].get(i).copied().unwrap_or("");
+                                    view! {
+                                        <div class="flex items-center gap-2 rounded-lg px-2 py-1 text-sm">
+                                            <span class="w-6 text-center">{if medal.is_empty() { format!("{}", i + 1) } else { medal.to_string() }}</span>
+                                            <span class="min-w-0 flex-1 truncate text-white/80">{r["name"].as_str().unwrap_or("—").to_string()}</span>
+                                            <span class="font-bold text-teal-400">{r["total"].as_i64().unwrap_or(0)} {t("pts")}</span>
+                                        </div>
+                                    }
+                                }).collect::<Vec<_>>()}
+                            </div>
+                        </div>
+                    })}
                 </div>
             </Show>
 
