@@ -13,6 +13,11 @@ const USERS_SVG: &str = "M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.12
 const NOTE_SVG: &str =
     "M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z";
 const ARROW_SVG: &str = "M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3";
+const MIC_SVG: &str = "M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z";
+const SHUFFLE_SVG: &str = "M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z";
+const TITLE_SVG: &str = "M5 4v3h5.5v12h3V7H19V4H5z";
+const DISC_SVG: &str = "M12 2a10 10 0 100 20 10 10 0 000-20zm0 6a4 4 0 110 8 4 4 0 010-8zm0 3a1 1 0 100 2 1 1 0 000-2z";
+const PLAY_SVG: &str = "M8 5v14l11-7z";
 const DISCORD_SVG: &str = "M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286z";
 
 fn users_icon(cls: &'static str) -> impl IntoView {
@@ -27,6 +32,24 @@ fn note_icon(cls: &'static str) -> impl IntoView {
     view! {
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class=cls>
             <path d=NOTE_SVG />
+        </svg>
+    }
+}
+
+/// Per-game icon for the minigames catalog cards — real SVGs (OS emojis
+/// render inconsistently and looked cheap).
+fn minigame_icon(ty: &str) -> impl IntoView {
+    let d = match ty {
+        "quiz" => NOTE_SVG,
+        "who_sang" => MIC_SVG,
+        "anagram" => SHUFFLE_SVG,
+        "first_letter" => TITLE_SVG,
+        "album_cover" => DISC_SVG,
+        _ => PLAY_SVG,
+    };
+    view! {
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-7 w-7" aria-hidden="true">
+            <path d=d />
         </svg>
     }
 }
@@ -1178,11 +1201,11 @@ pub fn HomePage() -> impl IntoView {
                                                             _ => "Mini-game",
                                                         };
                                                         view! {
-                                                            <A href=format!("/minigames/{}", ty.replace('_', "-")) attr:class="game-card flex flex-col">
+                                                            <A href=format!("/minigames/{}", ty.replace('_', "-")) attr:class="game-card group flex flex-col">
                                                                 <div class="flex aspect-[16/9] items-center justify-center bg-gradient-to-br from-brand-deep to-brand-midnight">
-                                                                    <span class="text-4xl" aria-hidden="true">
-                                                                        {match ty.as_str() { "quiz" => "🎵", "who_sang" => "🎤", "anagram" => "🔤", "first_letter" => "🔡", "album_cover" => "💿", _ => "🎮" }}
-                                                                    </span>
+                                                                    <div class="flex h-16 w-16 items-center justify-center rounded-xl bg-brand-midnight/80 text-brand-secondary ring-1 ring-white/15 transition duration-200 group-hover:scale-110" aria-hidden="true">
+                                                                        {minigame_icon(&ty)}
+                                                                    </div>
                                                                 </div>
                                                                 <div class="game-card__deck flex flex-1 flex-col gap-3">
                                                                     <h3 class="truncate text-sm font-bold uppercase tracking-wide text-white sm:text-base">{label}</h3>
