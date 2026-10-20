@@ -155,7 +155,8 @@ pub async fn unban(
     Path(user_id): Path<i64>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
-    if !require_moderator(&state, &user).await {
+    // Global bans are admin-only: moderators keep room-level controls.
+    if !user.is_administrator {
         return forbidden();
     }
     match state.moderation.unban(user_id).await {
@@ -233,7 +234,8 @@ pub async fn ban(
     CurrentUser(user): CurrentUser,
     Json(body): Json<BanBody>,
 ) -> Response {
-    if !require_moderator(&state, &user).await {
+    // Global bans are admin-only: moderators keep room-level controls.
+    if !user.is_administrator {
         return forbidden();
     }
     let reason = body.reason.trim();

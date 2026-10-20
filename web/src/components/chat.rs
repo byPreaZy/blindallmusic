@@ -437,6 +437,12 @@ fn ChatMessage(
             .map(|u| u.is_public_moderator || config.get().public_moderator_ids.contains(&u.id))
             .unwrap_or(false)
     };
+    let viewer_is_admin = move || {
+        viewer
+            .get()
+            .map(|u| u.is_administrator)
+            .unwrap_or(false)
+    };
     let viewer_can_moderate = move || viewer_is_room_mod() || viewer_is_public_mod();
     let author_is_public_mod = config.get().public_moderator_ids.contains(&uid);
     let from_mod = moderator_ids.get().contains(&uid);
@@ -659,7 +665,7 @@ fn ChatMessage(
                         time=time.get_value()
                         user_id=uid
                         message_id=msg_id
-                        show_ban=move || !author_is_room_mod && viewer_is_public_mod()
+                        show_ban=move || !author_is_room_mod && viewer_is_admin()
                         on_close=move || moderate.set(false)
                     />
                 }

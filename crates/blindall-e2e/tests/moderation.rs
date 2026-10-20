@@ -312,3 +312,122 @@ async fn admin_set_user_role() {
         .expect_ok("role=user");
     assert_eq!(profile_role(target.user_id).await, "");
 }
+
+// ---- global bans are admin-only; moderators keep room-level powers ---------
+
+#[tokio::test]
+async fn moderator_cannot_ban_but_keeps_room_powers() {
+    let admin = Client::admin().await;
+    let (room_id, _, _) = game_fixture(&admin, &[("Mod Room", 12, 1.0)]).await;
+
+    // Public room -> attached moderator becomes a public moderator.
+    admin
+        .put(
+            &format!("/api/v1/admin/rooms/{room_id}"),
+            json!({"name": uniq_name("modroom"), "is_public": true}),
+        )
+        .await
+        .expect_ok("publish room");
+    let (mod_u, _) = Client::register("pmod").await;
+    admin
+        .post(
+            &format!("/api/v1/rooms/{room_id}/moderators/attach"),
+            json!({"user_id": mod_u.user_id}),
+        )
+        .await
+        .expect_ok("attach moderator");
+
+    let (victim, _) = Client::register("vban").await;
+
+    // Moderator cannot globally ban.
+    let r = mod_u
+        .post(
+            &format!("/api/v1/moderation/users/{}/ban", victim.user_id),
+            json!({"reason": "mod attempt"}),
+        )
+        .await;
+    assert_eq!(r.status, StatusCode::FORBIDDEN, "mod ban: {}", r.text);
+
+    // Moderator cannot globally unban.
+    let r = mod_u
+        .post(
+            &format!("/api/v1/moderation/banned-users/{}/unban", victim.user_id),
+            json!({}),
+        )
+        .await;
+    assert_eq!(r.status, StatusCode::FORBIDDEN, "mod unban: {}", r.text);
+
+    // Read/investigation tools stay available to moderators.
+    mod_u
+        .get("/api/v1/moderation/banned-users")
+        .await
+        .expect_ok("banned list");
+    mod_u
+        .get("/api/v1/moderation/users")
+        .await
+        .expect_ok("users list");
+
+    // Room-level power retained: public moderator deletes a chat message.
+    admin
+        .post(
+            &format!("/api/v1/rooms/{room_id}/messages"),
+            json!({"body": "spam msg"}),
+        )
+        .await;
+    let hist = admin
+        .get(&format!("/api/v1/rooms/{room_id}/messages"))
+        .await
+        .expect_ok("history");
+    let msg_id = hist.body["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["body"] == "spam msg")
+        .and_then(|m| m["id"].as_i64())
+        .expect("message stored");
+    let r = mod_u.delete(&format!("/api/v1/messages/{msg_id}")).await;
+    assert!(
+        r.status.is_success() || r.status == StatusCode::NO_CONTENT,
+        "mod delete msg: {} {}",
+        r.status,
+        r.text
+    );
+
+    // Room moderator can still manage moderators (detach is room-scoped).
+    let (other_mod, _) = Client::register("omod").await;
+    admin
+        .post(
+            &format!("/api/v1/rooms/{room_id}/moderators/attach"),
+            json!({"user_id": other_mod.user_id}),
+        )
+        .await
+        .expect_ok("attach other");
+    let r = mod_u
+        .delete_body(
+            &format!("/api/v1/rooms/{room_id}/moderators/detach"),
+            json!({"user_id": other_mod.user_id}),
+        )
+        .await;
+    assert!(
+        r.status.is_success(),
+        "mod detach moderator: {} {}",
+        r.status,
+        r.text
+    );
+
+    // Admin ban + unban still work end to end.
+    admin
+        .post(
+            &format!("/api/v1/moderation/users/{}/ban", victim.user_id),
+            json!({"reason": "admin ban"}),
+        )
+        .await
+        .expect_ok("admin ban");
+    admin
+        .post(
+            &format!("/api/v1/moderation/banned-users/{}/unban", victim.user_id),
+            json!({}),
+        )
+        .await
+        .expect_ok("admin unban");
+}

@@ -242,6 +242,7 @@ pub fn ModTrashedMessages() -> impl IntoView {
 
 #[component]
 pub fn ModBannedUsers() -> impl IntoView {
+    let auth = use_auth();
     let data = RwSignal::new(Value::Null);
     let loading = RwSignal::new(true);
     let error = RwSignal::new(Option::<String>::None);
@@ -293,11 +294,13 @@ pub fn ModBannedUsers() -> impl IntoView {
                                         </A>
                                         <div class="text-xs text-white/40">{email} " · ip: " {ip} " · " {bans} " " {t("bans")}</div>
                                     </div>
-                                    <button type="button" class="rounded-lg border border-emerald-500/30 px-3 py-1.5 text-sm text-emerald-300"
-                                        on:click=move |_| leptos::task::spawn_local(async move {
-                                            let _ = api::post_empty::<Value>(&format!("/api/v1/moderation/banned-users/{uid}/unban")).await;
-                                            load();
-                                        })>{t("Unban")}</button>
+                                    {move || auth.user.get().map(|me| me.is_administrator).unwrap_or(false).then(|| view! {
+                                        <button type="button" class="rounded-lg border border-emerald-500/30 px-3 py-1.5 text-sm text-emerald-300"
+                                            on:click=move |_| leptos::task::spawn_local(async move {
+                                                let _ = api::post_empty::<Value>(&format!("/api/v1/moderation/banned-users/{uid}/unban")).await;
+                                                load();
+                                            })>{t("Unban")}</button>
+                                    })}
                                 </div>
                             }
                         }).collect::<Vec<_>>()}
@@ -550,6 +553,7 @@ fn RematchPanel(track_id: i64) -> impl IntoView {
 
 #[component]
 pub fn ModUsers() -> impl IntoView {
+    let auth = use_auth();
     let data = RwSignal::new(Value::Null);
     let loading = RwSignal::new(true);
     let error = RwSignal::new(Option::<String>::None);
@@ -608,7 +612,8 @@ pub fn ModUsers() -> impl IntoView {
                                     let reported = u["reported_messages_count"].as_i64().unwrap_or(0);
                                     let banned = u["is_banned"].as_bool().unwrap_or(false);
                                     let staff = u["is_admin"].as_bool().unwrap_or(false) || u["is_moderator"].as_bool().unwrap_or(false);
-                                    let can_ban = u["can_ban"].as_bool().unwrap_or(!staff);
+                                    let viewer_admin = auth.user.get().map(|me| me.is_administrator).unwrap_or(false);
+                                    let can_ban = u["can_ban"].as_bool().unwrap_or(!staff) && viewer_admin;
                                     view! {
                                         <tr class="border-b border-white/5 last:border-0">
                                             <td class="px-4 py-2">
@@ -635,7 +640,7 @@ pub fn ModUsers() -> impl IntoView {
                                             </td>
                                             <td class="px-4 py-2 text-right">
                                                 <div class="flex justify-end gap-1">
-                                                    {if banned { view! {
+                                                    {if banned && viewer_admin { view! {
                                                         <button type="button" class="rounded px-2 py-1 text-xs text-emerald-300 hover:bg-emerald-500/10"
                                                             on:click=move |_| leptos::task::spawn_local(async move {
                                                                 let _ = api::post_empty::<Value>(&format!("/api/v1/moderation/banned-users/{uid}/unban")).await;
@@ -697,6 +702,7 @@ pub fn ModUsers() -> impl IntoView {
 
 #[component]
 pub fn ModUserShow() -> impl IntoView {
+    let auth = use_auth();
     let params = use_params_map();
     let data = RwSignal::new(Value::Null);
     let loading = RwSignal::new(true);
@@ -742,16 +748,17 @@ pub fn ModUserShow() -> impl IntoView {
                             <div class="card p-5">
                                 <div class="mb-3 flex items-center justify-between">
                                     <h2 class="text-lg font-bold text-white">{name}</h2>
-                                    {if banned { view! {
+                                    {let admin = auth.user.get().map(|me| me.is_administrator).unwrap_or(false);
+                                     if banned && admin { view! {
                                         <button type="button" class="rounded-lg border border-emerald-500/30 px-3 py-1.5 text-sm text-emerald-300"
                                             on:click=move |_| leptos::task::spawn_local(async move {
                                                 let _ = api::post_empty::<Value>(&format!("/api/v1/moderation/banned-users/{uid}/unban")).await;
                                                 load();
                                             })>{t("Unban")}</button>
-                                    }.into_any() } else { view! {
+                                    }.into_any() } else if admin { view! {
                                         <button type="button" class="rounded-lg bg-red-500/20 px-3 py-1.5 text-sm text-red-300"
                                             on:click=move |_| show_ban.set(true)>{t("Ban")}</button>
-                                    }.into_any() }}
+                                    }.into_any() } else { view! {<span/>}.into_any() }}
                                 </div>
                                 <dl class="space-y-1 text-sm">
                                     <div class="flex justify-between"><dt class="text-white/50">"ID"</dt><dd class="text-white">{uid}</dd></div>
