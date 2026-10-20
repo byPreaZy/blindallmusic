@@ -115,7 +115,8 @@ impl Realtime {
                     Self::send_raw(&ws2, &json!({"op": "subscribe", "channel": ch}));
                 }
                 if inner.ever_connected.replace(true) {
-                    for cb in inner.reconnect_hooks.borrow().iter() {
+                    let hooks = inner.reconnect_hooks.borrow().clone();
+                    for cb in hooks {
                         cb();
                     }
                 }
@@ -143,7 +144,10 @@ impl Realtime {
                             (channel.to_string(), event.to_string()),
                             (channel.to_string(), "*".to_string()),
                         ] {
-                            if let Some(cbs) = inner.listeners.borrow().get(&key) {
+                            // Snapshot the vec before dispatch: a callback may
+                            // listen()/leave() (mutate this map) while handling.
+                            let cbs = inner.listeners.borrow().get(&key).cloned();
+                            if let Some(cbs) = cbs {
                                 for cb in cbs {
                                     cb(data);
                                 }
@@ -154,7 +158,8 @@ impl Realtime {
                         let channel = v["channel"].as_str().unwrap_or_default();
                         let kind = v["kind"].as_str().unwrap_or_default();
                         let users: Vec<Value> = v["users"].as_array().cloned().unwrap_or_default();
-                        if let Some(cbs) = inner.presence.borrow().get(channel) {
+                        let cbs = inner.presence.borrow().get(channel).cloned();
+                        if let Some(cbs) = cbs {
                             for cb in cbs {
                                 cb(kind, &users);
                             }
