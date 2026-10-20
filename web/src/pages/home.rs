@@ -36,6 +36,18 @@ fn note_icon(cls: &'static str) -> impl IntoView {
     }
 }
 
+/// Per-game accent gradient for the minigames catalog icon tiles.
+fn minigame_tile(ty: &str) -> &'static str {
+    match ty {
+        "quiz" => "from-teal-400 to-cyan-500",
+        "who_sang" => "from-purple-500 to-fuchsia-600",
+        "anagram" => "from-yellow-400 to-amber-600",
+        "first_letter" => "from-blue-600 to-blue-800",
+        "album_cover" => "from-violet-500 to-purple-800",
+        _ => "from-brand-deep to-brand-midnight",
+    }
+}
+
 /// Per-game icon for the minigames catalog cards — real SVGs (OS emojis
 /// render inconsistently and looked cheap).
 fn minigame_icon(ty: &str) -> impl IntoView {
@@ -1203,7 +1215,7 @@ pub fn HomePage() -> impl IntoView {
                                                         view! {
                                                             <A href=format!("/minigames/{}", ty.replace('_', "-")) attr:class="game-card group flex flex-col">
                                                                 <div class="flex aspect-[16/9] items-center justify-center bg-gradient-to-br from-brand-deep to-brand-midnight">
-                                                                    <div class="flex h-16 w-16 items-center justify-center rounded-xl bg-brand-midnight/80 text-brand-secondary ring-1 ring-white/15 transition duration-200 group-hover:scale-110" aria-hidden="true">
+                                                                    <div class=format!("flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br {} text-white shadow-lg ring-1 ring-white/20 transition duration-200 group-hover:scale-110", minigame_tile(&ty)) aria-hidden="true">
                                                                         {minigame_icon(&ty)}
                                                                     </div>
                                                                 </div>
