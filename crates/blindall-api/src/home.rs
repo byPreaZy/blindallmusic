@@ -232,7 +232,8 @@ pub async fn index(
         minigame_items = crate::minigames::games_list(&state, user.0.as_ref().map(|u| u.id)).await;
     }
     let catalog_items = if tab == "minigames" {
-        json!({"data": minigame_items, "total": minigame_items.len(), "current_page": 1, "last_page": 1})
+        let posters = state.minigames.random_artworks(18).await;
+        json!({"data": minigame_items, "posters": posters, "total": minigame_items.len(), "current_page": 1, "last_page": 1})
     } else {
         json!({
             "data": data,

@@ -3,6 +3,7 @@ use crate::auth::use_auth;
 use crate::components::answer_input::AnswerInput;
 use crate::components::answers_grid::{apply_track_voted, PlaylistPanel};
 use crate::components::chat::RoomChat;
+use crate::components::minigame::{MINIGAME_TYPES, game_name};
 use crate::components::navbar::Spinner;
 use crate::components::player::Player;
 use crate::components::ranking::RankingPanel;
@@ -1742,12 +1743,14 @@ fn PartyPanel(
     feedback: RwSignal<Option<Value>>,
 ) -> impl IntoView {
     let answering = RwSignal::new(false);
+    let ptype = RwSignal::new("quiz".to_string());
 
     let start_party = move |_| {
+        let game_type = ptype.get_untracked();
         leptos::task::spawn_local(async move {
             let _ = api::post::<Value, _>(
                 &format!("/api/v1/rooms/{room_id}/party/start"),
-                &json!({"game_type": "quiz", "count": 10}),
+                &json!({"game_type": game_type, "count": 10}),
             )
             .await;
         });
@@ -1784,18 +1787,30 @@ fn PartyPanel(
             let Some(p) = party.get() else {
                 // no party running — hosts see a start button
                 return can_host.get().then(|| view! {
-                    <div class="mb-4 flex items-center justify-between rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-3">
-                        <div>
-                            <p class="font-bold text-purple-200">{t("Party quiz")}</p>
-                            <p class="text-xs text-white/50">{t("10 questions for everyone in the room, same time.")}</p>
+                    <div class="mb-4 rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-3">
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <p class="font-bold text-purple-200">{t("Party quiz")}</p>
+                                <p class="text-xs text-white/50">{t("10 questions for everyone in the room, same time.")}</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <select class="rounded-lg border border-white/10 bg-neutral-900 px-2 py-1.5 text-xs text-white"
+                                    prop:value=ptype
+                                    on:change=move |ev| ptype.set(event_target_value(&ev))>
+                                    {MINIGAME_TYPES.into_iter().map(|ty| view! {
+                                        <option value=ty>{t(game_name(ty))}</option>
+                                    }).collect::<Vec<_>>()}
+                                </select>
+                                <button type="button" class="btn-primary text-sm" on:click=start_party>
+                                    {t("Start party")}
+                                </button>
+                            </div>
                         </div>
-                        <button type="button" class="btn-primary text-sm" on:click=start_party>
-                            {t("Start party")}
-                        </button>
                     </div>
                 }.into_any());
             };
             let phase = p["phase"].as_str().unwrap_or("").to_string();
+            let gtype = p["game_type"].as_str().unwrap_or("quiz").to_string();
             let idx = p["idx"].as_i64().unwrap_or(0);
             let total = p["total"].as_i64().unwrap_or(0);
             let ends = p["ends_at"].as_i64().unwrap_or(0);
@@ -1821,7 +1836,7 @@ fn PartyPanel(
                 <div class="mb-4 rounded-xl border-2 border-purple-500/30 bg-neutral-900/80 p-4">
                     <div class="mb-3 flex items-center justify-between">
                         <p class="text-sm font-black uppercase tracking-wider text-purple-300">
-                            {t("Party quiz")}" · "{idx + 1}"/"{total}
+                            {t("Party")}" · "{t(game_name(&gtype))}" · "{idx + 1}"/"{total}
                         </p>
                         <div class="flex items-center gap-2">
                             <span class="font-mono text-xs text-white/40">
@@ -1872,7 +1887,7 @@ fn PartyPanel(
                             view! {
                                 <crate::pages::duels::QuestionView
                                     q=q
-                                    game_type="quiz".to_string()
+                                    game_type=gtype.clone()
                                     disabled=answering.get()
                                     on_answer=submit/>
                             }.into_any()

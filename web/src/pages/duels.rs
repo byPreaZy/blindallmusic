@@ -1,21 +1,11 @@
 use crate::api;
 use crate::auth::use_auth;
+use crate::components::minigame::game_name;
 use crate::i18n::t;
 use leptos::prelude::*;
 use leptos_router::components::A;
-use leptos_router::hooks::use_params_map;
+use leptos_router::hooks::{use_params_map, use_query_map};
 use serde_json::{json, Value};
-
-fn game_name(ty: &str) -> &'static str {
-    match ty {
-        "quiz" => "Quiz",
-        "who_sang" => "Qui a chanté ?",
-        "album_cover" => "Pochette",
-        "first_letter" => "Première lettre",
-        "anagram" => "Anagramme",
-        _ => "Mini-jeu",
-    }
-}
 
 /// Wordle-style 🟩🟥 grid from a player's stored answers ({idx, correct}).
 fn answers_grid(answers: &[Value]) -> String {
@@ -155,8 +145,19 @@ pub fn DuelsPage() -> impl IntoView {
     let loading = RwSignal::new(true);
     let error = RwSignal::new(Option::<String>::None);
 
-    // create form
-    let new_type = RwSignal::new("quiz".to_string());
+    // create form — ?type= pre-selects the game (linked from each game page)
+    let initial_type = use_query_map()
+        .get_untracked()
+        .get("type")
+        .unwrap_or_default()
+        .replace('-', "_");
+    let new_type = RwSignal::new(
+        if crate::components::minigame::MINIGAME_TYPES.contains(&initial_type.as_str()) {
+            initial_type
+        } else {
+            "quiz".to_string()
+        },
+    );
     let opponent_name = RwSignal::new(String::new());
     let suggestions = RwSignal::new(Vec::<Value>::new());
     let creating = RwSignal::new(false);
@@ -260,7 +261,7 @@ pub fn DuelsPage() -> impl IntoView {
                     <select class="rounded-lg border border-white/10 bg-neutral-900 px-4 py-2.5 text-sm text-white"
                         prop:value=new_type
                         on:change=move |ev| new_type.set(event_target_value(&ev))>
-                        {["quiz", "who_sang", "album_cover", "first_letter", "anagram"].into_iter().map(|ty| view! {
+                        {crate::components::minigame::MINIGAME_TYPES.into_iter().map(|ty| view! {
                             <option value=ty>{t(game_name(ty))}</option>
                         }).collect::<Vec<_>>()}
                     </select>

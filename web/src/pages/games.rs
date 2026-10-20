@@ -1,5 +1,6 @@
 use crate::api;
 use crate::auth::use_auth;
+use crate::components::minigame::{minigame_icon, minigame_tile};
 use crate::i18n::t;
 use leptos::prelude::*;
 use leptos_router::components::A;
@@ -49,13 +50,22 @@ pub fn GamesIndexPage() -> impl IntoView {
     crate::seo::set_meta("name", "keywords", t("Mini-games meta keywords"));
     let auth = use_auth();
     let games = RwSignal::new(Vec::<Value>::new());
+    let posters = RwSignal::new(Vec::<String>::new());
     let loading = RwSignal::new(true);
 
     // Public catalog — the game list renders for everyone (visitors land
     // here from the navbar; only actually *playing* requires an account).
     leptos::task::spawn_local(async move {
         match api::get::<Value>("/api/v1/minigames").await {
-            Ok(v) => games.set(v["games"].as_array().cloned().unwrap_or_default()),
+            Ok(v) => {
+                games.set(v["games"].as_array().cloned().unwrap_or_default());
+                posters.set(
+                    v["posters"]
+                        .as_array()
+                        .map(|a| a.iter().filter_map(|p| p.as_str().map(str::to_string)).collect())
+                        .unwrap_or_default(),
+                );
+            }
             Err(_) => {}
         }
         loading.set(false);
@@ -79,13 +89,19 @@ pub fn GamesIndexPage() -> impl IntoView {
                 </p>
             </header>
 
-            <A href="/duels" attr:class="group mb-6 flex items-center justify-between rounded-2xl border-2 border-purple-500/30 bg-gradient-to-r from-purple-600/20 to-neutral-800/80 p-5 shadow-xl transition hover:border-purple-400/60">
+            <A href="/duels" attr:class="group mb-4 flex items-center justify-between rounded-2xl border-2 border-purple-500/30 bg-gradient-to-r from-purple-600/20 to-neutral-800/80 p-5 shadow-xl transition hover:border-purple-400/60">
                 <div>
                     <p class="text-lg font-black uppercase tracking-wider text-purple-300">{t("Multiplayer")}</p>
-                    <p class="text-sm text-neutral-400">{t("Duels against other players + the daily challenge.")}</p>
+                    <p class="text-sm text-neutral-400">{t("All 5 games vs other players: async duels + the daily challenge.")}</p>
                 </div>
                 <span class="rounded-full bg-purple-500/20 px-4 py-2 text-sm font-bold text-purple-300 group-hover:bg-purple-500/30">"→"</span>
             </A>
+            <div class="mb-6 flex items-center gap-3 rounded-xl border border-teal-500/20 bg-teal-500/5 px-4 py-3 text-sm text-teal-200/80">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-5 w-5 flex-shrink-0 text-teal-300" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg>
+                <p>
+                    {t("Live multiplayer: inside any room, the owner or a moderator can start a real-time party of any of these games for everyone present.")}
+                </p>
+            </div>
 
             <Show when=move || auth.ready.get() && auth.user.get().map(|u| u.is_guest).unwrap_or(true) && !loading.get()>
                 <div class="mb-6 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">
@@ -94,15 +110,26 @@ pub fn GamesIndexPage() -> impl IntoView {
             </Show>
 
             <ul class="flex flex-col gap-5">
-                {["quiz", "who_sang", "anagram", "first_letter", "album_cover"].into_iter().map(|ty| {
+                {["quiz", "who_sang", "anagram", "first_letter", "album_cover"].into_iter().enumerate().map(|(i, ty)| {
                     let ty_s = ty.to_string();
                     let (name, desc) = game_meta(ty);
                     view! {
                         <li>
                             <A href=format!("/minigames/{}", ty.replace('_', "-"))
-                                attr:class="group block overflow-hidden rounded-2xl border-2 border-neutral-700/60 bg-neutral-800/70 shadow-xl ring-1 ring-neutral-600/30 transition-all duration-200 hover:-translate-y-1 hover:border-teal-500/50 hover:ring-teal-500/30">
-                                <div class="flex flex-row items-center gap-5 p-6">
-                                    <div class="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-xl border-2 border-teal-500/30 bg-gradient-to-br from-teal-500/40 to-cyan-500/30 text-3xl text-white shadow-[0_0_20px_rgba(20,184,166,0.2)]" aria-hidden="true">"▶"</div>
+                                attr:class="group relative block overflow-hidden rounded-2xl border-2 border-neutral-700/60 bg-neutral-800/70 shadow-xl ring-1 ring-neutral-600/30 transition-all duration-200 hover:-translate-y-1 hover:border-teal-500/50 hover:ring-teal-500/30">
+                                <div class="pointer-events-none absolute inset-y-0 right-0 grid w-1/3 grid-cols-3 opacity-15" aria-hidden="true">
+                                    {move || {
+                                        let all = posters.get();
+                                        if all.is_empty() { return Vec::new(); }
+                                        (0..3).map(|k| view! {
+                                            <img src=all[(i * 3 + k) % all.len()].clone() class="h-full w-full object-cover" alt="" loading="lazy"/>
+                                        }).collect()
+                                    }}
+                                </div>
+                                <div class="relative flex flex-row items-center gap-5 p-6">
+                                    <div class=format!("flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br {} text-white shadow-lg" , minigame_tile(ty)) aria-hidden="true">
+                                        {minigame_icon(ty)}
+                                    </div>
                                     <div class="min-w-0 flex-1">
                                         <h2 class="text-xl font-black text-neutral-100 transition-colors group-hover:text-teal-400">
                                             {t(name)}
@@ -397,7 +424,7 @@ pub fn GamePlayPage() -> impl IntoView {
                             {t("Back")}
                         </A>
                     </div>
-                    <A href="/duels" attr:class="group mt-4 flex items-center justify-between rounded-xl border border-purple-500/30 bg-purple-600/10 px-4 py-3 transition hover:border-purple-400/60">
+                    <A href=format!("/duels?type={}", game_type.get_untracked()) attr:class="group mt-4 flex items-center justify-between rounded-xl border border-purple-500/30 bg-purple-600/10 px-4 py-3 transition hover:border-purple-400/60">
                         <span class="text-sm font-bold text-purple-300">{t("Play this game against a friend")}</span>
                         <span class="text-purple-300 group-hover:translate-x-0.5 transition">"→"</span>
                     </A>

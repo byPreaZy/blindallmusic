@@ -68,7 +68,8 @@ fn expired_question() -> Response {
 pub async fn index(State(state): State<AppState>, OptionalUser(user): OptionalUser) -> Response {
     let uid = user.filter(|u| !u.is_guest).map(|u| u.id);
     Json(json!({
-        "games": games_list(&state, uid).await
+        "games": games_list(&state, uid).await,
+        "posters": state.minigames.random_artworks(18).await,
     }))
     .into_response()
 }

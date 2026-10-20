@@ -128,8 +128,21 @@ async fn minigames_list_is_public_but_play_requires_member() {
     for g in &games {
         assert_eq!(g["score"].as_i64().unwrap_or(-1), 0);
     }
+    // Decorative poster urls for card backgrounds ship publicly too.
+    assert!(
+        r.body["posters"]
+            .as_array()
+            .map(|p| p
+                .iter()
+                .all(|u| u.as_str().is_some_and(|s| s.starts_with("http"))))
+            .unwrap_or(false),
+        "posters array of artwork urls: {}",
+        r.text
+    );
     // …but actually playing still requires a registered account.
-    let r = Client::anon().post_empty("/api/v1/minigames/quiz/next").await;
+    let r = Client::anon()
+        .post_empty("/api/v1/minigames/quiz/next")
+        .await;
     assert_eq!(r.status, StatusCode::UNAUTHORIZED);
 }
 

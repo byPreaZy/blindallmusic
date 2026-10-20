@@ -153,6 +153,20 @@ impl MinigameRepo {
         .await
     }
 
+    /// Decorative album covers for catalog card backgrounds — fresh
+    /// validation is not required (a dead cover just renders as an empty
+    /// cell behind the card gradient), only the http(s) shape matters.
+    pub async fn random_artworks(&self, limit: i64) -> Vec<String> {
+        sqlx::query_scalar(
+            "SELECT artwork_url FROM tracks \
+             WHERE artwork_url ~ '^https?://' ORDER BY RANDOM() LIMIT $1",
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .unwrap_or_default()
+    }
+
     pub async fn totals_for_user(&self, user_id: i64) -> Result<Vec<(String, i64)>, sqlx::Error> {
         sqlx::query(
             "SELECT game_type, CAST(COALESCE(SUM(score),0) AS bigint) AS total FROM minigame_scores \
@@ -211,13 +225,14 @@ impl MinigameRepo {
         limit: i64,
     ) -> Result<Vec<serde_json::Value>, sqlx::Error> {
         sqlx::query(
-            // Solo leaderboard only: duel & daily answers are scored in their
-            // own tables (duels, daily leaderboard) and marked in metadata —
-            // counting them here would let an oracle/alt farm the solo board.
+            // Solo leaderboard only: duel, daily & party answers are scored in
+            // their own contexts and marked in metadata — counting them here
+            // would let an oracle/alt farm the solo board.
             "SELECT m.user_id, u.name, CAST(SUM(m.score) AS bigint) AS total FROM minigame_scores m \
              JOIN users u ON u.id = m.user_id WHERE m.game_type = $1 \
              AND u.is_guest = false AND u.deleted_at IS NULL \
              AND NOT (m.metadata ? 'duel_id') AND NOT (m.metadata ? 'daily') \
+             AND NOT (m.metadata ? 'party') \
              GROUP BY m.user_id, u.name ORDER BY total DESC LIMIT $2",
         )
         .bind(game_type)

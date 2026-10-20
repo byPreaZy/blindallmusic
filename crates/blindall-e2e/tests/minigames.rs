@@ -478,6 +478,41 @@ async fn party_lifecycle_and_guards() {
     assert_eq!(r.status, StatusCode::NOT_FOUND);
 }
 
+/// Every minigame type is a valid realtime party mode: the host picks the
+/// type at start and all participants get that game's questions.
+#[tokio::test]
+async fn party_supports_all_game_types() {
+    let (owner, _) = Client::register("pty5").await;
+    let (room_id, _pl, _t) = game_fixture(&owner, &[]).await;
+    owner
+        .get(&format!("/api/v1/rooms/{room_id}"))
+        .await
+        .expect_ok("visit");
+    owner
+        .get(&format!("/api/v1/rooms/{room_id}/joined"))
+        .await
+        .expect_ok("join");
+
+    for ty in ["quiz", "who_sang", "album_cover", "first_letter", "anagram"] {
+        owner
+            .post(
+                &format!("/api/v1/rooms/{room_id}/party/start"),
+                json!({"game_type": ty, "count": 3}),
+            )
+            .await
+            .expect_ok(&format!("start {ty}"));
+        let s = owner
+            .get(&format!("/api/v1/rooms/{room_id}/party"))
+            .await
+            .expect_ok("show");
+        assert_eq!(s.json("/game_type"), ty, "{ty}");
+        owner
+            .post(&format!("/api/v1/rooms/{room_id}/party/stop"), json!({}))
+            .await
+            .expect_ok("stop");
+    }
+}
+
 // ---- media validity & distractor quality (regressions) ------------------------
 
 /// Regression for "question N has no music" + "album cover shows no cover":
