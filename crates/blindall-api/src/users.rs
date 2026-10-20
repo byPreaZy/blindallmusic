@@ -122,26 +122,6 @@ pub async fn update(
                 .collect::<String>()
         })
         .filter(|t| !t.is_empty());
-    // custom_tag is a Plus perk — clearing it or keeping the existing one
-    // stays free; only setting/changing it requires Plus.
-    if tag.is_some() && !user.is_administrator {
-        let current = state
-            .auth
-            .custom_tag_of(id)
-            .await
-            .ok()
-            .flatten()
-            .unwrap_or_default();
-        if tag.as_deref() != Some(current.as_str())
-            && !crate::billing::is_plus(&state, user.id).await
-        {
-            return (
-                StatusCode::FORBIDDEN,
-                Json(json!({"error": "plus_required", "field": "custom_tag"})),
-            )
-                .into_response();
-        }
-    }
     if let Err(_) = state.auth.update_custom_tag(id, tag.as_deref()).await {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
@@ -361,9 +341,6 @@ pub async fn me(State(state): State<AppState>, CurrentUser(user): CurrentUser) -
             "donor_perks": perks,
             "is_supporter": is_supporter,
             "is_administrator": user.is_administrator,
-            "plans": crate::billing::entitlements(&state, user.id).await,
-            "is_plus": crate::billing::is_plus(&state, user.id).await,
-            "is_pro": crate::billing::is_pro(&state, user.id).await,
             "custom_tag": state
                 .auth
                 .custom_tag_of(user.id)

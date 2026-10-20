@@ -57,8 +57,6 @@ pub struct AppState {
     pub hidden_category_ids: Vec<i64>,
     pub donations_repo: blindall_db::DonationRepo,
     pub donations: crate::donations::DonationsConfig,
-    pub subscriptions: blindall_db::SubscriptionRepo,
-    pub billing: crate::billing::BillingConfig,
     pub adsense_client: String,
     pub adsense_slot: String,
     pub chat_reaction_emojis: Vec<String>,

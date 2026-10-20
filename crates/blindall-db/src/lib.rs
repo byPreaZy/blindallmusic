@@ -19,7 +19,6 @@ pub mod rankings;
 pub mod rooms;
 pub mod seasons;
 pub mod seo;
-pub mod subscriptions;
 pub mod teams;
 pub mod votes;
 
@@ -42,7 +41,6 @@ pub use rankings::RankingsRepo;
 pub use rooms::{RoomOptions, RoomRepo, RoomRow};
 pub use seasons::SeasonRepo;
 pub use seo::SeoRepo;
-pub use subscriptions::SubscriptionRepo;
 pub use teams::{TEAM_SEATS, TeamRepo, TeamRow};
 pub use votes::VoteRepo;
 

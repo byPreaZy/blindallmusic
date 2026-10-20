@@ -216,12 +216,6 @@ pub fn SettingsPage() -> impl IntoView {
                                             {t("Supporter")}
                                         </span>
                                     })}
-                                {move || account.get()["account"]["is_plus"].as_bool().unwrap_or(false)
-                                    .then(|| view! {
-                                        <span class="inline-flex items-center gap-1 rounded-full border border-brand-accent/50 bg-brand-accent/15 px-2 py-0.5 text-[10px] font-semibold text-brand-accent" title="Blind'All Plus">
-                                            "★ Plus"
-                                        </span>
-                                    })}
                             </h2>
                             <p class="text-sm text-white/55">{move || account.get()["account"]["email"].as_str().unwrap_or("").to_string()}</p>
                             <p class="text-xs text-white/40">
@@ -266,28 +260,12 @@ pub fn SettingsPage() -> impl IntoView {
                                 on:input=move |ev| email.set(event_target_value(&ev))/>
                         </div>
                         <div>
-                            <label class="mb-1 flex items-center gap-2 text-sm text-white/60">
-                                {t("Custom tag")}
-                                <span class="rounded-full border border-brand-accent/40 bg-brand-accent/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-brand-accent">"Plus"</span>
-                            </label>
-                            <Show
-                                when=move || account.get()["account"]["is_plus"].as_bool().unwrap_or(false)
-                                    || account.get()["account"]["is_administrator"].as_bool().unwrap_or(false)
-                                fallback=move || view! {
-                                    <div class="rounded-lg border border-brand-accent/20 bg-brand-accent/5 px-3 py-2.5">
-                                        <p class="text-xs text-white/50">{t("Custom tag is a Plus perk")}</p>
-                                        <A href="/pricing" attr:class="mt-1 inline-block text-xs font-semibold text-brand-accent hover:underline">
-                                            {t("Discover Plus")}" →"
-                                        </A>
-                                    </div>
-                                }
-                            >
-                                <input type="text" maxlength="24"
-                                    class="w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white outline-none focus:border-brand-accent/50"
-                                    prop:value=tag
-                                    on:input=move |ev| tag.set(event_target_value(&ev))/>
-                                <p class="mt-1 text-xs text-white/40">{t("Custom tag help")}</p>
-                            </Show>
+                            <label class="mb-1 block text-sm text-white/60">{t("Custom tag")}</label>
+                            <input type="text" maxlength="24"
+                                class="w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white outline-none focus:border-brand-accent/50"
+                                prop:value=tag
+                                on:input=move |ev| tag.set(event_target_value(&ev))/>
+                            <p class="mt-1 text-xs text-white/40">{t("Custom tag help")}</p>
                         </div>
                         <button type="submit" class="btn-primary">{t("Save")}</button>
                     </form>

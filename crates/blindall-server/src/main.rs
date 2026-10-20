@@ -232,11 +232,6 @@ async fn main() -> anyhow::Result<()> {
             cfg.stripe_webhook_secret = std::env::var("STRIPE_WEBHOOK_SECRET").unwrap_or_default();
             cfg
         },
-        subscriptions: blindall_db::SubscriptionRepo::new(pool.clone()),
-        billing: blindall_api::billing::BillingConfig {
-            plus_payment_url: std::env::var("STRIPE_PLUS_PAYMENT_URL").unwrap_or_default(),
-            pro_payment_url: std::env::var("STRIPE_PRO_PAYMENT_URL").unwrap_or_default(),
-        },
         adsense_client: std::env::var("ADSENSE_CLIENT_ID").unwrap_or_default(),
         adsense_slot: std::env::var("ADSENSE_SLOT").unwrap_or_default(),
         spa_dir: std::env::var("SPA_DIR")

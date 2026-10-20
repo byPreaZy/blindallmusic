@@ -102,29 +102,10 @@ pub async fn stripe_webhook(
     let Ok(event) = serde_json::from_slice::<Value>(&body) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
-    match event["type"].as_str() {
-        Some("checkout.session.completed") => {
-            let session = &event["data"]["object"];
-            // Payment Links: mode "subscription" → Plus/Pro; mode "payment" → donation.
-            let r = if session["mode"].as_str() == Some("subscription") {
-                crate::billing::record_session(&state, session).await
-            } else {
-                record_session(&state, session).await.map(|_| ())
-            };
-            if let Err(r) = r {
-                return r;
-            }
+    if event["type"].as_str() == Some("checkout.session.completed") {
+        if let Err(r) = record_session(&state, &event["data"]["object"]).await {
+            return r;
         }
-        Some("customer.subscription.created")
-        | Some("customer.subscription.updated")
-        | Some("customer.subscription.deleted") => {
-            if let Err(r) =
-                crate::billing::sync_subscription(&state, &event["data"]["object"]).await
-            {
-                return r;
-            }
-        }
-        _ => {}
     }
     Json(json!({"received": true})).into_response()
 }

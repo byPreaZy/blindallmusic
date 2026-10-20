@@ -246,7 +246,6 @@ fn UserDropdown() -> impl IntoView {
                 <div class="fixed inset-0 z-40" on:click=move |_| open.set(false)/>
                 <ul class="absolute right-0 z-50 mt-2 w-48 rounded-xl border border-white/10 bg-surface-raised py-1 shadow-2xl">
                     {link("/me".into(), "My account")}
-                    {link("/pricing".into(), "Plus & Pro")}
                     {link("/teams".into(), "Teams")}
                     {link("/rooms".into(), "Rooms")}
                     {link("/playlists".into(), "Playlists")}

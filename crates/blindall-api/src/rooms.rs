@@ -915,22 +915,6 @@ pub async fn store(
     {
         return validation("category_id", "The selected category id is invalid.");
     }
-    // Plus perk "unlimited private rooms": free accounts cap at 3 active rooms.
-    const FREE_ROOM_LIMIT: i64 = 3;
-    if !user.is_administrator
-        && !crate::billing::is_plus(&state, user.id).await
-        && state.rooms.owned_active_count(user.id).await.unwrap_or(0) >= FREE_ROOM_LIMIT
-    {
-        return (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            Json(json!({
-                "error": "plus_required",
-                "field": "rooms",
-                "message": "Limite de 3 rooms actives — Blind'All Plus pour en créer sans limite.",
-            })),
-        )
-            .into_response();
-    }
     match state.rooms.create(user.id, name, body.category_id).await {
         Ok(id) => {
             state
@@ -1092,23 +1076,6 @@ pub async fn update_options(
             "venue_name",
             "The venue name field must be at most 80 characters.",
         );
-    }
-    // Venue branding is a Pro (B2B) perk — setting or changing it requires an
-    // active Pro subscription on the room owner; clearing/keeping is free.
-    if venue_name.is_some()
-        && venue_name != room.venue_name
-        && !user.is_administrator
-        && !crate::billing::is_pro(&state, room.user_id).await
-    {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({
-                "error": "pro_required",
-                "field": "venue_name",
-                "message": "Le branding du lieu nécessite Blind'All Pro.",
-            })),
-        )
-            .into_response();
     }
     let options = RoomOptions {
         password: body.password,
