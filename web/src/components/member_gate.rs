@@ -15,14 +15,7 @@ pub fn MemberGate(
     children: ChildrenFn,
 ) -> impl IntoView {
     let auth = use_auth();
-    let allowed = move || {
-        auth.ready.get()
-            && auth
-                .user
-                .get()
-                .map(|u| !u.is_guest)
-                .unwrap_or(false)
-    };
+    let allowed = move || auth.ready.get() && auth.user.get().map(|u| !u.is_guest).unwrap_or(false);
     view! {
         <Show when=allowed fallback=move || view! {
             <div class="mx-auto max-w-md px-4 py-16 text-center">

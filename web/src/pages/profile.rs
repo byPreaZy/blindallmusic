@@ -1144,4 +1144,3 @@ fn MinigamesTab(data: RwSignal<Value>, profile_id: String) -> impl IntoView {
         }}
     }
 }
-

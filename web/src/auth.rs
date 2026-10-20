@@ -148,12 +148,7 @@ pub fn require_registered(auth: Auth) {
 /// True once the session is resolved and belongs to a registered user
 /// (not anonymous, not guest).
 pub fn is_member(auth: Auth) -> bool {
-    auth.ready.get()
-        && auth
-            .user
-            .get()
-            .map(|u| !u.is_guest)
-            .unwrap_or(false)
+    auth.ready.get() && auth.user.get().map(|u| !u.is_guest).unwrap_or(false)
 }
 
 /// Run `f` as soon as the session is known — but only for registered
