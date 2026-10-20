@@ -931,6 +931,8 @@ fn en<'a>(key: &'a str) -> &'a str {
         "Games played" => "Games played",
         "Wins" => "Wins",
         "Win rate" => "Win rate",
+        "Plus subscribed thanks" => "Welcome to Blind'All Plus! Your perks are now active.",
+        "Pro subscribed thanks" => "Welcome to Blind'All Pro! Your venue features are now active.",
         k => k,
     }
 }
@@ -1888,6 +1890,8 @@ fn es<'a>(key: &'a str) -> &'a str {
         "Games played" => "Partidas jugadas",
         "Wins" => "Victorias",
         "Win rate" => "Tasa de victoria",
+        "Plus subscribed thanks" => "¡Bienvenido a Blind'All Plus! Tus ventajas ya están activas.",
+        "Pro subscribed thanks" => "¡Bienvenido a Blind'All Pro! Tus funciones de local ya están activas.",
         k => k,
     }
 }
@@ -2844,6 +2848,8 @@ fn fr<'a>(key: &'a str) -> &'a str {
         "Games played" => "Parties jouées",
         "Wins" => "Victoires",
         "Win rate" => "Taux de victoire",
+        "Plus subscribed thanks" => "Bienvenue dans Blind'All Plus ! Vos avantages sont actifs.",
+        "Pro subscribed thanks" => "Bienvenue dans Blind'All Pro ! Vos fonctions lieu sont actives.",
         k => k,
     }
 }

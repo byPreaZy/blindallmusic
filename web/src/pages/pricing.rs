@@ -9,6 +9,10 @@ pub fn PricingPage() -> impl IntoView {
     crate::i18n::set_title_key("Pricing");
     let data = RwSignal::new(Value::Null);
     let loading = RwSignal::new(true);
+    let subscribed = leptos_router::hooks::use_query_map()
+        .get_untracked()
+        .get("subscribed")
+        .filter(|p| ["plus", "pro"].contains(&p.as_str()));
 
     leptos::task::spawn_local(async move {
         if let Ok(v) = api::get::<Value>("/api/v1/billing/plans").await {
@@ -71,6 +75,12 @@ pub fn PricingPage() -> impl IntoView {
                 <h1 class="retro-title retro-title--white mb-2 text-3xl">{t("Pricing")}</h1>
                 <p class="text-white/60">{t("Pricing intro")}</p>
             </div>
+
+            {subscribed.map(|p| view! {
+                <div class="mb-6 rounded-xl border border-teal-400/40 bg-teal-500/15 px-4 py-3 text-center text-sm font-semibold text-teal-200">
+                    {if p == "pro" { t("Pro subscribed thanks") } else { t("Plus subscribed thanks") }}
+                </div>
+            })}
 
             <Show
                 when=move || !loading.get()
