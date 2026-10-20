@@ -721,8 +721,7 @@ pub fn RoomPage() -> impl IntoView {
             // may have been missed). Same fallback here.
             if let Some(rid) = e["round"]["id"].as_i64() {
                 let _ = leptos::task::spawn_local(async move {
-                    if let Ok(v) =
-                        api::get::<Value>(&format!("/api/v1/rounds/{rid}/scores")).await
+                    if let Ok(v) = api::get::<Value>(&format!("/api/v1/rounds/{rid}/scores")).await
                     {
                         scores.set(parse_scores(&v["scores"]));
                     }

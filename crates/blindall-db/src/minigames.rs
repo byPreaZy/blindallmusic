@@ -902,6 +902,88 @@ impl MinigameRepo {
             })
             .collect())
     }
+
+    /// Plus perk "revive": wipe today's progress so the daily can be replayed.
+    /// The score/answers ledger in minigame_scores is left untouched — a
+    /// replay is a second run, not a rollback of history.
+    pub async fn reset_daily_progress(
+        &self,
+        user_id: i64,
+        day: chrono::NaiveDate,
+        game_type: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "DELETE FROM minigame_daily_scores
+             WHERE user_id = $1 AND day = $2 AND game_type = $3",
+        )
+        .bind(user_id)
+        .bind(day)
+        .bind(game_type)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Plus perk: advanced stats — answer-type accuracy, podium rate, busiest
+    /// hour — built from round_standings + scores (both already populated).
+    pub async fn advanced_stats(&self, user_id: i64) -> Result<serde_json::Value, sqlx::Error> {
+        let summary = sqlx::query(
+            "SELECT COUNT(*) AS games,
+                    COUNT(*) FILTER (WHERE position = 1) AS wins,
+                    AVG(total_score)::float8 AS avg_score,
+                    AVG(average_response_time)::float8 AS avg_response_time,
+                    SUM(fast_answers_count)::bigint AS fast_answers,
+                    SUM(total_answers_count)::bigint AS total_answers
+             FROM round_standings WHERE user_id = $1",
+        )
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+        let by_type = sqlx::query(
+            "SELECT at.name AS type, COUNT(*) AS found,
+                    AVG(s.score)::float8 AS avg_score,
+                    AVG(s.time)::float8 AS avg_time
+             FROM scores s
+             JOIN track_answers a ON a.id = s.answer_id
+             JOIN answer_types at ON at.id = a.answer_type_id
+             WHERE s.user_id = $1
+             GROUP BY at.name ORDER BY found DESC LIMIT 8",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+        let hours = sqlx::query(
+            "SELECT EXTRACT(HOUR FROM r.created_at)::int AS hour, COUNT(*) AS games
+             FROM round_standings rs JOIN rounds r ON r.id = rs.round_id
+             WHERE rs.user_id = $1
+             GROUP BY 1 ORDER BY games DESC LIMIT 4",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+        use sqlx::Row;
+        let games = summary.get::<i64, _>("games");
+        let wins = summary.get::<i64, _>("wins");
+        Ok(serde_json::json!({
+            "games": games,
+            "wins": wins,
+            "win_rate": if games > 0 { wins as f64 / games as f64 } else { 0.0 },
+            "avg_score": summary.get::<Option<f64>, _>("avg_score").unwrap_or(0.0),
+            "avg_response_time": summary.get::<Option<f64>, _>("avg_response_time").unwrap_or(0.0),
+            "fast_answers": summary.get::<Option<i64>, _>("fast_answers").unwrap_or(0),
+            "total_answers": summary.get::<Option<i64>, _>("total_answers").unwrap_or(0),
+            "by_answer_type": by_type.iter().map(|r| serde_json::json!({
+                "type": r.get::<String, _>("type"),
+                "found": r.get::<i64, _>("found"),
+                "avg_score": r.get::<Option<f64>, _>("avg_score").unwrap_or(0.0),
+                "avg_time": r.get::<Option<f64>, _>("avg_time").unwrap_or(0.0),
+            })).collect::<Vec<_>>(),
+            "peak_hours": hours.iter().map(|r| serde_json::json!({
+                "hour": r.get::<i32, _>("hour"),
+                "games": r.get::<i64, _>("games"),
+            })).collect::<Vec<_>>(),
+        }))
+    }
 }
 
 fn duel_listing(r: &sqlx::postgres::PgRow) -> serde_json::Value {

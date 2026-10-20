@@ -49,6 +49,12 @@ pub struct User {
     pub is_supporter: bool,
     #[serde(default)]
     pub custom_tag: String,
+    #[serde(default)]
+    pub plans: Vec<String>,
+    #[serde(default)]
+    pub is_plus: bool,
+    #[serde(default)]
+    pub is_pro: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]

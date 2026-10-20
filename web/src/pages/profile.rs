@@ -1084,6 +1084,12 @@ fn MinigamesTab(data: RwSignal<Value>, profile_id: String) -> impl IntoView {
             let total = mg["user_total_score"].as_i64().unwrap_or(0);
             view! {
                 <div class="space-y-6">
+                    {move || {
+                        let pid = profile_id.get_value();
+                        let own = use_auth().user.get()
+                            .map(|u| u.id.to_string() == pid).unwrap_or(false);
+                        own.then(|| view! { <AdvancedStatsCard profile_id=pid/> })
+                    }}
                     <div class="flex flex-wrap items-center justify-between gap-3">
                         <p class="text-sm text-white/55">{t("Mini-games scores on profile intro")}</p>
                         <div class="flex flex-wrap items-center gap-3">
@@ -1138,6 +1144,61 @@ fn MinigamesTab(data: RwSignal<Value>, profile_id: String) -> impl IntoView {
                                 </button>
                             </div>
                         })}
+                    </div>
+                </div>
+            }.into_any()
+        }}
+    }
+}
+
+#[component]
+fn AdvancedStatsCard(profile_id: String) -> impl IntoView {
+    let stats = RwSignal::new(Option::<Value>::None);
+    let gated = RwSignal::new(false);
+    leptos::task::spawn_local(async move {
+        match api::get::<Value>(&format!("/api/v1/users/{profile_id}/stats/advanced")).await {
+            Ok(v) => stats.set(Some(v)),
+            Err(e) if e.status == 403 => gated.set(true),
+            Err(_) => {}
+        }
+    });
+    let row = move |label: &'static str, value: String| {
+        view! {
+            <div class="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                <p class="text-[10px] uppercase tracking-wide text-white/45">{t(label)}</p>
+                <p class="text-lg font-black tabular-nums text-white">{value}</p>
+            </div>
+        }
+    };
+    view! {
+        {move || {
+            if gated.get() {
+                return view! {
+                    <div class="rounded-xl border border-brand-accent/25 bg-brand-accent/5 p-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <p class="text-sm font-bold text-white">"★ "{t("Advanced stats")}</p>
+                                <p class="text-xs text-white/55">{t("Advanced stats teaser")}</p>
+                            </div>
+                            <A href="/pricing" attr:class="rounded-lg border border-brand-accent/40 px-3 py-1.5 text-xs font-semibold text-brand-accent hover:bg-brand-accent/10">
+                                {t("Discover Plus")}
+                            </A>
+                        </div>
+                    </div>
+                }.into_any();
+            }
+            let Some(s) = stats.get() else {
+                return view! { <div/> }.into_any();
+            };
+            let pct = (s["win_rate"].as_f64().unwrap_or(0.0) * 100.0).round() as i64;
+            view! {
+                <div class="rounded-xl border border-brand-accent/25 bg-gradient-to-br from-brand-deep/60 to-neutral-900 p-4">
+                    <p class="mb-3 text-sm font-bold text-white">"★ "{t("Advanced stats")}</p>
+                    <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        {row("Games played", s["games"].as_i64().unwrap_or(0).to_string())}
+                        {row("Wins", s["wins"].as_i64().unwrap_or(0).to_string())}
+                        {row("Win rate", format!("{pct}%"))}
+                        {row("Avg. response time", format!("{:.1}s", s["avg_response_time"].as_f64().unwrap_or(0.0)))}
                     </div>
                 </div>
             }.into_any()

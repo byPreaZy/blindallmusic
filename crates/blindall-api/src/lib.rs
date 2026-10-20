@@ -4,6 +4,7 @@ pub mod auth_reset;
 pub mod auth_session;
 pub mod authz;
 pub mod avatar;
+pub mod billing;
 pub mod category_content;
 pub mod chat;
 pub mod content;
@@ -388,6 +389,16 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/v1/users/{id}/donations",
             get(donations::user_donations),
+        )
+        .route("/api/v1/billing", get(billing::billing))
+        .route("/api/v1/billing/plans", get(billing::plans_public))
+        .route(
+            "/api/v1/daily-challenge/revive",
+            post(billing::daily_revive),
+        )
+        .route(
+            "/api/v1/users/{id}/stats/advanced",
+            get(billing::stats_advanced),
         )
         .route("/api/v1/stripe/webhook", post(donations::stripe_webhook))
         .route("/robots.txt", get(seo::robots))

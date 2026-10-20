@@ -131,6 +131,25 @@ impl Client {
         self.req(Method::POST, path, None).await
     }
 
+    /// Raw-body POST with an extra header — used by the signed Stripe webhook.
+    pub async fn post_raw(&self, path: &str, header: (&str, &str), body: String) -> Resp {
+        let url = format!("{}{}", base(), path);
+        let res = self
+            .http
+            .post(&url)
+            .header("X-Forwarded-For", &self.ip)
+            .header("Content-Type", "application/json")
+            .header(header.0, header.1)
+            .body(body)
+            .send()
+            .await
+            .expect(&format!("request {url}"));
+        let status = res.status();
+        let text = res.text().await.unwrap_or_default();
+        let body = serde_json::from_str(&text).unwrap_or(Value::Null);
+        Resp { status, body, text }
+    }
+
     pub async fn post_file(&self, path: &str, field: &str, filename: &str, bytes: &[u8]) -> Resp {
         let url = format!("{}{}", base(), path);
         let part = reqwest::multipart::Part::bytes(bytes.to_vec())

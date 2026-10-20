@@ -16,3 +16,6 @@ uuid.workspace = true
 futures.workspace = true
 bcrypt.workspace = true
 once_cell.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+hex.workspace = true

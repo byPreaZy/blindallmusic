@@ -26,6 +26,7 @@ use crate::pages::moderation::{
 use crate::pages::pages::StaticPage;
 use crate::pages::playlist_edit::PlaylistEditPage;
 use crate::pages::playlists::{PlaylistCreatePage, PlaylistsPage};
+use crate::pages::pricing::PricingPage;
 use crate::pages::profile::ProfilePage;
 use crate::pages::rankings::RankingsPage;
 use crate::pages::room_forms::{RoomCreatePage, RoomEditPage};
@@ -209,6 +210,8 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/games") view=GamesIndexPage/>
                         <Route path=path!("/games/:type") view=|| view! { <ParamRemount><GamePlayPage/></ParamRemount> }/>
                         <Route path=path!("/donations") view=DonationsPage/>
+                        <Route path=path!("/pricing") view=PricingPage/>
+                        <Route path=path!("/plus") view=PricingPage/>
                         <Route path=path!("/faq") view=FaqRedirect/>
                         <Route path=path!("/user/banned") view=BannedPage/>
                         <Route path=path!("/settings") view=SettingsPage/>

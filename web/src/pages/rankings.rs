@@ -197,10 +197,8 @@ fn PlayersBoard(
     let level_modal = RwSignal::new(Option::<Value>::None);
     let open_level = move |uid: i64| {
         leptos::task::spawn_local(async move {
-            if let Ok(v) = api::get::<Value>(&format!(
-                "/api/v1/rankings/users/{uid}/level-metrics"
-            ))
-            .await
+            if let Ok(v) =
+                api::get::<Value>(&format!("/api/v1/rankings/users/{uid}/level-metrics")).await
             {
                 level_modal.set(Some(v));
             }

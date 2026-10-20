@@ -412,6 +412,14 @@ impl RoomRepo {
         })
     }
 
+    /// Active rooms owned by the user — Plus perk "unlimited private rooms".
+    pub async fn owned_active_count(&self, user_id: i64) -> Result<i64, sqlx::Error> {
+        sqlx::query_scalar("SELECT COUNT(*) FROM rooms WHERE user_id = $1 AND deleted_at IS NULL")
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await
+    }
+
     pub async fn tracks_count(&self, room_id: i64) -> Result<i64, sqlx::Error> {
         sqlx::query_scalar::<_, i64>(
             "SELECT COUNT(DISTINCT t.id) FROM tracks t \

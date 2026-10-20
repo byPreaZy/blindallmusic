@@ -533,7 +533,8 @@ impl ModerationRepo {
         ),
         sqlx::Error,
     > {
-        let mut rooms: std::collections::HashMap<i64, Vec<Value>> = std::collections::HashMap::new();
+        let mut rooms: std::collections::HashMap<i64, Vec<Value>> =
+            std::collections::HashMap::new();
         let mut playlists: std::collections::HashMap<i64, Vec<Value>> =
             std::collections::HashMap::new();
         if ids.is_empty() {

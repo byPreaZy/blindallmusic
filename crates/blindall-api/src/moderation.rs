@@ -434,7 +434,7 @@ pub async fn detach_room_moderator(
                 StatusCode::UNPROCESSABLE_ENTITY,
                 Json(json!({"error": "Moderation moderator room is not public or user is owner."})),
             )
-                .into_response()
+                .into_response();
         }
         Ok(None) => return StatusCode::NOT_FOUND.into_response(),
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
@@ -456,13 +456,11 @@ pub async fn detach_playlist_moderator(
     // PHP: assertPublicPlaylist + assertNotPlaylistOwner
     match state.playlists.find(playlist_id).await {
         Ok(Some(p)) if p.is_public && p.user_id != user_id => {}
-        Ok(Some(_)) => {
-            return (
-                StatusCode::UNPROCESSABLE_ENTITY,
-                Json(json!({"error": "Moderation moderator playlist is not public or user is owner."})),
-            )
-                .into_response()
-        }
+        Ok(Some(_)) => return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(json!({"error": "Moderation moderator playlist is not public or user is owner."})),
+        )
+            .into_response(),
         Ok(None) => return StatusCode::NOT_FOUND.into_response(),
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }

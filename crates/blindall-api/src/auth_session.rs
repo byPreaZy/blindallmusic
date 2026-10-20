@@ -133,6 +133,18 @@ pub(crate) async fn enriched_user_json(
             .flatten()
             .unwrap_or_default()
     );
+    let plans = crate::billing::entitlements(state, u.id).await;
+    base["plans"] = json!(plans);
+    base["is_plus"] = json!(
+        plans
+            .iter()
+            .any(|p| p == blindall_db::subscriptions::PLAN_PLUS)
+    );
+    base["is_pro"] = json!(
+        plans
+            .iter()
+            .any(|p| p == blindall_db::subscriptions::PLAN_PRO)
+    );
     let snap = state.levels.snapshot(u.id).await;
     base["level"] = snap
         .as_ref()

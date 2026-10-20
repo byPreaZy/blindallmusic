@@ -2,6 +2,7 @@ use crate::api;
 use crate::i18n::t;
 use crate::types::{Category, IdName};
 use leptos::prelude::*;
+use leptos_router::components::A;
 use leptos_router::hooks::{use_navigate, use_params_map};
 use serde_json::{json, Value};
 
@@ -475,9 +476,30 @@ pub fn RoomEditPage() -> impl IntoView {
                             </div>
                         </div>
                         <div>
-                            <label class="mb-1 block text-xs text-white/60">{t("Venue name (shown on the TV screen)")}</label>
-                            <input type="text" maxlength="80" placeholder=t("e.g. Le Comptoir — jeudi soir") class="w-full max-w-md rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white"
-                                prop:value=venue_name on:input=move |ev| venue_name.set(event_target_value(&ev))/>
+                            <label class="mb-1 flex items-center gap-2 text-xs text-white/60">
+                                {t("Venue name (shown on the TV screen)")}
+                                <span class="rounded-full border border-amber-400/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-300">"Pro"</span>
+                            </label>
+                            {move || {
+                                let pro = crate::auth::use_auth().user.get()
+                                    .map(|u| u.is_pro || u.is_administrator).unwrap_or(false);
+                                let existing = !venue_name.get().is_empty();
+                                if pro || existing {
+                                    view! {
+                                        <input type="text" maxlength="80" placeholder=t("e.g. Le Comptoir — jeudi soir") class="w-full max-w-md rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white"
+                                            prop:value=venue_name on:input=move |ev| venue_name.set(event_target_value(&ev))/>
+                                    }.into_any()
+                                } else {
+                                    view! {
+                                        <div class="max-w-md rounded-lg border border-amber-400/20 bg-amber-500/5 px-3 py-2.5">
+                                            <p class="text-xs text-white/50">{t("Venue name is a Pro perk")}</p>
+                                            <A href="/pricing" attr:class="mt-1 inline-block text-xs font-semibold text-amber-300 hover:underline">
+                                                {t("Discover Pro")}" →"
+                                            </A>
+                                        </div>
+                                    }.into_any()
+                                }
+                            }}
                         </div>
                         <div class="flex flex-wrap gap-5 text-sm text-white/70">
                             <label class="flex items-center gap-2">

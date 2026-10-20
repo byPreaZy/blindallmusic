@@ -461,9 +461,7 @@ impl RoomActor {
         // PHP parity: RoundController@stop broadcasts TrackEnded so players
         // see the answers of the track interrupted mid-play.
         if matches!(self.phase, Phase::Playing { .. }) {
-            if let (Some(round), Some(track)) =
-                (self.round.as_ref(), self.current_track.as_ref())
-            {
+            if let (Some(round), Some(track)) = (self.round.as_ref(), self.current_track.as_ref()) {
                 let payload = events::track_ended(
                     round,
                     self.room.pause_between_tracks,
