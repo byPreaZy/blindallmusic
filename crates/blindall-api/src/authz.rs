@@ -72,6 +72,26 @@ impl ChannelAuthorizer for RoomChannelAuthorizer {
                 _ => deny("room_not_found"),
             };
         }
+        // Live minigame match — only its players may subscribe.
+        if let Some(rest) = channel.strip_prefix("match.") {
+            return match rest.parse::<i64>() {
+                Ok(match_id) if self.app.matchmaking.is_participant(match_id, user_id) => {
+                    let info = self
+                        .app
+                        .store
+                        .players_info(&[user_id])
+                        .await
+                        .ok()
+                        .and_then(|m| m.get(&user_id).cloned());
+                    Ok(Some(json!({
+                        "id": user_id,
+                        "name": info.as_ref().map(|p| p.name.clone()).unwrap_or_default(),
+                        "photo": info.as_ref().and_then(|p| p.photo.clone()),
+                    })))
+                }
+                _ => deny("forbidden"),
+            };
+        }
         if let Some(rest) = channel.strip_prefix("chat-room.") {
             return match rest.parse::<i64>() {
                 Ok(room_id) if self.room_exists(room_id).await => {

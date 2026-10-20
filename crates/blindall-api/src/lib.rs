@@ -13,6 +13,7 @@ pub mod home;
 pub mod levels;
 pub mod local_tracks;
 pub mod mail;
+pub mod matchmaking;
 pub mod minigames;
 pub mod moderation;
 pub mod oauth;
@@ -228,6 +229,11 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/duels/{id}/accept", post(minigames::duel_accept))
         .route("/api/v1/duels/{id}/answer", post(minigames::duel_answer))
         .route("/api/v1/daily-challenge", get(minigames::daily_show))
+        .route("/api/v1/matchmaking/join", post(matchmaking::join))
+        .route("/api/v1/matchmaking/leave", post(matchmaking::leave))
+        .route("/api/v1/matchmaking/status", get(matchmaking::status))
+        .route("/api/v1/matches/{id}", get(matchmaking::show))
+        .route("/api/v1/matches/{id}/answer", post(matchmaking::answer))
         .route("/api/v1/rooms/{id}/party", get(party::show))
         .route("/api/v1/rooms/{id}/party/start", post(party::start))
         .route("/api/v1/rooms/{id}/party/stop", post(party::stop))

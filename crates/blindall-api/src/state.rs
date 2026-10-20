@@ -40,6 +40,7 @@ pub struct AppState {
     pub minigames: blindall_db::MinigameRepo,
     pub anagram_questions: std::sync::Arc<crate::minigames::AnagramQuestions>,
     pub parties: std::sync::Arc<crate::party::PartyStore>,
+    pub matchmaking: std::sync::Arc<crate::matchmaking::MatchStore>,
     pub moderation: blindall_db::ModerationRepo,
     pub admin: blindall_db::AdminRepo,
     pub faqs: blindall_db::FaqRepo,

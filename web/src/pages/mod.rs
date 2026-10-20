@@ -6,6 +6,7 @@ pub mod faq;
 pub mod games;
 pub mod home;
 pub mod login;
+pub mod r#match;
 pub mod moderation;
 pub mod pages;
 pub mod playlist_edit;

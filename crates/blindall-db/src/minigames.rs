@@ -232,7 +232,7 @@ impl MinigameRepo {
              JOIN users u ON u.id = m.user_id WHERE m.game_type = $1 \
              AND u.is_guest = false AND u.deleted_at IS NULL \
              AND NOT (m.metadata ? 'duel_id') AND NOT (m.metadata ? 'daily') \
-             AND NOT (m.metadata ? 'party') \
+             AND NOT (m.metadata ? 'party') AND NOT (m.metadata ? 'match') \
              GROUP BY m.user_id, u.name ORDER BY total DESC LIMIT $2",
         )
         .bind(game_type)

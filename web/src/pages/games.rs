@@ -1,6 +1,6 @@
 use crate::api;
 use crate::auth::use_auth;
-use crate::components::minigame::{minigame_icon, minigame_tile};
+use crate::components::minigame::{game_name, minigame_icon, minigame_tile};
 use crate::i18n::t;
 use leptos::prelude::*;
 use leptos_router::components::A;
@@ -62,7 +62,11 @@ pub fn GamesIndexPage() -> impl IntoView {
                 posters.set(
                     v["posters"]
                         .as_array()
-                        .map(|a| a.iter().filter_map(|p| p.as_str().map(str::to_string)).collect())
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|p| p.as_str().map(str::to_string))
+                                .collect()
+                        })
                         .unwrap_or_default(),
                 );
             }
@@ -89,6 +93,23 @@ pub fn GamesIndexPage() -> impl IntoView {
                 </p>
             </header>
 
+            <div class="mb-4 rounded-2xl border-2 border-purple-500/30 bg-gradient-to-r from-purple-600/20 to-neutral-800/80 p-5 shadow-xl">
+                <p class="text-lg font-black uppercase tracking-wider text-purple-300">{t("Play online")}</p>
+                <p class="mb-4 text-sm text-neutral-400">{t("Live matchmaking — face real players right now.")}</p>
+                <div class="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                    {crate::components::minigame::MINIGAME_TYPES.into_iter().map(|ty| view! {
+                        <A href=format!("/match/{}", ty.replace('_', "-"))
+                            attr:class="group flex flex-col items-center gap-2 rounded-xl border border-white/10 bg-neutral-900/60 px-2 py-3 text-center transition hover:border-purple-400/60 hover:bg-purple-500/10">
+                            <div class=format!("flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br {} text-white", minigame_tile(ty))>
+                                {minigame_icon(ty)}
+                            </div>
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-white/70 group-hover:text-white">
+                                {t(game_name(ty))}
+                            </span>
+                        </A>
+                    }).collect::<Vec<_>>()}
+                </div>
+            </div>
             <A href="/duels" attr:class="group mb-4 flex items-center justify-between rounded-2xl border-2 border-purple-500/30 bg-gradient-to-r from-purple-600/20 to-neutral-800/80 p-5 shadow-xl transition hover:border-purple-400/60">
                 <div>
                     <p class="text-lg font-black uppercase tracking-wider text-purple-300">{t("Multiplayer")}</p>
@@ -424,10 +445,16 @@ pub fn GamePlayPage() -> impl IntoView {
                             {t("Back")}
                         </A>
                     </div>
-                    <A href=format!("/duels?type={}", game_type.get_untracked()) attr:class="group mt-4 flex items-center justify-between rounded-xl border border-purple-500/30 bg-purple-600/10 px-4 py-3 transition hover:border-purple-400/60">
-                        <span class="text-sm font-bold text-purple-300">{t("Play this game against a friend")}</span>
-                        <span class="text-purple-300 group-hover:translate-x-0.5 transition">"→"</span>
-                    </A>
+                    <div class="mt-4 grid gap-2 sm:grid-cols-2">
+                        <A href=format!("/match/{}", game_type.get_untracked().replace('_', "-")) attr:class="group flex items-center justify-between rounded-xl border border-purple-500/30 bg-purple-600/15 px-4 py-3 transition hover:border-purple-400/60">
+                            <span class="text-sm font-bold text-purple-300">{t("Play online")}</span>
+                            <span class="text-purple-300 transition group-hover:translate-x-0.5">"→"</span>
+                        </A>
+                        <A href=format!("/duels?type={}", game_type.get_untracked()) attr:class="group flex items-center justify-between rounded-xl border border-purple-500/30 bg-purple-600/10 px-4 py-3 transition hover:border-purple-400/60">
+                            <span class="text-sm font-bold text-purple-300">{t("Play this game against a friend")}</span>
+                            <span class="text-purple-300 transition group-hover:translate-x-0.5">"→"</span>
+                        </A>
+                    </div>
                     {move || (!game_lb.get().is_empty()).then(|| view! {
                         <div class="mt-4">
                             <h3 class="mb-2 text-sm font-bold text-white/60">{t("Leaderboard")}</h3>

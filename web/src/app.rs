@@ -27,6 +27,7 @@ use crate::pages::pages::StaticPage;
 use crate::pages::playlist_edit::PlaylistEditPage;
 use crate::pages::playlists::{PlaylistCreatePage, PlaylistsPage};
 use crate::pages::profile::ProfilePage;
+use crate::pages::r#match::MatchPage;
 use crate::pages::rankings::RankingsPage;
 use crate::pages::room_forms::{RoomCreatePage, RoomEditPage};
 use crate::pages::room_live::RoomLivePage;
@@ -203,6 +204,7 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/teams/:id") view=|| view! { <ParamRemount><TeamShowPage/></ParamRemount> }/>
                         <Route path=path!("/minigames") view=GamesIndexPage/>
                         <Route path=path!("/minigames/:type") view=|| view! { <ParamRemount><GamePlayPage/></ParamRemount> }/>
+                        <Route path=path!("/match/:type") view=|| view! { <ParamRemount><MatchPage/></ParamRemount> }/>
                         <Route path=path!("/duels") view=DuelsPage/>
                         <Route path=path!("/duels/:id") view=|| view! { <ParamRemount><DuelPlayPage/></ParamRemount> }/>
                         <Route path=path!("/daily") view=DailyPage/>
