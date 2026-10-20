@@ -3,7 +3,7 @@ use crate::auth::use_auth;
 use crate::components::answer_input::AnswerInput;
 use crate::components::answers_grid::{apply_track_voted, PlaylistPanel};
 use crate::components::chat::RoomChat;
-use crate::components::minigame::{MINIGAME_TYPES, game_name};
+use crate::components::minigame::{game_name, MINIGAME_TYPES};
 use crate::components::navbar::Spinner;
 use crate::components::player::Player;
 use crate::components::ranking::RankingPanel;
@@ -500,9 +500,25 @@ pub fn RoomPage() -> impl IntoView {
     // ---- hydrate + wire events once we have a token -----------------------
     let hydrate = Rc::new(move |room_id: i64| {
         leptos::task::spawn_local(async move {
-            let Ok(data) =
-                api::get::<JoinedPayload>(&format!("/api/v1/rooms/{room_id}/joined")).await
-            else {
+            // /joined 403s while presence isn't recorded — re-register and
+            // retry once (first visit, or presence expired after a dropout).
+            let mut data = None;
+            for attempt in 0..2 {
+                match api::get::<JoinedPayload>(&format!("/api/v1/rooms/{room_id}/joined")).await {
+                    Ok(d) => {
+                        data = Some(d);
+                        break;
+                    }
+                    Err(_) if attempt == 0 => {
+                        let _ = api::post_empty::<Value>(&format!(
+                            "/api/v1/rooms/{room_id}/presence-joined"
+                        ))
+                        .await;
+                    }
+                    Err(_) => break,
+                }
+            }
+            let Some(data) = data else {
                 return;
             };
             if round_id.is_disposed() {
@@ -837,8 +853,10 @@ pub fn RoomPage() -> impl IntoView {
 
         let hydrate2 = hydrate.clone();
         leptos::task::spawn_local(async move {
-            hydrate2(rid);
+            // presence-joined MUST precede hydrate: /joined 403s while the
+            // user isn't recorded as a participant yet.
             let _ = api::post_empty::<Value>(&format!("/api/v1/rooms/{rid}/presence-joined")).await;
+            hydrate2(rid);
         });
         {
             let rt2 = realtime.clone();
