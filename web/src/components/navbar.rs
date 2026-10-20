@@ -289,11 +289,14 @@ fn MobileBottomNav() -> impl IntoView {
             <div class="flex items-stretch justify-evenly">
                 {move || {
                     let path = location.pathname.get();
-                    let home_active = path == "/" || path.starts_with("/rooms");
+                    let query_tab = location.query.get().get("tab").unwrap_or_default();
+                    let games_tab = path == "/" && query_tab == "minigames";
+                    let home_active = (path == "/" && !games_tab) || path.starts_with("/rooms");
                     let games_active = path.starts_with("/minigames")
                         || path.starts_with("/duels")
                         || path.starts_with("/daily")
-                        || path.starts_with("/games");
+                        || path.starts_with("/games")
+                        || games_tab;
                     let rankings_active = path.starts_with("/rankings");
                     let profile_active = path.starts_with("/profile") || path.starts_with("/settings");
                     let u = auth.user.get();
@@ -303,7 +306,7 @@ fn MobileBottomNav() -> impl IntoView {
                             {home_icon("h-5 w-5")}
                             <span class="text-[10px] font-semibold leading-tight">{t("Home")}</span>
                         </A>
-                        <A href="/minigames" attr:class=tab_cls(games_active)>
+                        <A href="/?tab=minigames" attr:class=tab_cls(games_active)>
                             {gamepad_icon("h-5 w-5")}
                             <span class="text-[10px] font-semibold leading-tight">{t("Games")}</span>
                         </A>
@@ -393,7 +396,7 @@ pub fn Navbar() -> impl IntoView {
                         <HelpDropdown/>
                     </div>
                     <div class="flex items-center gap-3">
-                        <A href="/minigames" attr:title=t("Mini-games")
+                        <A href="/?tab=minigames" attr:title=t("Mini-games")
                             attr:class="retro-icon-btn text-brand-secondary hover:text-brand-secondary">
                             {gamepad_icon("h-5 w-5 drop-shadow-[0_0_8px_rgb(242_201_76/0.5)]")}
                         </A>

@@ -862,7 +862,17 @@ pub fn HomePage() -> impl IntoView {
     crate::seo::apply_page("/", t("Home meta description"));
     let auth = expect_context::<Auth>();
 
-    let tab = RwSignal::new("official".to_string());
+    let query = use_query_map();
+    let initial_tab = match query
+        .get_untracked()
+        .get("tab")
+        .unwrap_or_default()
+        .as_str()
+    {
+        t @ ("community" | "minigames" | "mine" | "favorites") => t.to_string(),
+        _ => "official".to_string(),
+    };
+    let tab = RwSignal::new(initial_tab);
     let cat_ids = RwSignal::new(Vec::<i64>::new());
     let page = RwSignal::new(1usize);
 
@@ -940,7 +950,7 @@ pub fn HomePage() -> impl IntoView {
         });
     };
 
-    let switch_tab = move |id: &'static str| {
+    let apply_tab = move |id: &'static str| {
         if tab.get_untracked() == id {
             return;
         }
@@ -953,13 +963,46 @@ pub fn HomePage() -> impl IntoView {
         }
     };
 
+    let navigate = StoredValue::new(use_navigate());
+    let switch_tab = move |id: &'static str| {
+        if tab.get_untracked() == id {
+            return;
+        }
+        // Reflect the tab in the URL so a reload or a shared link lands on
+        // the same catalog view (?tab=minigames etc.).
+        navigate.with_value(|n| {
+            n(
+                &format!("/?tab={id}"),
+                leptos_router::NavigateOptions {
+                    replace: true,
+                    ..Default::default()
+                },
+            )
+        });
+        apply_tab(id);
+    };
+
+    // Deep-link: /?tab=… while the page is already mounted (navbar link)
+    // or on a fresh load — select the matching catalog tab reactively.
+    Effect::new(move |_| {
+        let wanted = query.get().get("tab").unwrap_or_default();
+        let id: &'static str = match wanted.as_str() {
+            "official" => "official",
+            "community" => "community",
+            "minigames" => "minigames",
+            "mine" if logged_in.get() => "mine",
+            "favorites" if logged_in.get() => "favorites",
+            _ => return,
+        };
+        apply_tab(id);
+    });
+
     let refetch = StoredValue::new(fetch_home);
     Effect::new(move |_| {
         cat_ids.track();
         refetch.with_value(|f| f());
     });
 
-    let query = use_query_map();
     let search_results = RwSignal::new(Vec::<HomeRoom>::new());
     let search_term = Signal::derive(move || query.get().get("search").unwrap_or_default());
     Effect::new(move |_| {
@@ -988,7 +1031,6 @@ pub fn HomePage() -> impl IntoView {
             }
         });
     });
-    let navigate = StoredValue::new(use_navigate());
     let load_more = move || {
         page.update(|p| *p += 1);
         let tab_v = tab.get_untracked();
