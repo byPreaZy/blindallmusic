@@ -6,6 +6,7 @@ description = "Black-box HTTP parity suite : hits a running blindall-server (TES
 publish = false
 
 [dependencies]
+blindall-core = { path = "../blindall-core" }
 reqwest.workspace = true
 sqlx.workspace = true
 serde.workspace = true

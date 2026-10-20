@@ -311,6 +311,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcrypt",
+ "blindall-core",
  "futures",
  "hex",
  "hmac",

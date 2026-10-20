@@ -173,10 +173,40 @@ impl PresenceStore for blindall_redis::RoomPresenceStore {
     }
 }
 
+/// Freshly resolved media for a track: a playable audio URL plus (when the
+/// provider exposes it) a cover image URL. Both are validated http(s) —
+/// a `None` means the source could not produce a usable URL right now
+/// (dead/upstream-removed track, API failure).
+#[derive(Debug, Clone, Default)]
+pub struct ResolvedMedia {
+    pub audio: Option<String>,
+    pub artwork: Option<String>,
+}
+
 #[async_trait::async_trait]
 pub trait PreviewResolver: Send + Sync {
     async fn resolve(&self, provider: &str, provider_id: &str, preview_url: &str)
     -> Option<String>;
+
+    /// Resolve audio AND artwork. Providers with a real resolver override
+    /// this (one upstream call yields both); the default keeps the stored
+    /// artwork so callers that don't care can use `resolve` only.
+    async fn resolve_media(
+        &self,
+        provider: &str,
+        provider_id: &str,
+        preview_url: &str,
+        artwork_url: &str,
+    ) -> ResolvedMedia {
+        ResolvedMedia {
+            audio: self.resolve(provider, provider_id, preview_url).await,
+            artwork: if artwork_url.starts_with("http") {
+                Some(artwork_url.to_string())
+            } else {
+                None
+            },
+        }
+    }
 }
 
 #[derive(Default)]

@@ -150,7 +150,6 @@ pub fn QuestionView(
 pub fn DuelsPage() -> impl IntoView {
     crate::i18n::set_title_key("Duels");
     let auth = use_auth();
-    crate::auth::require_registered(auth);
     let duels = RwSignal::new(Vec::<Value>::new());
     let leaderboard = RwSignal::new(Vec::<Value>::new());
     let loading = RwSignal::new(true);
@@ -163,6 +162,9 @@ pub fn DuelsPage() -> impl IntoView {
     let creating = RwSignal::new(false);
 
     let reload = move |silent: bool| {
+        if !crate::auth::is_member(auth) {
+            return;
+        }
         leptos::task::spawn_local(async move {
             match api::get::<Value>("/api/v1/duels").await {
                 Ok(v) => duels.set(v["duels"].as_array().cloned().unwrap_or_default()),
@@ -176,7 +178,7 @@ pub fn DuelsPage() -> impl IntoView {
             loading.set(false);
         });
     };
-    reload(false);
+    crate::auth::on_member(auth, move || reload(false));
     // Keep the lobby fresh: new challenges / completed duels appear without reload.
     {
         let iv = send_wrapper::SendWrapper::new(gloo_timers::callback::Interval::new(
@@ -229,6 +231,7 @@ pub fn DuelsPage() -> impl IntoView {
     let my_id = move || auth.user.get().map(|u| u.id).unwrap_or(0);
 
     view! {
+        <crate::components::member_gate::MemberGate title="Duels">
         <div class="mx-auto max-w-3xl px-4 py-8">
             <A href="/minigames" attr:class="mb-6 inline-flex items-center gap-2 text-sm text-neutral-400 transition hover:text-white">
                 "← " {t("Back")}
@@ -375,6 +378,7 @@ pub fn DuelsPage() -> impl IntoView {
                 </div>
             </Show>
         </div>
+        </crate::components::member_gate::MemberGate>
     }
 }
 
@@ -382,8 +386,8 @@ pub fn DuelsPage() -> impl IntoView {
 
 #[component]
 pub fn DuelPlayPage() -> impl IntoView {
-    crate::auth::require_registered(use_auth());
     let params = use_params_map();
+    let auth = use_auth();
     let duel_id = move || params.get().get("id").unwrap_or_default();
     let duel = RwSignal::new(Option::<Value>::None);
     let loading = RwSignal::new(true);
@@ -416,7 +420,7 @@ pub fn DuelPlayPage() -> impl IntoView {
             loading.set(false);
         });
     };
-    fetch_duel(true);
+    crate::auth::on_member(auth, move || fetch_duel(true));
     // While waiting for the opponent (my side done), poll so the final
     // result flips on its own instead of needing a manual reload.
     {
@@ -471,6 +475,7 @@ pub fn DuelPlayPage() -> impl IntoView {
     };
 
     view! {
+        <crate::components::member_gate::MemberGate title="Duels">
         <div class="mx-auto max-w-2xl px-4 py-8">
             <A href="/duels" attr:class="mb-6 inline-block text-sm text-white/60 hover:text-white">
                 "← " {t("Back")}
@@ -626,6 +631,7 @@ pub fn DuelPlayPage() -> impl IntoView {
                 }
             })}
         </div>
+        </crate::components::member_gate::MemberGate>
     }
 }
 
@@ -634,7 +640,7 @@ pub fn DuelPlayPage() -> impl IntoView {
 #[component]
 pub fn DailyPage() -> impl IntoView {
     crate::i18n::set_title_key("Daily challenge");
-    crate::auth::require_registered(use_auth());
+    let auth = use_auth();
     let data = RwSignal::new(Option::<Value>::None);
     let loading = RwSignal::new(true);
     let error = RwSignal::new(Option::<String>::None);
@@ -647,15 +653,6 @@ pub fn DailyPage() -> impl IntoView {
     let daily_type = RwSignal::new("quiz");
     let copied = RwSignal::new(false);
     let marks = RwSignal::new(Vec::<Value>::new());
-    let reviving = RwSignal::new(false);
-    let revive_err = RwSignal::new(Option::<String>::None);
-    let auth = use_auth();
-    let is_plus = move || {
-        auth.user
-            .get()
-            .map(|u| u.is_plus || u.is_administrator)
-            .unwrap_or(false)
-    };
 
     let load = move |ty: &'static str| {
         daily_type.set(ty);
@@ -681,7 +678,7 @@ pub fn DailyPage() -> impl IntoView {
             loading.set(false);
         });
     };
-    load("quiz");
+    crate::auth::on_member(auth, move || load("quiz"));
 
     let submit = move |value: String| {
         if checking.get() || result.get().is_some() {
@@ -717,34 +714,8 @@ pub fn DailyPage() -> impl IntoView {
         idx.update(|i| *i += 1);
     };
 
-    let revive = move |_| {
-        if reviving.get() {
-            return;
-        }
-        let gt = daily_type.get().to_string();
-        reviving.set(true);
-        revive_err.set(None);
-        leptos::task::spawn_local(async move {
-            if let Err(e) =
-                api::post::<Value, _>("/api/v1/daily-challenge/revive", &json!({"game_type": gt}))
-                    .await
-            {
-                revive_err.set(Some(e.message));
-            } else {
-                let ty: &'static str = match daily_type.get() {
-                    "who_sang" => "who_sang",
-                    "album_cover" => "album_cover",
-                    "first_letter" => "first_letter",
-                    "anagram" => "anagram",
-                    _ => "quiz",
-                };
-                load(ty);
-            }
-            reviving.set(false);
-        });
-    };
-
     view! {
+        <crate::components::member_gate::MemberGate title="Daily challenge">
         <div class="mx-auto max-w-2xl px-4 py-8">
             <A href="/duels" attr:class="mb-6 inline-block text-sm text-white/60 hover:text-white">
                 "← " {t("Back")}
@@ -834,22 +805,6 @@ pub fn DailyPage() -> impl IntoView {
                                     }.into_any()
                                 } else { view! { <div/> }.into_any() }}
                                 <div class="mt-6 flex justify-center gap-3">
-                                    {if is_plus() {
-                                        view! {
-                                            <button type="button"
-                                                class="rounded-lg border border-brand-accent/40 bg-brand-accent/10 px-4 py-2 text-sm font-semibold text-brand-accent transition hover:bg-brand-accent/20 disabled:opacity-50"
-                                                prop:disabled=reviving
-                                                on:click=revive>
-                                                {move || if reviving.get() { t("Loading").to_string() + "…" } else { format!("★ {}", t("Retry today's set")) }}
-                                            </button>
-                                        }.into_any()
-                                    } else {
-                                        view! {
-                                            <A href="/pricing" attr:class="rounded-lg border border-brand-accent/30 bg-brand-accent/5 px-4 py-2 text-sm font-semibold text-brand-accent/80 transition hover:bg-brand-accent/15">
-                                                "★ "{t("Retry with Plus")}
-                                            </A>
-                                        }.into_any()
-                                    }}
                                     <button type="button"
                                         class="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80 transition hover:bg-white/10"
                                         on:click=move |_| {
@@ -864,9 +819,6 @@ pub fn DailyPage() -> impl IntoView {
                                         {move || if copied.get() { t("Copied!") } else { t("Share result") }}
                                     </button>
                                 </div>
-                                {move || revive_err.get().map(|e| view! {
-                                    <p class="mt-3 text-xs text-red-400">{e}</p>
-                                })}
                             </div>
                             {leaderboard}
                         </div>
@@ -913,5 +865,6 @@ pub fn DailyPage() -> impl IntoView {
                 }
             })}
         </div>
+        </crate::components::member_gate::MemberGate>
     }
 }

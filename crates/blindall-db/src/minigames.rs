@@ -7,6 +7,19 @@ use std::sync::Arc;
 pub const ANSWER_TYPE_ARTIST: i64 = 1;
 pub const ANSWER_TYPE_TITLE: i64 = 2;
 const MAX_RANDOM_RETRIES: usize = 5;
+/// How many candidate tracks a pick may resolve before giving up — each
+/// candidate costs at most one provider API call (usually a cache hit).
+const MAX_RESOLVE_TRIES: usize = 4;
+
+/// (track_id, playlist_id, provider, provider_id, preview_url, artwork_url)
+type TrackCandidate = (
+    i64,
+    i64,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
 
 #[derive(Clone)]
 pub struct MinigameRepo {
@@ -51,7 +64,7 @@ impl MinigameRepo {
         } else {
             ANSWER_TYPE_TITLE
         };
-        let Some(track) = self
+        let Some((track, playlist_id)) = self
             .pick_random_track(answer_type_id, require_artwork)
             .await?
         else {
@@ -61,8 +74,11 @@ impl MinigameRepo {
             .answer_of(track.id, answer_type_id)
             .await?
             .unwrap_or_default();
+        if correct.trim().is_empty() {
+            return Ok(None);
+        }
         let mut choices = self
-            .wrong_choices(track.id, answer_type_id, &correct, 3)
+            .wrong_choices(track.id, playlist_id, answer_type_id, &correct, 3)
             .await?;
         if choices.len() < 3 {
             // Not enough distinct distractors — abort so the caller retries
@@ -79,7 +95,7 @@ impl MinigameRepo {
     }
 
     pub async fn track_with_title(&self) -> Result<Option<TitleQuestion>, sqlx::Error> {
-        let Some(track) = self.pick_random_track(ANSWER_TYPE_TITLE, false).await? else {
+        let Some((track, _)) = self.pick_random_track(ANSWER_TYPE_TITLE, false).await? else {
             return Ok(None);
         };
         let raw = self
@@ -221,11 +237,17 @@ impl MinigameRepo {
         })
     }
 
+    /// Pick a track whose media actually works *right now*: candidates are
+    /// drawn first, then each is passed through the provider resolver until
+    /// one yields a usable http(s) audio URL (and artwork when required).
+    /// A pick that resolves to dead media is skipped instead of shipping a
+    /// silent question — that was the "question 9 has no music" bug.
+    /// Returns the track plus its playlist id (used for distractor pools).
     async fn pick_random_track(
         &self,
         answer_type_id: i64,
         require_artwork: bool,
-    ) -> Result<Option<MinigameTrack>, sqlx::Error> {
+    ) -> Result<Option<(MinigameTrack, i64)>, sqlx::Error> {
         let max_id: i64 = sqlx::query_scalar("SELECT COALESCE(MAX(id),0) FROM tracks")
             .fetch_one(&self.pool)
             .await?;
@@ -239,36 +261,59 @@ impl MinigameRepo {
                 .map(|_| rng.random_range(1..=max_id))
                 .collect()
         };
-        let mut found = None;
+        let mut seen_ids = std::collections::HashSet::new();
+        let mut candidates = Vec::new();
         for rid in random_ids {
-            found = self.pick_one(answer_type_id, require_artwork, rid).await?;
-            if found.is_some() {
+            if let Some(c) = self.pick_one(answer_type_id, require_artwork, rid).await? {
+                if seen_ids.insert(c.0) {
+                    candidates.push(c);
+                }
+            }
+            if candidates.len() >= MAX_RESOLVE_TRIES {
                 break;
             }
         }
-        if found.is_none() {
-            // Deterministic fallback (smallest eligible id) used to
-            // over-represent old tracks — uniform pick on the rare miss path.
-            found = self
+        // Uniform fallback (the deterministic smallest-id fallback used to
+        // over-represent old tracks) to fill the candidate budget.
+        for _ in 0..MAX_RESOLVE_TRIES {
+            if candidates.len() >= MAX_RESOLVE_TRIES {
+                break;
+            }
+            if let Some(c) = self
                 .pick_one_uniform(answer_type_id, require_artwork)
-                .await?;
+                .await?
+            {
+                if seen_ids.insert(c.0) {
+                    candidates.push(c);
+                }
+            }
         }
-        let Some((id, provider, provider_id, preview_url, artwork_url)) = found else {
-            return Ok(None);
-        };
-        let audio = self
-            .resolver
-            .resolve(
-                &provider,
-                &provider_id.unwrap_or_default(),
-                &preview_url.unwrap_or_default(),
-            )
-            .await;
-        Ok(Some(MinigameTrack {
-            id,
-            preview_url: audio,
-            artwork_url,
-        }))
+        for (id, playlist_id, provider, provider_id, preview_url, artwork_url) in candidates {
+            let media = self
+                .resolver
+                .resolve_media(
+                    &provider,
+                    &provider_id.unwrap_or_default(),
+                    &preview_url.unwrap_or_default(),
+                    artwork_url.as_deref().unwrap_or(""),
+                )
+                .await;
+            let audio = media.audio.filter(|u| u.starts_with("http"));
+            let Some(audio) = audio else { continue };
+            let artwork = media.artwork.filter(|u| u.starts_with("http"));
+            if require_artwork && artwork.is_none() {
+                continue;
+            }
+            return Ok(Some((
+                MinigameTrack {
+                    id,
+                    preview_url: Some(audio),
+                    artwork_url: artwork,
+                },
+                playlist_id,
+            )));
+        }
+        Ok(None)
     }
 
     async fn pick_one(
@@ -276,10 +321,9 @@ impl MinigameRepo {
         answer_type_id: i64,
         require_artwork: bool,
         from_id: i64,
-    ) -> Result<Option<(i64, String, Option<String>, Option<String>, Option<String>)>, sqlx::Error>
-    {
+    ) -> Result<Option<TrackCandidate>, sqlx::Error> {
         let sql = format!(
-            "SELECT t.id, t.provider, t.provider_id, t.preview_url, t.artwork_url \
+            "SELECT t.id, t.playlist_id, t.provider, t.provider_id, t.preview_url, t.artwork_url \
              FROM tracks t \
              JOIN playlists p ON p.id = t.playlist_id AND p.is_public = true \
              JOIN track_answers ta ON ta.track_id = t.id AND ta.answer_type_id = $1 \
@@ -288,7 +332,7 @@ impl MinigameRepo {
                   OR t.provider IN ('spotify','itunes','deezer')) \
              {} {} AND t.id >= $2 ORDER BY t.id LIMIT 1",
             if require_artwork {
-                "AND t.artwork_url IS NOT NULL"
+                "AND t.artwork_url IS NOT NULL AND t.artwork_url ~ '^https?://'"
             } else {
                 ""
             },
@@ -303,6 +347,7 @@ impl MinigameRepo {
                 o.map(|r| {
                     (
                         r.get("id"),
+                        r.get("playlist_id"),
                         r.get("provider"),
                         r.get("provider_id"),
                         r.get("preview_url"),
@@ -316,10 +361,9 @@ impl MinigameRepo {
         &self,
         answer_type_id: i64,
         require_artwork: bool,
-    ) -> Result<Option<(i64, String, Option<String>, Option<String>, Option<String>)>, sqlx::Error>
-    {
+    ) -> Result<Option<TrackCandidate>, sqlx::Error> {
         let sql = format!(
-            "SELECT t.id, t.provider, t.provider_id, t.preview_url, t.artwork_url \
+            "SELECT t.id, t.playlist_id, t.provider, t.provider_id, t.preview_url, t.artwork_url \
              FROM tracks t \
              JOIN playlists p ON p.id = t.playlist_id AND p.is_public = true \
              JOIN track_answers ta ON ta.track_id = t.id AND ta.answer_type_id = $1 \
@@ -328,7 +372,7 @@ impl MinigameRepo {
                   OR t.provider IN ('spotify','itunes','deezer')) \
              {} {} ORDER BY random() LIMIT 1",
             if require_artwork {
-                "AND t.artwork_url IS NOT NULL"
+                "AND t.artwork_url IS NOT NULL AND t.artwork_url ~ '^https?://'"
             } else {
                 ""
             },
@@ -342,6 +386,7 @@ impl MinigameRepo {
                 o.map(|r| {
                     (
                         r.get("id"),
+                        r.get("playlist_id"),
                         r.get("provider"),
                         r.get("provider_id"),
                         r.get("preview_url"),
@@ -351,66 +396,176 @@ impl MinigameRepo {
             })
     }
 
+    /// Wrong answers drawn with decreasing specificity so they stay
+    /// plausible: same playlist first, then the whole public catalog.
+    /// When the correct title has a detectable language, distractors must
+    /// never be detected as the *other* language — a French title with
+    /// English alternatives gives the answer away (neutral/proper-noun
+    /// titles are fine, they betray nothing). If the filtered pools
+    /// cannot fill `count`, the caller retries with another track rather
+    /// than shipping a cross-language choice. Language filtering only
+    /// applies to title answers; artist names carry no meaningful
+    /// language. Normalized dedup prevents "Imagine" vs
+    /// "Imagine (Remastered)" near-identical pairs.
     async fn wrong_choices(
         &self,
         exclude_track: i64,
+        playlist_id: i64,
         answer_type_id: i64,
         exclude_value: &str,
         count: usize,
     ) -> Result<Vec<String>, sqlx::Error> {
-        let max_id: i64 = sqlx::query_scalar(
+        let use_lang = answer_type_id == ANSWER_TYPE_TITLE;
+        let want_lang = if use_lang {
+            blindall_core::lang::detect(exclude_value)
+        } else {
+            blindall_core::lang::Lang::Other
+        };
+        let filter_lang = use_lang && want_lang != blindall_core::lang::Lang::Other;
+
+        let mut seen_norm = std::collections::HashSet::new();
+        seen_norm.insert(norm_choice(exclude_value));
+        let mut out: Vec<String> = Vec::new();
+
+        // Pass 1: same playlist (thematically coherent), language-filtered
+        // when the correct answer has a detectable language.
+        self.fill_choices(
+            &mut out,
+            &mut seen_norm,
+            exclude_track,
+            Some(playlist_id),
+            answer_type_id,
+            exclude_value,
+            count,
+            want_lang,
+            filter_lang,
+        )
+        .await?;
+        // Pass 2: same language anywhere in the public catalog.
+        if out.len() < count {
+            self.fill_choices(
+                &mut out,
+                &mut seen_norm,
+                exclude_track,
+                None,
+                answer_type_id,
+                exclude_value,
+                count,
+                want_lang,
+                filter_lang,
+            )
+            .await?;
+        }
+        // No unfiltered fallback pass: when the correct answer's language
+        // is known, a cross-language distractor is worse than no question
+        // at all — the caller retries with a different track instead.
+        Ok(out)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn fill_choices(
+        &self,
+        out: &mut Vec<String>,
+        seen_norm: &mut std::collections::HashSet<String>,
+        exclude_track: i64,
+        playlist_id: Option<i64>,
+        answer_type_id: i64,
+        exclude_value: &str,
+        count: usize,
+        want_lang: blindall_core::lang::Lang,
+        filter_lang: bool,
+    ) -> Result<(), sqlx::Error> {
+        let scope = if playlist_id.is_some() {
+            "AND t.playlist_id = $5"
+        } else {
+            "AND p.is_public = true"
+        };
+        let max_sql = format!(
             "SELECT COALESCE(MAX(ta.id),0) FROM track_answers ta \
              JOIN tracks t ON t.id = ta.track_id \
-             JOIN playlists p ON p.id = t.playlist_id AND p.is_public = true \
-             WHERE ta.answer_type_id = $1 AND ta.track_id != $2 AND ta.value IS NOT NULL",
-        )
-        .bind(answer_type_id)
-        .bind(exclude_track)
-        .fetch_one(&self.pool)
-        .await?;
+             JOIN playlists p ON p.id = t.playlist_id \
+             WHERE ta.answer_type_id = $1 AND ta.track_id != $2 \
+             AND ta.value IS NOT NULL {}",
+            if playlist_id.is_some() {
+                "AND t.playlist_id = $3"
+            } else {
+                "AND p.is_public = true"
+            }
+        );
+        let mut max_q = sqlx::query_scalar::<_, i64>(&max_sql)
+            .bind(answer_type_id)
+            .bind(exclude_track);
+        if let Some(pl) = playlist_id {
+            max_q = max_q.bind(pl);
+        }
+        let max_id: i64 = max_q.fetch_one(&self.pool).await?;
         if max_id < 1 {
-            return Ok(vec![]);
+            return Ok(());
         }
         let random_ids: Vec<i64> = {
             use rand::Rng;
             let mut rng = rand::rng();
-            (0..3).map(|_| rng.random_range(1..=max_id)).collect()
+            (0..4).map(|_| rng.random_range(1..=max_id)).collect()
         };
-        let mut seen = std::collections::HashSet::new();
-        seen.insert(exclude_value.to_string());
-        let mut out = Vec::new();
         for rid in random_ids {
             if out.len() >= count {
                 break;
             }
-            let batch: Vec<String> = sqlx::query_scalar(&format!(
+            let sql = format!(
                 "SELECT ta.value FROM track_answers ta \
                  JOIN tracks t ON t.id = ta.track_id \
-                 JOIN playlists p ON p.id = t.playlist_id AND p.is_public = true \
+                 JOIN playlists p ON p.id = t.playlist_id \
                  WHERE ta.answer_type_id = $1 AND ta.track_id != $2 \
                  AND ta.value IS NOT NULL AND ta.value != $3 AND ta.id >= $4 \
-                 {} ORDER BY ta.id LIMIT 5",
+                 {} {} ORDER BY ta.id LIMIT 12",
+                scope,
                 generic_filter(answer_type_id)
-            ))
-            .bind(answer_type_id)
-            .bind(exclude_track)
-            .bind(exclude_value)
-            .bind(rid)
-            .fetch_all(&self.pool)
-            .await?;
-            for v in batch {
-                if out.len() < count && seen.insert(v.clone()) {
+            );
+            let mut q = sqlx::query_scalar::<_, String>(&sql)
+                .bind(answer_type_id)
+                .bind(exclude_track)
+                .bind(exclude_value)
+                .bind(rid);
+            if let Some(pl) = playlist_id {
+                q = q.bind(pl);
+            }
+            for v in q.fetch_all(&self.pool).await? {
+                if out.len() >= count {
+                    break;
+                }
+                if filter_lang && !blindall_core::lang::compatible(want_lang, &v) {
+                    continue;
+                }
+                if seen_norm.insert(norm_choice(&v)) {
                     out.push(v);
                 }
             }
         }
-        Ok(out)
+        Ok(())
     }
 }
 
 fn shuffle<T>(v: &mut [T]) {
     use rand::seq::SliceRandom;
     v.shuffle(&mut rand::rng());
+}
+
+/// Normalized form used to dedup choices: parenthetical/bracketed
+/// segments removed ("(Remastered)", "[Live]"), then slugged (lowercase,
+/// accents stripped, words space-joined). Catches near-identical
+/// distractor/correct pairs like "Imagine" vs "Imagine - 2010 Remaster".
+fn norm_choice(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut depth = 0usize;
+    for c in s.chars() {
+        match c {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            _ if depth == 0 => out.push(c),
+            _ => {}
+        }
+    }
+    blindall_core::sanitize::str_slug(&out, ' ')
 }
 
 /// SQL fragment excluding answer values that are never quiz material:
@@ -693,10 +848,10 @@ impl MinigameRepo {
     ) -> Result<Vec<serde_json::Value>, sqlx::Error> {
         let rows = sqlx::query(
             "WITH per_user AS (
-               SELECT creator_id AS uid, opponent_score AS mine, creator_score AS theirs
+               SELECT creator_id AS uid, creator_score AS mine, opponent_score AS theirs
                FROM minigame_duels WHERE status = 'finished'
                UNION ALL
-               SELECT opponent_id, creator_score, opponent_score
+               SELECT opponent_id, opponent_score, creator_score
                FROM minigame_duels WHERE status = 'finished'
              )
              SELECT u.id, u.name, u.elo,
@@ -901,88 +1056,6 @@ impl MinigameRepo {
                 })
             })
             .collect())
-    }
-
-    /// Plus perk "revive": wipe today's progress so the daily can be replayed.
-    /// The score/answers ledger in minigame_scores is left untouched — a
-    /// replay is a second run, not a rollback of history.
-    pub async fn reset_daily_progress(
-        &self,
-        user_id: i64,
-        day: chrono::NaiveDate,
-        game_type: &str,
-    ) -> Result<(), sqlx::Error> {
-        sqlx::query(
-            "DELETE FROM minigame_daily_scores
-             WHERE user_id = $1 AND day = $2 AND game_type = $3",
-        )
-        .bind(user_id)
-        .bind(day)
-        .bind(game_type)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    /// Plus perk: advanced stats — answer-type accuracy, podium rate, busiest
-    /// hour — built from round_standings + scores (both already populated).
-    pub async fn advanced_stats(&self, user_id: i64) -> Result<serde_json::Value, sqlx::Error> {
-        let summary = sqlx::query(
-            "SELECT COUNT(*) AS games,
-                    COUNT(*) FILTER (WHERE position = 1) AS wins,
-                    AVG(total_score)::float8 AS avg_score,
-                    AVG(average_response_time)::float8 AS avg_response_time,
-                    SUM(fast_answers_count)::bigint AS fast_answers,
-                    SUM(total_answers_count)::bigint AS total_answers
-             FROM round_standings WHERE user_id = $1",
-        )
-        .bind(user_id)
-        .fetch_one(&self.pool)
-        .await?;
-        let by_type = sqlx::query(
-            "SELECT at.name AS type, COUNT(*) AS found,
-                    AVG(s.score)::float8 AS avg_score,
-                    AVG(s.time)::float8 AS avg_time
-             FROM scores s
-             JOIN track_answers a ON a.id = s.answer_id
-             JOIN answer_types at ON at.id = a.answer_type_id
-             WHERE s.user_id = $1
-             GROUP BY at.name ORDER BY found DESC LIMIT 8",
-        )
-        .bind(user_id)
-        .fetch_all(&self.pool)
-        .await?;
-        let hours = sqlx::query(
-            "SELECT EXTRACT(HOUR FROM r.created_at)::int AS hour, COUNT(*) AS games
-             FROM round_standings rs JOIN rounds r ON r.id = rs.round_id
-             WHERE rs.user_id = $1
-             GROUP BY 1 ORDER BY games DESC LIMIT 4",
-        )
-        .bind(user_id)
-        .fetch_all(&self.pool)
-        .await?;
-        use sqlx::Row;
-        let games = summary.get::<i64, _>("games");
-        let wins = summary.get::<i64, _>("wins");
-        Ok(serde_json::json!({
-            "games": games,
-            "wins": wins,
-            "win_rate": if games > 0 { wins as f64 / games as f64 } else { 0.0 },
-            "avg_score": summary.get::<Option<f64>, _>("avg_score").unwrap_or(0.0),
-            "avg_response_time": summary.get::<Option<f64>, _>("avg_response_time").unwrap_or(0.0),
-            "fast_answers": summary.get::<Option<i64>, _>("fast_answers").unwrap_or(0),
-            "total_answers": summary.get::<Option<i64>, _>("total_answers").unwrap_or(0),
-            "by_answer_type": by_type.iter().map(|r| serde_json::json!({
-                "type": r.get::<String, _>("type"),
-                "found": r.get::<i64, _>("found"),
-                "avg_score": r.get::<Option<f64>, _>("avg_score").unwrap_or(0.0),
-                "avg_time": r.get::<Option<f64>, _>("avg_time").unwrap_or(0.0),
-            })).collect::<Vec<_>>(),
-            "peak_hours": hours.iter().map(|r| serde_json::json!({
-                "hour": r.get::<i32, _>("hour"),
-                "games": r.get::<i64, _>("games"),
-            })).collect::<Vec<_>>(),
-        }))
     }
 }
 

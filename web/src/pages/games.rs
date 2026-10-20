@@ -48,19 +48,21 @@ pub fn GamesIndexPage() -> impl IntoView {
     crate::seo::apply_page("/minigames", t("Mini-games meta description"));
     crate::seo::set_meta("name", "keywords", t("Mini-games meta keywords"));
     let auth = use_auth();
-    crate::auth::require_registered(auth);
     let games = RwSignal::new(Vec::<Value>::new());
     let loading = RwSignal::new(true);
 
-    leptos::task::spawn_local(async move {
-        match api::get::<Value>("/api/v1/minigames").await {
-            Ok(v) => games.set(v["games"].as_array().cloned().unwrap_or_default()),
-            Err(_) => {}
-        }
-        loading.set(false);
+    crate::auth::on_member(auth, move || {
+        leptos::task::spawn_local(async move {
+            match api::get::<Value>("/api/v1/minigames").await {
+                Ok(v) => games.set(v["games"].as_array().cloned().unwrap_or_default()),
+                Err(_) => {}
+            }
+            loading.set(false);
+        });
     });
 
     view! {
+        <crate::components::member_gate::MemberGate title="Mini-games">
         <div class="mx-auto max-w-3xl px-4 py-8">
             <A href="/" attr:class="mb-6 inline-flex items-center gap-2 text-sm text-neutral-400 transition hover:text-white">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -129,6 +131,7 @@ pub fn GamesIndexPage() -> impl IntoView {
                 }).collect::<Vec<_>>()}
             </ul>
         </div>
+        </crate::components::member_gate::MemberGate>
     }
 }
 
@@ -155,8 +158,8 @@ struct RoundResult {
 
 #[component]
 pub fn GamePlayPage() -> impl IntoView {
-    crate::auth::require_registered(crate::auth::use_auth());
     let params = use_params_map();
+    let auth = use_auth();
     let game = move || {
         params
             .get()
@@ -240,7 +243,7 @@ pub fn GamePlayPage() -> impl IntoView {
         });
     };
     if valid_type {
-        preload();
+        crate::auth::on_member(auth, preload);
     }
 
     let finish_wrong = move |correct_value: Option<String>| {
@@ -338,6 +341,7 @@ pub fn GamePlayPage() -> impl IntoView {
     };
 
     view! {
+        <crate::components::member_gate::MemberGate title="Mini-games">
         <div class="mx-auto max-w-2xl px-4 py-8">
             <div class="mb-6 flex items-center justify-between">
                 <A href="/minigames" attr:class="text-sm text-white/60 hover:text-white">
@@ -555,6 +559,7 @@ pub fn GamePlayPage() -> impl IntoView {
                 </div>
             </Show>
         </div>
+        </crate::components::member_gate::MemberGate>
     }
 }
 

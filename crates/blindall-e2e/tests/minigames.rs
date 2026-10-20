@@ -48,6 +48,46 @@ fn duel_track_ids(d: &serde_json::Value) -> Vec<i64> {
         .collect()
 }
 
+/// Play a full 3-question duel: p1 answers wrong, p2 sweeps with the revealed
+/// correct_value → p2 wins 3-0.
+async fn duel_p2_sweeps(p1: &Client, p2: &Client) -> i64 {
+    let created = p1
+        .post(
+            "/api/v1/duels",
+            json!({"game_type": "quiz", "opponent_id": p2.user_id, "count": 3}),
+        )
+        .await
+        .expect_ok("create duel");
+    let id = created.json("/id").as_i64().unwrap();
+    p2.post_empty(&format!("/api/v1/duels/{id}/accept"))
+        .await
+        .expect_ok("accept");
+    for i in 0..3 {
+        let r1 = p1
+            .post(
+                &format!("/api/v1/duels/{id}/answer"),
+                json!({"idx": i, "value": "zzz wrong zzz"}),
+            )
+            .await
+            .expect_ok("p1 answer");
+        let cv = r1.json("/correct_value").as_str().unwrap().to_string();
+        p2.post(
+            &format!("/api/v1/duels/{id}/answer"),
+            json!({"idx": i, "value": cv}),
+        )
+        .await
+        .expect_ok("p2 answer");
+    }
+    let fin = p2
+        .get(&format!("/api/v1/duels/{id}"))
+        .await
+        .expect_ok("final");
+    assert_eq!(fin.json("/status"), "finished");
+    assert_eq!(fin.json("/creator_score"), 0);
+    assert_eq!(fin.json("/opponent_score"), 3);
+    id
+}
+
 #[tokio::test]
 async fn duel_lifecycle_frozen_questions_and_result() {
     let (p1, _) = Client::register("dla").await;
@@ -116,7 +156,26 @@ async fn duel_lifecycle_frozen_questions_and_result() {
     assert_eq!(fin.json("/creator_score"), 0);
     assert_eq!(fin.json("/opponent_score"), 3);
 
-    // p2 appears on the wins leaderboard
+    // p2 appears on the wins leaderboard — the route serves a fixed top-N
+    // window and the test DB persists across runs, so p2 must strictly out-win
+    // the current board maximum (1 win already secured above).
+    let lb = p1
+        .get("/api/v1/duels/leaderboard")
+        .await
+        .expect_ok("leaderboard");
+    let max_wins = lb
+        .json("/leaderboard")
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|r| r["wins"].as_i64())
+                .max()
+                .unwrap_or(0)
+        })
+        .unwrap_or(0);
+    for _ in 0..max_wins {
+        duel_p2_sweeps(&p1, &p2).await;
+    }
     let lb = p1
         .get("/api/v1/duels/leaderboard")
         .await
@@ -280,14 +339,44 @@ async fn daily_challenge_shared_questions_and_leaderboard() {
         .await;
     assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY);
 
-    // leaderboard has both players
+    // p1 reveals every remaining idx, p2 sweeps → p2 hits the maximum
+    // score for the day, which guarantees a top-20 leaderboard slot no
+    // matter how many players the persistent test DB already has today.
+    for idx in 1..10 {
+        let reveal = p1
+            .post(
+                "/api/v1/daily-challenge/answer",
+                json!({"game_type": "quiz", "idx": idx, "value": "zzz wrong zzz"}),
+            )
+            .await
+            .expect_ok("p1 reveal");
+        assert_eq!(reveal.json("/correct"), false);
+        let cv = reveal.json("/correct_value").as_str().unwrap().to_string();
+        let ok = p2
+            .post(
+                "/api/v1/daily-challenge/answer",
+                json!({"game_type": "quiz", "idx": idx, "value": cv}),
+            )
+            .await
+            .expect_ok("p2 sweep");
+        assert_eq!(ok.json("/correct"), true);
+    }
+
+    // p1's own progress came back in the show payload (score 0, all 10
+    // answered) — its row exists even though a 0-score entry can
+    // legitimately fall outside the top-20 on a populated day.
     let lb = p1
         .get("/api/v1/daily-challenge?type=quiz")
         .await
         .expect_ok("daily lb");
+    assert_eq!(lb.json("/score"), 0);
+    assert_eq!(lb.json("/answered"), 10);
+    // p2 scored the daily maximum → must be on the board.
     let lbtext = lb.body["leaderboard"].to_string();
-    assert!(lbtext.contains(&p1.user_id.to_string()));
-    assert!(lbtext.contains(&p2.user_id.to_string()));
+    assert!(
+        lbtext.contains(&p2.user_id.to_string()),
+        "top scorer missing from daily leaderboard: {lbtext}"
+    );
 }
 
 // ---- room party (realtime quiz) ------------------------------------------------
@@ -387,4 +476,153 @@ async fn party_lifecycle_and_guards() {
         .expect_ok("stop");
     let r = guest.get(&format!("/api/v1/rooms/{room_id}/party")).await;
     assert_eq!(r.status, StatusCode::NOT_FOUND);
+}
+
+// ---- media validity & distractor quality (regressions) ------------------------
+
+/// Regression for "question N has no music" + "album cover shows no cover":
+/// every frozen question must ship a playable http(s) audio URL, and
+/// album_cover questions a usable artwork URL. A pick whose provider
+/// resolution fails must be skipped, never served.
+#[tokio::test]
+async fn duel_questions_always_have_media() {
+    let (p1, _) = Client::register("mda").await;
+    for game_type in ["quiz", "who_sang", "album_cover", "first_letter"] {
+        let created = p1
+            .post("/api/v1/duels", json!({"game_type": game_type, "count": 5}))
+            .await
+            .expect_ok("create duel");
+        let id = created.json("/id").as_i64().unwrap();
+        let d = p1
+            .get(&format!("/api/v1/duels/{id}"))
+            .await
+            .expect_ok("show");
+        let questions = d.body["questions"].as_array().unwrap();
+        assert_eq!(questions.len(), 5, "{game_type}: {}", d.text);
+        for (i, q) in questions.iter().enumerate() {
+            let track = &q["question"]["track"];
+            let audio = track["preview_url"].as_str().unwrap_or("");
+            assert!(
+                audio.starts_with("http"),
+                "{game_type} q{i}: preview_url missing/invalid: {audio:?}"
+            );
+            if game_type == "album_cover" {
+                let art = track["artwork_url"].as_str().unwrap_or("");
+                assert!(
+                    art.starts_with("http") && !art.contains("/cover//"),
+                    "album_cover q{i}: artwork_url missing/invalid: {art:?}"
+                );
+            }
+        }
+    }
+}
+
+/// Solo /next must also never serve a question without playable audio.
+#[tokio::test]
+async fn solo_next_always_has_audio() {
+    let (u, _) = Client::register("mna").await;
+    for game_type in ["quiz", "who_sang", "album_cover", "first_letter"] {
+        let q = u
+            .post_empty(&format!("/api/v1/minigames/{game_type}/next"))
+            .await
+            .expect_ok("next");
+        let audio = q.body["track"]["preview_url"].as_str().unwrap_or("");
+        assert!(
+            audio.starts_with("http"),
+            "{game_type}: preview_url missing/invalid: {audio:?}"
+        );
+        if game_type == "album_cover" {
+            let art = q.body["track"]["artwork_url"].as_str().unwrap_or("");
+            assert!(
+                art.starts_with("http") && !art.contains("/cover//"),
+                "album_cover: artwork_url missing/invalid: {art:?}"
+            );
+        }
+    }
+}
+
+/// Regression for "French distractors on an English title": when the
+/// correct title has a detectable language, every distractor must share
+/// it. Draws with undetectable language are skipped (playlist coherence
+/// covers them).
+#[tokio::test]
+async fn quiz_distractors_match_correct_language() {
+    use blindall_core::lang::{Lang, compatible, detect};
+    let (u, _) = Client::register("mql").await;
+    let mut sampled = 0;
+    for _ in 0..40 {
+        if sampled >= 8 {
+            break;
+        }
+        let q = u
+            .post_empty("/api/v1/minigames/quiz/next")
+            .await
+            .expect_ok("next");
+        let correct = q.body["correct_value"].as_str().unwrap_or("");
+        let lang = detect(correct);
+        if lang == Lang::Other {
+            continue;
+        }
+        sampled += 1;
+        let choices = q.body["choices"].as_array().unwrap();
+        assert_eq!(choices.len(), 4);
+        for c in choices {
+            let v = c.as_str().unwrap_or("");
+            if v == correct {
+                continue;
+            }
+            assert!(
+                compatible(lang, v),
+                "distractor {v:?} is not {lang:?} (correct: {correct:?})"
+            );
+        }
+    }
+    assert!(
+        sampled >= 3,
+        "too few language-detectable draws ({sampled})"
+    );
+}
+
+/// Mirror of `norm_choice` in the repo: strip bracketed segments, slug.
+fn norm_choice(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut depth = 0usize;
+    for c in s.chars() {
+        match c {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            _ if depth == 0 => out.push(c),
+            _ => {}
+        }
+    }
+    blindall_core::sanitize::str_slug(&out, ' ')
+}
+
+/// Choices must be 4 distinct, normalized-different values — no
+/// "Imagine"/"Imagine (Remastered)" ambiguity.
+#[tokio::test]
+async fn quiz_choices_are_distinct() {
+    let (u, _) = Client::register("mqd").await;
+    for _ in 0..6 {
+        let q = u
+            .post_empty("/api/v1/minigames/quiz/next")
+            .await
+            .expect_ok("next");
+        let choices: Vec<String> = q.body["choices"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|c| c.as_str().map(norm_choice))
+            .collect();
+        let mut dedup = choices.clone();
+        dedup.sort();
+        dedup.dedup();
+        assert_eq!(
+            dedup.len(),
+            4,
+            "duplicate/near-duplicate choices: {:?} (raw: {})",
+            choices,
+            q.text
+        );
+    }
 }

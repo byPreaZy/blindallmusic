@@ -7,6 +7,7 @@ pub mod finished_round;
 pub mod footer;
 pub mod install_prompt;
 pub mod level;
+pub mod member_gate;
 pub mod moderators;
 pub mod navbar;
 pub mod notifications;

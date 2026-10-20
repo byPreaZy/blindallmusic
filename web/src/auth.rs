@@ -144,3 +144,33 @@ pub fn require_registered(auth: Auth) {
         }
     });
 }
+
+/// True once the session is resolved and belongs to a registered user
+/// (not anonymous, not guest).
+pub fn is_member(auth: Auth) -> bool {
+    auth.ready.get()
+        && auth
+            .user
+            .get()
+            .map(|u| !u.is_guest)
+            .unwrap_or(false)
+}
+
+/// Run `f` as soon as the session is known — but only for registered
+/// users. Pages behind a `MemberGate` use this to avoid firing doomed
+/// 401/403 requests for anonymous/guest visitors.
+pub fn on_member<F: Fn() + 'static>(auth: Auth, f: F) {
+    let f = std::rc::Rc::new(f);
+    let done = RwSignal::new(false);
+    Effect::new(move |_| {
+        if done.get() || !auth.ready.get() {
+            return;
+        }
+        done.set(true);
+        if auth.user.get().map(|u| !u.is_guest).unwrap_or(false) {
+            (f)();
+        }
+        // else: session known and not a member — it cannot change without
+        // a full page navigation (login/register routes remount anyway).
+    });
+}
