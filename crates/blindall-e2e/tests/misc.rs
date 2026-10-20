@@ -118,8 +118,18 @@ async fn seo_endpoints() {
 // ---- minigames -----------------------------------------------------------------
 
 #[tokio::test]
-async fn minigames_list_requires_auth() {
+async fn minigames_list_is_public_but_play_requires_member() {
+    // Catalog renders for everyone (the /minigames page is a public
+    // landing); scores are simply zeroed for anonymous visitors.
     let r = Client::anon().get("/api/v1/minigames").await;
+    assert_eq!(r.status, StatusCode::OK, "{}", r.text);
+    let games = r.json("/games").as_array().cloned().unwrap_or_default();
+    assert!(games.len() >= 5, "{}", r.text);
+    for g in &games {
+        assert_eq!(g["score"].as_i64().unwrap_or(-1), 0);
+    }
+    // …but actually playing still requires a registered account.
+    let r = Client::anon().post_empty("/api/v1/minigames/quiz/next").await;
     assert_eq!(r.status, StatusCode::UNAUTHORIZED);
 }
 

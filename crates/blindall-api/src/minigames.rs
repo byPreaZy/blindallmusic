@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use crate::auth::CurrentUser;
+use crate::auth::{CurrentUser, OptionalUser};
 use crate::state::AppState;
 
 const POINTS_CORRECT: i64 = 1;
@@ -62,12 +62,13 @@ fn expired_question() -> Response {
 
 // ---- index -----------------------------------------------------------------
 
-pub async fn index(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
-    if let Some(r) = crate::rooms::require_not_guest(&user) {
-        return r;
-    }
+/// Public catalog — anyone can see the game list (SEO-friendly landing
+/// page); `score` is just zeroed for anonymous/guest visitors. Actual
+/// gameplay endpoints stay member-only.
+pub async fn index(State(state): State<AppState>, OptionalUser(user): OptionalUser) -> Response {
+    let uid = user.filter(|u| !u.is_guest).map(|u| u.id);
     Json(json!({
-        "games": games_list(&state, Some(user.id)).await
+        "games": games_list(&state, uid).await
     }))
     .into_response()
 }

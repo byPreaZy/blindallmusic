@@ -51,18 +51,17 @@ pub fn GamesIndexPage() -> impl IntoView {
     let games = RwSignal::new(Vec::<Value>::new());
     let loading = RwSignal::new(true);
 
-    crate::auth::on_member(auth, move || {
-        leptos::task::spawn_local(async move {
-            match api::get::<Value>("/api/v1/minigames").await {
-                Ok(v) => games.set(v["games"].as_array().cloned().unwrap_or_default()),
-                Err(_) => {}
-            }
-            loading.set(false);
-        });
+    // Public catalog — the game list renders for everyone (visitors land
+    // here from the navbar; only actually *playing* requires an account).
+    leptos::task::spawn_local(async move {
+        match api::get::<Value>("/api/v1/minigames").await {
+            Ok(v) => games.set(v["games"].as_array().cloned().unwrap_or_default()),
+            Err(_) => {}
+        }
+        loading.set(false);
     });
 
     view! {
-        <crate::components::member_gate::MemberGate title="Mini-games">
         <div class="mx-auto max-w-3xl px-4 py-8">
             <A href="/" attr:class="mb-6 inline-flex items-center gap-2 text-sm text-neutral-400 transition hover:text-white">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -88,7 +87,7 @@ pub fn GamesIndexPage() -> impl IntoView {
                 <span class="rounded-full bg-purple-500/20 px-4 py-2 text-sm font-bold text-purple-300 group-hover:bg-purple-500/30">"→"</span>
             </A>
 
-            <Show when=move || auth.user.get().is_none() && !loading.get()>
+            <Show when=move || auth.ready.get() && auth.user.get().map(|u| u.is_guest).unwrap_or(true) && !loading.get()>
                 <div class="mb-6 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">
                     {t("Log in to save your scores.")}
                 </div>
@@ -131,7 +130,6 @@ pub fn GamesIndexPage() -> impl IntoView {
                 }).collect::<Vec<_>>()}
             </ul>
         </div>
-        </crate::components::member_gate::MemberGate>
     }
 }
 
