@@ -250,6 +250,13 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0029_user_subscriptions.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            30,
+            "remove_em_dashes".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0030_remove_em_dashes.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {
