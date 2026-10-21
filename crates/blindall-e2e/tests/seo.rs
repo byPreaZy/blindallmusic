@@ -48,8 +48,16 @@ async fn public_room(owner: &Client) -> (i64, String, String) {
 async fn home_serves_seo_head_and_landing() {
     let r = Client::anon().get("/").await;
     assert_eq!(r.status, StatusCode::OK, "{}", r.status);
-    contains(&r.text, "<title>Blind test en ligne multijoueur", "home title");
-    contains(&r.text, "name=\"robots\" content=\"index, follow\"", "robots");
+    contains(
+        &r.text,
+        "<title>Blind test en ligne multijoueur",
+        "home title",
+    );
+    contains(
+        &r.text,
+        "name=\"robots\" content=\"index, follow\"",
+        "robots",
+    );
     contains(&r.text, "rel=\"canonical\"", "canonical");
     contains(&r.text, "hreflang=\"fr\"", "hreflang fr");
     contains(&r.text, "hreflang=\"en\"", "hreflang en");
@@ -66,7 +74,11 @@ async fn room_page_serves_seo_landing_and_video_game_schema() {
     let r = Client::anon().get(&format!("/rooms/{slug}")).await;
     assert_eq!(r.status, StatusCode::OK, "{}", r.text);
     contains(&r.text, &format!("<title>{name}"), "room title");
-    contains(&r.text, &format!("rel=\"canonical\" href=\"http://localhost:8080/rooms/{slug}\""), "canonical");
+    contains(
+        &r.text,
+        &format!("rel=\"canonical\" href=\"http://localhost:8080/rooms/{slug}\""),
+        "canonical",
+    );
     contains(&r.text, "id=\"seo-landing\"", "landing");
     contains(&r.text, &name, "room name in landing");
     contains(&r.text, "VideoGame", "videogame schema");
@@ -82,10 +94,7 @@ async fn private_room_is_noindexed() {
     let (owner, _) = Client::register("seopriv").await;
     let name = uniq_name("privroom");
     let r = owner
-        .post(
-            "/api/v1/rooms",
-            json!({"name": name, "category_id": 4}),
-        )
+        .post("/api/v1/rooms", json!({"name": name, "category_id": 4}))
         .await;
     assert_eq!(r.status, StatusCode::CREATED, "{}", r.text);
     let room_id = r.json("/room/id").as_i64().unwrap();
@@ -127,7 +136,14 @@ async fn unknown_routes_return_real_404() {
 #[tokio::test]
 async fn private_and_member_routes_are_noindexed() {
     let c = Client::anon();
-    for path in ["/login", "/register", "/admin", "/settings", "/me", "/rooms"] {
+    for path in [
+        "/login",
+        "/register",
+        "/admin",
+        "/settings",
+        "/me",
+        "/rooms",
+    ] {
         let r = c.get(path).await;
         assert_eq!(r.status, StatusCode::OK, "{path}");
         contains(&r.text, "noindex", "{path} robots");
@@ -156,10 +172,18 @@ async fn locale_prefixed_routes_serve_self_canonical() {
     let c = Client::anon();
     let r = c.get("/en").await;
     assert_eq!(r.status, StatusCode::OK);
-    contains(&r.text, "canonical\" href=\"http://localhost:8080/en/", "en canonical");
+    contains(
+        &r.text,
+        "canonical\" href=\"http://localhost:8080/en/",
+        "en canonical",
+    );
     let r = c.get("/es/rankings").await;
     assert_eq!(r.status, StatusCode::OK);
-    contains(&r.text, "canonical\" href=\"http://localhost:8080/es/rankings\"", "es canonical");
+    contains(
+        &r.text,
+        "canonical\" href=\"http://localhost:8080/es/rankings\"",
+        "es canonical",
+    );
 }
 
 #[tokio::test]

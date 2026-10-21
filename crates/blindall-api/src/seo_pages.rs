@@ -355,7 +355,7 @@ const HOME_FAQ: [(&str, &str); 4] = [
     ),
     (
         "Peut-on jouer entre amis ?",
-        "Oui : crée une room privée, partage le lien et jouez en temps réel — ou lancez un duel asynchrone où chacun joue quand il veut.",
+        "Oui : crée une room privée, partage le lien et jouez en temps réel, ou lancez un duel asynchrone où chacun joue quand il veut.",
     ),
 ];
 
@@ -407,7 +407,7 @@ async fn landing_home(state: &AppState) -> String {
     s.push_str(
         "<p>Blind'All Music est un <strong>blind test en ligne</strong> gratuit et multijoueur : \
          écoute un extrait, devine le titre ou l'artiste avant les autres joueurs et grimpe au \
-         classement. Aucun téléchargement — tout se joue dans le navigateur, sur mobile comme \
+         classement. Aucun téléchargement : tout se joue dans le navigateur, sur mobile comme \
          sur ordinateur.</p>",
     );
     s.push_str("<h2>Comment jouer ?</h2><ol>\
@@ -477,7 +477,7 @@ async fn landing_room(state: &AppState, row: &blindall_db::RoomRow) -> String {
             .map(|(l, h)| (*l, h.as_deref()))
             .collect::<Vec<_>>(),
     ));
-    let _ = write!(s, "<h1>{} — Blind test en ligne</h1>", esc(&row.name));
+    let _ = write!(s, "<h1>Blind test {}</h1>", esc(&row.name));
 
     let intro = crate::official_seo::configured_intro(&slug, "fr")
         .and_then(|i| i.intro)
@@ -561,7 +561,7 @@ fn doc_head(path: &str) -> Option<(&'static str, &'static str, &'static str, &'s
     // (title, description, h1, intro) — FR
     let v = match path {
         "docs" => (
-            "Niveau, score, ELO et XP — les systèmes de progression | Blind'All Music",
+            "Niveau, score, ELO et XP : les systèmes de progression | Blind'All Music",
             "Comprends les systèmes de progression de Blind'All Music : XP, niveaux, score par manche et classement ELO.",
             "Les systèmes de progression",
             "Blind'All Music mesure ta progression sur quatre systèmes complémentaires : l'XP cumulée, le niveau, le score par manche et le classement ELO compétitif.",
@@ -573,7 +573,7 @@ fn doc_head(path: &str) -> Option<(&'static str, &'static str, &'static str, &'s
             "Chaque partie rapporte de l'XP qui fait progresser ton niveau. Plus tu réponds vite et juste, plus tu gagnes d'expérience.",
         ),
         "docs/elo" => (
-            "Système ELO — classement compétitif | Blind'All Music",
+            "Système ELO : classement compétitif | Blind'All Music",
             "Le classement ELO de Blind'All Music expliqué : calcul, gains, pertes et comment progresser.",
             "Système ELO",
             "L'ELO mesure ton niveau relatif face aux autres joueurs : chaque victoire fait monter ton score, chaque défaite le fait baisser.",
@@ -737,7 +737,7 @@ async fn decide(state: &AppState, path: &str, _locale: &str) -> Decision {
             "Contact | Blind'All Music",
             "Contacte l'équipe Blind'All Music : bug, suggestion, playlist ou question de modération.",
             "Contact",
-            "<p>Une question, un bug à signaler ou une suggestion de titre ? Envoie un message à l'équipe — pour ajouter ou modifier des titres dans les playlists publiques, contacte directement les modérateurs.</p>",
+            "<p>Une question, un bug à signaler ou une suggestion de titre ? Envoie un message à l'équipe. Pour ajouter ou modifier des titres dans les playlists publiques, contacte directement les modérateurs.</p>",
         ),
         ("rankings", 1) => rankings_decision(state, path).await,
         ("rankings", 2) => match segs[1] {
@@ -765,15 +765,15 @@ async fn decide(state: &AppState, path: &str, _locale: &str) -> Decision {
             "Duels de blind test asynchrones | Blind'All Music",
             "Défie un joueur en duel de blind test : les mêmes 10 questions pour les deux, chacun joue quand il veut. Classement au score.",
             "Duels",
-            "<p>Crée un défi ouvert ou cible un joueur : vous répondez chacun aux mêmes 10 questions, à votre rythme. Le meilleur score gagne le duel — revanche possible en un clic.</p>",
+            "<p>Crée un défi ouvert ou cible un joueur : vous répondez chacun aux mêmes 10 questions, à votre rythme. Le meilleur score gagne le duel. Revanche possible en un clic.</p>",
         ),
         ("daily", 1) => simple_decision(
             state,
             path,
-            "Défi du jour — blind test quotidien | Blind'All Music",
+            "Défi du jour : blind test quotidien | Blind'All Music",
             "Le défi du jour de Blind'All Music : les mêmes 10 questions pour tout le monde, un classement quotidien. Joue chaque jour !",
             "Défi du jour",
-            "<p>Chaque jour, les mêmes 10 questions pour tous les joueurs. Une seule partie par jour, un classement quotidien — reviens demain pour défendre ton rang.</p>",
+            "<p>Chaque jour, les mêmes 10 questions pour tous les joueurs. Une seule partie par jour, un classement quotidien : reviens demain pour défendre ton rang.</p>",
         ),
         ("donations", 1) => simple_decision(
             state,
@@ -893,7 +893,7 @@ async fn room_decision(state: &AppState, key: &str) -> Decision {
     head.json_ld.push(json!({
         "@context": "https://schema.org",
         "@type": "VideoGame",
-        "name": format!("{} — Blind'All Music", row.name),
+        "name": format!("{} : Blind'All Music", row.name),
         "description": head.description,
         "url": head.canonical,
         "image": head.og_image,
@@ -1041,14 +1041,14 @@ async fn faq_decision(state: &AppState, path: &str) -> Decision {
     let mut head = Head::new(
         state,
         path,
-        format!("FAQ — Questions fréquentes | {SITE}"),
+        format!("FAQ : questions fréquentes | {SITE}"),
         "Questions fréquentes sur Blind'All Music : compte, salles, scores, règles, playlists et fonctionnement du blind test en ligne.".into(),
     );
     if !faq.is_empty() {
         head.json_ld.push(faq_json_ld(&faq));
     }
     let mut landing = String::from(
-        "<main><h1>FAQ — Questions fréquentes</h1>\
+        "<main><h1>FAQ : questions fréquentes</h1>\
          <p>Tout ce qu'il faut savoir sur Blind'All Music : compte, salles, scores, règles et fonctionnement du jeu.</p>",
     );
     landing.push_str(&faq_dl(&faq));
@@ -1086,7 +1086,7 @@ fn minigames_decision(state: &AppState, path: &str) -> Decision {
     for (slug, label, desc) in GAME_COPY {
         let _ = write!(
             landing,
-            "<li><a href=\"/minigames/{slug}\"><strong>{label}</strong></a> — {} \
+            "<li><a href=\"/minigames/{slug}\"><strong>{label}</strong></a> : {} \
              <a href=\"/match/{slug}\">Jouer en ligne</a></li>",
             esc(desc)
         );
@@ -1106,7 +1106,7 @@ fn minigame_play_decision(state: &AppState, path: &str, gtype: &str) -> Decision
     let head = Head::new(
         state,
         path,
-        format!("{label} — mini-jeu musical en ligne | {SITE}"),
+        format!("{label} : mini-jeu musical en ligne | {SITE}"),
         format!("{desc} Joue gratuitement dans le navigateur, en solo ou en multijoueur en ligne."),
     );
     let landing = format!(
@@ -1124,13 +1124,13 @@ fn match_decision(state: &AppState, path: &str, gtype: &str) -> Decision {
     let head = Head::new(
         state,
         path,
-        format!("{label} en ligne multijoueur — matchmaking | {SITE}"),
+        format!("{label} en ligne multijoueur : matchmaking | {SITE}"),
         format!(
             "Rejoins la file de matchmaking {label} : un match en direct se lance dès qu'un autre joueur est trouvé. 10 questions, scores en temps réel, revanche en un clic."
         ),
     );
     let landing = format!(
-        "<main><h1>{label} — match en ligne</h1>\
+        "<main><h1>{label} : match en ligne</h1>\
          <p>Le matchmaking Blind'All Music trouve un adversaire en quelques secondes : 10 questions \
          en direct, le score de chacun s'affiche en temps réel, puis la revanche se lance en un clic.</p>\
          <p><a href=\"/match/{gtype}\">▶ Rejoindre la file d'attente</a></p>\
@@ -1171,13 +1171,16 @@ async fn static_page_decision(state: &AppState, slug: &str) -> Decision {
         &format!("/pages/{slug}"),
         format!("{title} | {SITE}"),
         if desc.is_empty() {
-            format!("{title} — Blind'All Music")
+            format!("{title} : Blind'All Music")
         } else {
             desc
         },
     );
     // Page content is admin-authored HTML — inject raw (parity with the SPA's
-    // inner_html rendering).
-    let landing = format!("<main><h1>{}</h1>{content}</main>", esc(&title));
+    // inner_html rendering), wrapped so it stays readable before WASM mounts.
+    let landing = format!(
+        "<main class=\"prose prose-invert mx-auto max-w-3xl px-4 py-10\"><h1>{}</h1>{content}</main>",
+        esc(&title)
+    );
     Decision::Page(StatusCode::OK, head, Some(landing))
 }

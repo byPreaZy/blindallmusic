@@ -553,7 +553,7 @@ pub fn DuelPlayPage() -> impl IntoView {
                                                 d["my_answers"].as_array().map(Vec::as_slice).unwrap_or(&[]));
                                             move |_| {
                                                 copy_clipboard(
-                                                    format!("Blind'All — {} {}\n{}\n{}\n{}/duels",
+                                                    format!("Blind'All : {} {}\n{}\n{}\n{}/duels",
                                                         t("Duel"), t(game_name(&gt)), line, grid, site_origin()),
                                                     copied);
                                             }
