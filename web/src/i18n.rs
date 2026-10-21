@@ -2121,7 +2121,7 @@ fn fr<'a>(key: &'a str) -> &'a str {
         "Forgot your password? No problem. Just let us know your email address and we will email you a password reset link that will allow you to choose a new one" => "Mot de passe oublié ? Donne simplement ton adresse e-mail : tu recevras un lien pour en définir un nouveau.",
         "Forgot your password?" => "Mot de passe oublié ?",
         "Multiplayer music quizzes for everyone. Challenge friends and discover new music." => "Des quiz musicaux multijoueurs ouverts à tous : défie tes amis et découvre des sons.",
-        "Multiplayer music quizzes" => "Quiz musicaux multijoueurs",
+        "Multiplayer music quizzes" => "Blind test en ligne multijoueur gratuit",
         "Free" => "Gratuit",
         "Game in progress" => "Partie en cours",
         "Game not found" => "Jeu introuvable",

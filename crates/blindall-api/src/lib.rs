@@ -27,6 +27,7 @@ pub mod rooms;
 pub mod round;
 pub mod seasons;
 pub mod seo;
+pub mod seo_pages;
 pub mod state;
 pub mod storage;
 pub mod teams;
@@ -41,7 +42,7 @@ use axum::extract::{DefaultBodyLimit, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
-use tower_http::services::{ServeDir, ServeFile};
+use tower_http::services::ServeDir;
 
 const PHOTO_UPLOAD_LIMIT: usize = 12 * 1024 * 1024;
 const TRACK_UPLOAD_LIMIT: usize = 16 * 1024 * 1024;
@@ -399,10 +400,7 @@ pub fn router(state: AppState) -> Router {
         .route("/robots.txt", get(seo::robots))
         .route("/llms.txt", get(seo::llms))
         .route("/sitemap.xml", get(seo::sitemap))
-        .route(
-            "/contact",
-            post(content::contact).get_service(ServeFile::new(state.spa_dir.join("index.html"))),
-        )
+        .route("/contact", post(content::contact).get(seo_pages::spa_page))
         .route("/stripe/webhook", post(donations::stripe_webhook))
         .route("/api/v1/faqs", get(faqs::index))
         .route("/api/v1/faqs/{id}/vote/{direction}", post(faqs::vote))
@@ -675,7 +673,10 @@ pub fn router(state: AppState) -> Router {
         )
         .fallback_service(
             ServeDir::new(&state.spa_dir)
-                .fallback(ServeFile::new(state.spa_dir.join("index.html"))),
+                // index.html must NOT be served as a directory index: every
+                // HTML route goes through `spa_page` for head/landing injection.
+                .append_index_html_on_directories(false)
+                .fallback(get(seo_pages::spa_page).with_state(state.clone())),
         )
         .layer(axum::middleware::from_fn(html_no_cache))
         .with_state(state)

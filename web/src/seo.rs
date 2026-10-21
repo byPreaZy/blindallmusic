@@ -1,38 +1,43 @@
-use std::sync::OnceLock;
 use wasm_bindgen::JsCast;
 
 fn document() -> Option<web_sys::Document> {
     web_sys::window()?.document()
 }
 
-const STATIC_META: &[(&str, &str)] = &[
-    ("name", "description"),
-    ("name", "robots"),
-    ("property", "og:title"),
-    ("property", "og:description"),
-    ("property", "og:image"),
-    ("property", "og:url"),
-    ("property", "og:locale"),
-    ("name", "twitter:title"),
-    ("name", "twitter:description"),
-    ("name", "twitter:image"),
+// Site-wide default head values — identical to the static index.html shell.
+// These are constants (not a DOM snapshot) because by the time a page has
+// called set_meta once, the live DOM no longer holds the defaults.
+const DEFAULT_META: &[(&str, &str, &str)] = &[
+    ("name", "description", "Des quiz musicaux multijoueurs en ligne. Teste ta culture sonore face à d'autres joueurs : Années 80, Disney, Rap, Rock, Pop, Chanson française et bien d'autres salles."),
+    ("name", "robots", "index, follow"),
+    ("property", "og:title", "Blind'All Music - Quiz musicaux multijoueurs en ligne"),
+    ("property", "og:description", "Des quiz musicaux multijoueurs en ligne. Teste ta culture sonore face à d'autres joueurs : Années 80, Disney, Rap, Rock, Pop, Chanson française et bien d'autres salles."),
+    ("property", "og:image", "/images/statics/screenshot.png"),
+    ("property", "og:url", ""),
+    ("property", "og:locale", "fr_FR"),
+    ("name", "twitter:title", "Blind'All Music - Quiz musicaux multijoueurs en ligne"),
+    ("name", "twitter:description", "Des quiz musicaux multijoueurs en ligne. Teste ta culture sonore face à d'autres joueurs : Années 80, Disney, Rap, Rock, Pop et bien plus."),
+    ("name", "twitter:image", "/images/statics/screenshot.png"),
 ];
 
-fn defaults() -> &'static Vec<(String, String)> {
-    static D: OnceLock<Vec<(String, String)>> = OnceLock::new();
-    D.get_or_init(|| {
-        let Some(doc) = document() else {
-            return Vec::new();
-        };
-        STATIC_META
-            .iter()
-            .filter_map(|(attr, key)| {
-                let sel = format!("meta[{attr}=\"{key}\"]");
-                let el = doc.query_selector(&sel).ok()??;
-                Some((sel, el.get_attribute("content").unwrap_or_default()))
-            })
-            .collect()
-    })
+fn defaults() -> Vec<(String, String)> {
+    let origin = web_sys::window()
+        .and_then(|w| w.location().origin().ok())
+        .unwrap_or_default();
+    DEFAULT_META
+        .iter()
+        .map(|(attr, key, value)| {
+            let sel = format!("meta[{attr}=\"{key}\"]");
+            let v = if *value == "" {
+                format!("{origin}/")
+            } else if value.starts_with('/') {
+                format!("{origin}{value}")
+            } else {
+                value.to_string()
+            };
+            (sel, v)
+        })
+        .collect()
 }
 
 fn head_el(doc: &web_sys::Document) -> Option<web_sys::Element> {
@@ -139,8 +144,8 @@ pub fn reset() {
         }
     }
     for (sel, content) in defaults() {
-        if let Ok(Some(el)) = doc.query_selector(sel) {
-            let _ = el.set_attribute("content", content);
+        if let Ok(Some(el)) = doc.query_selector(&sel) {
+            let _ = el.set_attribute("content", &content);
             let _ = el.remove_attribute("data-seo-managed");
         }
     }

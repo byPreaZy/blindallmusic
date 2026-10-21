@@ -75,12 +75,13 @@ pub async fn llms(State(state): State<AppState>) -> Response {
          - [ELO system]({base}/docs/elo): Competitive ranking explained.\n\
          - [Create rooms & playlists]({base}/docs/create-content): Guide for hosts and playlist creators.\n\n\
          ## Optional\n\n\
+         - [Mini-games]({base}/minigames): Five free music mini-games — quiz, who sang, anagram, first letter, album cover.\n\
          - [Contact]({base}/contact): Contact the Blind'All Music team.\n\
-         - [Terms & legal pages]({base}/pages/cgu): Legal information (French).\n"
+         - [Legal notice]({base}/pages/mentions-legales): Legal information (French).\n"
     ))
 }
 
-const DOC_PATHS: [(&str, &str); 9] = [
+const DOC_PATHS: [(&str, &str); 18] = [
     ("docs", "0.60"),
     ("docs/howto", "0.65"),
     ("docs/glossary", "0.55"),
@@ -89,6 +90,15 @@ const DOC_PATHS: [(&str, &str); 9] = [
     ("docs/faq", "0.50"),
     ("docs/level", "0.45"),
     ("docs/elo", "0.45"),
+    ("minigames", "0.70"),
+    ("minigames/quiz", "0.60"),
+    ("minigames/who-sang", "0.60"),
+    ("minigames/anagram", "0.60"),
+    ("minigames/first-letter", "0.60"),
+    ("minigames/album-cover", "0.60"),
+    ("duels", "0.50"),
+    ("daily", "0.50"),
+    ("donations", "0.30"),
     ("contact", "0.25"),
 ];
 
@@ -116,12 +126,14 @@ pub async fn sitemap(State(state): State<AppState>) -> Response {
 
     if let Ok(rooms) = state.seo.public_rooms().await {
         for room in rooms {
-            entry(
-                &format!("{base}/rooms/{}", room.slug),
-                &atom(room.updated_at),
-                "weekly",
-                "0.90",
-            );
+            for locale in LOCALES {
+                entry(
+                    &localized_path(&base, &format!("rooms/{}", room.slug), locale),
+                    &atom(room.updated_at),
+                    "weekly",
+                    "0.90",
+                );
+            }
         }
     }
 
@@ -184,10 +196,8 @@ pub async fn sitemap(State(state): State<AppState>) -> Response {
     );
     h.insert(
         header::CACHE_CONTROL,
-        HeaderValue::from_static("no-cache, no-store, must-revalidate"),
+        HeaderValue::from_static("public, max-age=300"),
     );
-    h.insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
-    h.insert(header::EXPIRES, HeaderValue::from_static("0"));
     res
 }
 
