@@ -489,12 +489,17 @@ pub async fn duel_show(
         return r;
     }
     match state.minigames.duel(id).await {
-        Ok(Some(row)) => {
+        Ok(Some(mut row)) => {
             let creator_id = row["creator_id"].as_i64().unwrap_or_default();
             let opponent_id = row["opponent_id"].as_i64();
             let participant = user.id == creator_id || opponent_id == Some(user.id);
             if !participant {
                 return duel_err(StatusCode::FORBIDDEN, "Not a participant.");
+            }
+            // Stored preview URLs expire ~15 min after duel creation —
+            // re-resolve before serving.
+            if let Some(qs) = row["questions"].as_array_mut() {
+                state.minigames.refresh_question_media(qs).await;
             }
             Json(duel_row_json(&row, user.id, true)).into_response()
         }
@@ -674,7 +679,7 @@ pub async fn daily_show(
         return duel_err(StatusCode::UNPROCESSABLE_ENTITY, "Invalid game type.");
     }
     let today = chrono::Utc::now().date_naive();
-    let questions = match state
+    let mut questions = match state
         .minigames
         .daily_questions(today, &game_type, DAILY_QUESTIONS_CONST)
         .await
@@ -685,6 +690,9 @@ pub async fn daily_show(
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
+    // Daily sets are generated once at midnight — their preview URLs are
+    // long expired by the time players answer. Re-resolve before serving.
+    state.minigames.refresh_question_media(&mut questions).await;
     let (score, answered, my_answers) = state
         .minigames
         .daily_progress(user.id, today, &game_type)

@@ -660,6 +660,67 @@ impl MinigameRepo {
         }
     }
 
+    /// Re-resolve audio/artwork URLs inside stored question sets — Deezer
+    /// preview URLs are signed and expire ~15 min after generation, so a
+    /// frozen duel/daily JSONB would otherwise ship dead links.
+    pub async fn refresh_question_media(&self, questions: &mut [serde_json::Value]) {
+        use std::collections::HashMap;
+        let ids: Vec<i64> = questions
+            .iter()
+            .filter_map(|q| q["track"]["id"].as_i64())
+            .collect();
+        if ids.is_empty() {
+            return;
+        }
+        let rows = match sqlx::query(
+            "SELECT id, provider, provider_id, preview_url, artwork_url \
+             FROM tracks WHERE id = ANY($1)",
+        )
+        .bind(&ids)
+        .fetch_all(&self.pool)
+        .await
+        {
+            Ok(r) => r,
+            Err(_) => return,
+        };
+        let mut map: HashMap<i64, (String, Option<String>, Option<String>, Option<String>)> =
+            HashMap::new();
+        for r in &rows {
+            map.insert(
+                r.get("id"),
+                (
+                    r.get("provider"),
+                    r.get("provider_id"),
+                    r.get("preview_url"),
+                    r.get("artwork_url"),
+                ),
+            );
+        }
+        for q in questions.iter_mut() {
+            let Some(tid) = q["track"]["id"].as_i64() else {
+                continue;
+            };
+            let Some((provider, provider_id, preview_url, artwork_url)) = map.get(&tid) else {
+                continue;
+            };
+            let media = self
+                .resolver
+                .resolve_media(
+                    provider,
+                    provider_id.as_deref().unwrap_or_default(),
+                    preview_url.as_deref().unwrap_or(""),
+                    artwork_url.as_deref().unwrap_or(""),
+                )
+                .await;
+            if let Some(audio) = media.audio.filter(|u| u.starts_with("http")) {
+                q["track"]["preview_url"] = serde_json::json!(audio);
+            }
+            if let Some(art) = media.artwork.filter(|u| u.starts_with("http")) {
+                q["track"]["artwork_url"] = serde_json::json!(art);
+            }
+        }
+    }
+
     /// `n` questions with distinct track ids when the type is track-based.
     pub async fn gen_question_set(&self, game_type: &str, n: usize) -> Vec<serde_json::Value> {
         let mut out = Vec::new();
