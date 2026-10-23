@@ -137,8 +137,10 @@ pub fn AnswerInput(
             _ => 1500,
         };
         gloo_timers::callback::Timeout::new(ms, move || {
-            if flash.get().as_deref() == Some(kind.as_str()) {
-                flash.set(None);
+            // try_* — the timeout outlives the component when the track
+            // ends or the page unmounts → plain set() panics on disposed.
+            if flash.try_get().flatten().as_deref() == Some(kind.as_str()) {
+                let _ = flash.try_set(None);
             }
         })
         .forget();
@@ -148,7 +150,7 @@ pub fn AnswerInput(
     let flash_chips = move |ids: Vec<i64>| {
         flashing_ids.update(|s| s.extend(ids.iter().copied()));
         gloo_timers::callback::Timeout::new(650, move || {
-            flashing_ids.update(|s| {
+            let _ = flashing_ids.try_update(|s| {
                 for id in &ids {
                     s.remove(id);
                 }

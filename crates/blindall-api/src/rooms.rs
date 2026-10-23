@@ -379,18 +379,42 @@ async fn room_state(state: &AppState, room_id: i64) -> Value {
         .collect();
     let configured: Vec<String> = state.donations.supporter_perks.clone();
 
-    let users: Vec<Value> = member_ids
-        .iter()
-        .filter_map(|uid| info.get(uid))
-        .map(|p| {
-            let perks: &[String] = if supporter_ids.contains(&p.id) {
-                &configured
-            } else {
-                &[]
-            };
-            player_info_json(state, p, raw_map.get(&p.id).copied().unwrap_or(0.0), perks)
-        })
-        .collect();
+    // PHP parity: the in-room user list comes from the presence channel
+    // membership (.here), not the Redis zset — the zset only feeds
+    // home/catalog counters. WS members are merged with zset joiners
+    // (REST presence-joined posts land before the socket subscribes),
+    // deduped by id, with live scores patched in.
+    let mut users: Vec<Value> = state
+        .hub
+        .presence_members(&blindall_game::events::room_channel(room_id))
+        .await;
+    let mut seen: std::collections::HashSet<i64> =
+        users.iter().filter_map(|u| u["id"].as_i64()).collect();
+    for uid in &member_ids {
+        if !seen.contains(uid) {
+            seen.insert(*uid);
+            if let Some(p) = info.get(uid) {
+                let perks: &[String] = if supporter_ids.contains(&p.id) {
+                    &configured
+                } else {
+                    &[]
+                };
+                users.push(player_info_json(
+                    state,
+                    p,
+                    raw_map.get(&p.id).copied().unwrap_or(0.0),
+                    perks,
+                ));
+            }
+        }
+    }
+    for u in users.iter_mut() {
+        if let Some(uid) = u["id"].as_i64() {
+            if let Some(total) = raw_map.get(&uid) {
+                u["score"]["total"] = json!(total);
+            }
+        }
+    }
 
     json!({
         "users": users,
@@ -409,11 +433,18 @@ async fn broadcast_public_state(state: &AppState, cfg: &blindall_game::store::Ro
     let now = chrono::Utc::now().timestamp();
     let count = state.presence.member_count(cfg.id, now).await.unwrap_or(0);
     let snapshot = state.manager.snapshot(cfg.id).await.ok().flatten();
-    let (idx, playing) = snapshot
-        .as_ref()
-        .and_then(|s| s.round.as_ref())
-        .map(|r| (r.current, r.is_playing))
-        .unwrap_or((0, false));
+    // PHP parity: current_track_index reports 0 whenever no live round
+    // occupies the room (stalled/finished), so the public counter resets
+    // instead of freezing on a dead round. A paused round keeps its index.
+    let (idx, playing) = match snapshot.as_ref().and_then(|s| {
+        s.round
+            .as_ref()
+            .filter(|r| r.finished_at.is_none())
+            .map(|r| (r.current, s.is_playing, s.paused))
+    }) {
+        Some((idx, playing, paused)) if playing || paused => (idx, playing),
+        _ => (0, false),
+    };
     let payload = blindall_game::events::room_public_state(cfg, count, idx, playing);
     state
         .hub
@@ -456,7 +487,17 @@ pub async fn joined(
         ));
     }
 
-    if !row.is_playing && cfg.is_autostart {
+    // Gate on the actor's snapshot, not the DB flag: a stalled actor
+    // leaves rooms.is_playing=true forever, so trusting the row alone
+    // means the room can never restart. Any unfinished in-memory round
+    // (playing, paused, or retrying) counts as live; the actor's 5s
+    // retry recovers a stalled one. No actor → trust the row.
+    let snapshot = state.manager.snapshot(id).await.ok().flatten();
+    let playing = snapshot
+        .as_ref()
+        .and_then(|s| s.round.as_ref().map(|r| r.finished_at.is_none()))
+        .unwrap_or(row.is_playing);
+    if !playing && cfg.is_autostart {
         let _ = state
             .manager
             .send(
@@ -469,7 +510,6 @@ pub async fn joined(
     }
 
     let st = room_state(&state, id).await;
-    let snapshot = state.manager.snapshot(id).await.ok().flatten();
 
     let played: Vec<Value> = match &snapshot {
         Some(s) => {
@@ -622,11 +662,15 @@ pub async fn public_state(
     let now = chrono::Utc::now().timestamp();
     let count = state.presence.member_count(id, now).await.unwrap_or(0);
     let snapshot = state.manager.snapshot(id).await.ok().flatten();
-    let (idx, playing) = snapshot
-        .as_ref()
-        .and_then(|s| s.round.as_ref())
-        .map(|r| (r.current, r.is_playing))
-        .unwrap_or((0, false));
+    let (idx, playing) = match snapshot.as_ref().and_then(|s| {
+        s.round
+            .as_ref()
+            .filter(|r| r.finished_at.is_none())
+            .map(|r| (r.current, s.is_playing, s.paused))
+    }) {
+        Some((idx, playing, paused)) if playing || paused => (idx, playing),
+        _ => (0, false),
+    };
     let mut out = blindall_game::events::room_public_state(&cfg, count, idx, playing);
     if playing {
         if let (Some(t), Some(started)) = (
@@ -693,7 +737,10 @@ pub async fn live_state(
     let snapshot = state.manager.snapshot(id).await.ok().flatten();
     let round_any = snapshot.as_ref().and_then(|s| s.round.as_ref());
     let round = round_any.filter(|r| r.finished_at.is_none());
-    let playing = round.map(|r| r.is_playing).unwrap_or(false);
+    // PHP parity: is_playing/current_index reflect an actively progressing
+    // round only — a stalled or paused round reports 0/idle instead of a
+    // frozen counter.
+    let playing = round.is_some() && snapshot.as_ref().map(|s| s.is_playing).unwrap_or(false);
 
     // Keep showing the just-finished round's scores until the snapshot clears.
     let mut standings: Vec<Value> = vec![];
@@ -736,7 +783,11 @@ pub async fn live_state(
         "is_playing": playing,
         "can_control": can_control,
         "member_count": count,
-        "current_index": round.map(|r| r.current).unwrap_or(0),
+        "current_index": if playing || paused {
+            round.map(|r| r.current).unwrap_or(0)
+        } else {
+            0
+        },
         "tracks_total": cfg.tracks_by_round,
         "standings": standings,
     });

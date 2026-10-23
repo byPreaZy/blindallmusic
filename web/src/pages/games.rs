@@ -510,8 +510,9 @@ pub fn GamePlayPage() -> impl IntoView {
                                         })
                                     })}
                                     {q.preview_url.clone().map(|url| view! {
-                                        <audio controls autoplay class="w-full" src=url
-                                            on:ended=on_ended />
+                                        <crate::components::minigame::MinigameAudio
+                                            src=url
+                                            on_ended=Callback::new(move |_| on_ended(()))/>
                                     })}
                                     {q.scrambled_artist.clone().map(|s| view! {
                                         <div class="text-center">

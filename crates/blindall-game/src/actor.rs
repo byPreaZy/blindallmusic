@@ -72,6 +72,9 @@ pub struct RoomActor {
     room: RoomConfig,
     round: Option<RoundRow>,
     phase: Phase,
+    /// A transient store failure parked the chain — the timer is re-armed
+    /// for a retry instead of leaving the round stuck is_playing forever.
+    stalled: bool,
     current_track: Option<GameTrack>,
     store: Arc<dyn GameStore>,
     scores: Arc<dyn ScoreStore>,
@@ -96,6 +99,7 @@ impl RoomActor {
             room,
             round: None,
             phase: Phase::Idle,
+            stalled: false,
             current_track: None,
             store,
             scores,
@@ -149,6 +153,18 @@ impl RoomActor {
             .reset(Instant::now() + Duration::from_secs(86400));
     }
 
+    /// A parked timer used to mean "stuck forever" (room counter frozen,
+    /// autostart dead). Transient failures now retry in 5s through the
+    /// InterTrack phase; `stalled` tells snapshots/start_round the round
+    /// exists but isn't progressing.
+    fn stall_and_retry(&mut self) {
+        self.stalled = true;
+        self.phase = Phase::InterTrack {
+            next_at: Instant::now() + Duration::from_secs(5),
+        };
+        self.arm_timer();
+    }
+
     async fn handle(&mut self, cmd: RoomCommand) -> bool {
         match cmd {
             RoomCommand::Start { user_id } => self.start_round(user_id).await,
@@ -180,7 +196,11 @@ impl RoomActor {
             RoomCommand::Snapshot { reply } => {
                 let _ = reply.send(RoomSnapshot {
                     room_id: self.room.id,
-                    is_playing: self.round.as_ref().map(|r| r.is_playing).unwrap_or(false),
+                    is_playing: self
+                        .round
+                        .as_ref()
+                        .map(|r| r.is_playing && !self.stalled)
+                        .unwrap_or(false),
                     paused: matches!(self.phase, Phase::Paused { .. }),
                     round: self.round.clone(),
                     current_track: self.current_track.clone(),
@@ -207,10 +227,26 @@ impl RoomActor {
 
     async fn start_round(&mut self, user_id: Option<i64>) {
         if let Some(r) = &self.round {
-            if r.is_playing && !r.tracks.is_empty() && r.finished_at.is_none() {
+            if r.is_playing && !r.tracks.is_empty() && r.finished_at.is_none() && !self.stalled {
                 return;
             }
         }
+
+        // A stalled round (dead in the water after a store failure) blocks
+        // restart: the row still has is_playing=true, so PHP-style callers
+        // checking the flag never send Start again. Close it out first.
+        if let Some(r) = &self.round {
+            if r.finished_at.is_none() && self.stalled {
+                let now = Utc::now();
+                let _ = self.store.finish_round(r.id, now).await;
+                let _ = self.store.set_room_playing(self.room.id, false).await;
+                if let Some(r) = self.round.as_mut() {
+                    r.is_playing = false;
+                    r.finished_at = Some(now);
+                }
+            }
+        }
+        self.stalled = false;
 
         let tracks = match self.store.pick_tracks(&self.room).await {
             Ok(t) => t,
@@ -314,7 +350,7 @@ impl RoomActor {
 
             if let Err(e) = self.store.advance_round(round.id, Utc::now()).await {
                 tracing::error!(round = round.id, error = %e, "advance_round failed");
-                self.park_timer();
+                self.stall_and_retry();
                 return;
             }
             let round = self.round.as_mut().unwrap();
@@ -329,7 +365,7 @@ impl RoomActor {
                 }
                 Err(e) => {
                     tracing::error!(track_id, error = %e, "load_track failed");
-                    self.park_timer();
+                    self.stall_and_retry();
                     return;
                 }
             };
@@ -376,6 +412,7 @@ impl RoomActor {
                 }
             }
 
+            self.stalled = false;
             self.current_track = Some(track.clone());
             let room_v = self.room_payload().await;
             let payload = events::track_played(self.round.as_ref().unwrap(), &room_v, &track);

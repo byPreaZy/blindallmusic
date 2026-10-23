@@ -78,8 +78,9 @@ pub fn QuestionView(
                     </div>
                 })}
                 {preview.map(|url| view! {
-                    <audio controls autoplay class="w-full" src=url
-                        on:ended=move |_| audio_ended.set(true)/>
+                    <crate::components::minigame::MinigameAudio
+                        src=url
+                        on_ended=Callback::new(move |_| audio_ended.set(true))/>
                 })}
                 {scrambled.map(|s| view! {
                     <div class="text-center">

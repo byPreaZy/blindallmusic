@@ -59,8 +59,16 @@ pub fn MatchPage() -> impl IntoView {
 
     let joined_channel = RwSignal::new(Option::<String>::None);
     let still_queued = RwSignal::new(false);
+    // Stale-callback guard for hooks parked on the shared realtime socket
+    // (they outlive this component → touching disposed signals panics).
+    let alive = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    {
+        let alive = alive.clone();
+        on_cleanup(move || alive.store(false, std::sync::atomic::Ordering::Relaxed));
+    }
 
     // ---- enter a formed match: subscribe to its channel + load snapshot --
+    let enter_alive = alive.clone();
     let enter_match = Callback::new(move |id: i64| {
         match_id.set(Some(id));
         stage.set("playing");
@@ -100,11 +108,17 @@ pub fn MatchPage() -> impl IntoView {
                 });
             });
             // Re-fetch the snapshot after a reconnect — question events
-            // fired while the socket was down are not replayed.
+            // fired while the socket was down are not replayed. The hook
+            // outlives this component on the shared socket: bail out once
+            // the page is disposed or its signals panic on access.
+            let alive = enter_alive.clone();
             realtime.on_reconnect(Rc::new(move || {
+                if !alive.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
+                }
                 leptos::task::spawn_local(async move {
                     if let Ok(v) = api::get::<Value>(&format!("/api/v1/matches/{id}")).await {
-                        match_state.set(Some(v));
+                        let _ = match_state.try_set(Some(v));
                     }
                 });
             }));
@@ -145,10 +159,14 @@ pub fn MatchPage() -> impl IntoView {
             return;
         };
         instant.set(true);
+        let alive = alive.clone();
         realtime.listen(
             &format!("user:{uid}"),
             "MatchFound",
             Rc::new(move |e| {
+                if !alive.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
+                }
                 if let Some(id) = e["match_id"].as_i64() {
                     still_queued.set(false);
                     stop_poll.run(());
@@ -237,9 +255,12 @@ pub fn MatchPage() -> impl IntoView {
         });
     }
 
-    // countdown re-render every second
-    let tick_iv = gloo_timers::callback::Interval::new(1_000, move || tick.update(|t| *t += 1));
-    tick_iv.forget();
+    // countdown re-render every second — dropped on unmount: a forgotten
+    // interval keeps updating a disposed signal → reactive panic.
+    let tick_iv = SendWrapper::new(gloo_timers::callback::Interval::new(1_000, move || {
+        let _ = tick.try_update(|t| *t += 1);
+    }));
+    on_cleanup(move || drop(tick_iv));
 
     on_cleanup(move || {
         if let Some(ch) = joined_channel.get_untracked() {

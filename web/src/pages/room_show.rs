@@ -496,6 +496,14 @@ pub fn RoomPage() -> impl IntoView {
 
     let rt = RwSignal::new_local(Option::<Realtime>::None);
     let shared_rt = use_context::<crate::app::SharedRealtime>();
+    // Stale-callback guard: event listeners parked on the shared realtime
+    // socket (and the reconnect hook) outlive this component — without the
+    // flag they touch disposed signals → reactive panic.
+    let rt_alive = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    {
+        let rt_alive = rt_alive.clone();
+        on_cleanup(move || rt_alive.store(false, std::sync::atomic::Ordering::Relaxed));
+    }
 
     // ---- hydrate + wire events once we have a token -----------------------
     let hydrate = Rc::new(move |room_id: i64| {
@@ -726,6 +734,7 @@ pub fn RoomPage() -> impl IntoView {
         on!("RoundFinalizing", move |_| {
             finalizing.set(true);
         });
+        let fin_alive = rt_alive.clone();
         on!("RoundFinished", move |e| {
             if let Ok(r) = serde_json::from_value::<Round>(e["round"].clone()) {
                 round.set(Some(r));
@@ -737,7 +746,11 @@ pub fn RoomPage() -> impl IntoView {
             // PHP reconciles the scoreboard from the API at round end (events
             // may have been missed). Same fallback here.
             if let Some(rid) = e["round"]["id"].as_i64() {
+                let alive = fin_alive.clone();
                 let _ = leptos::task::spawn_local(async move {
+                    if !alive.load(std::sync::atomic::Ordering::Relaxed) {
+                        return;
+                    }
                     if let Ok(v) = api::get::<Value>(&format!("/api/v1/rounds/{rid}/scores")).await
                     {
                         scores.set(parse_scores(&v["scores"]));
@@ -876,7 +889,15 @@ pub fn RoomPage() -> impl IntoView {
         }
         {
             let hydrate = hydrate.clone();
-            realtime.on_reconnect(Rc::new(move || hydrate(rid)));
+            let rt_alive = rt_alive.clone();
+            realtime.on_reconnect(Rc::new(move || {
+                // The shared socket outlives this component: without the
+                // guard, a reconnect after unmount touches disposed signals
+                // → reactive panic.
+                if rt_alive.load(std::sync::atomic::Ordering::Relaxed) {
+                    hydrate(rid)
+                }
+            }));
         }
     });
 
