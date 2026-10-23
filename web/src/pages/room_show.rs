@@ -484,9 +484,18 @@ pub fn RoomPage() -> impl IntoView {
             leptos::task::spawn_local({
                 let nav = nav.clone();
                 async move {
-                    match api::post_empty::<crate::types::AuthResponse>("/api/v1/auth/guest").await
-                    {
+                    let guest =
+                        || api::post_empty::<crate::types::AuthResponse>("/api/v1/auth/guest");
+                    match guest().await {
                         Ok(resp) => auth.complete_oauth(resp),
+                        Err(e) if e.status == 429 => {
+                            let wait = e.body["retry_after"].as_u64().unwrap_or(20).min(60);
+                            gloo_timers::future::TimeoutFuture::new(wait as u32 * 1_000).await;
+                            match guest().await {
+                                Ok(resp) => auth.complete_oauth(resp),
+                                Err(_) => nav("/login", Default::default()),
+                            }
+                        }
                         Err(_) => nav("/login", Default::default()),
                     }
                 }
