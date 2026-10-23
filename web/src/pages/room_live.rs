@@ -355,9 +355,9 @@ pub fn RoomLivePage() -> impl IntoView {
                                                 alt="QR" class="h-44 w-44"/>
                                         </div>
                                         <p class="mt-4 break-all text-xs text-white/40">
-                                            {format!("/rooms/{rid}")}
+                                            {format!("/rooms/{rid}?pad=1")}
                                         </p>
-                                        <A href=format!("/rooms/{rid}") attr:class="btn-primary mt-4 inline-block w-full">
+                                        <A href=format!("/rooms/{rid}?pad=1") attr:class="btn-primary mt-4 inline-block w-full">
                                             {t("Play")}
                                         </A>
                                     </div>

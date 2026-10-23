@@ -12,7 +12,7 @@ use crate::types::{JoinedPayload, RoomConfig, RoomUser, Round, Track};
 use crate::ws::Realtime;
 use leptos::prelude::*;
 use leptos_router::components::A;
-use leptos_router::hooks::{use_navigate, use_params};
+use leptos_router::hooks::{use_navigate, use_params, use_query_map};
 use leptos_router::params::Params;
 use send_wrapper::SendWrapper;
 use serde_json::{json, Value};
@@ -470,6 +470,15 @@ pub fn RoomPage() -> impl IntoView {
     let found_all_markers = RwSignal::new(Vec::<Value>::new());
 
     // ---- view state (Show.vue layout) --------------------------------------
+    // `?pad=1` = buzzer mode (TV QR code): the phone answers, the TV plays.
+    // No <Player> is mounted so no audio is fetched on the device; the answer
+    // clock is driven by the server's track started_at timestamps instead.
+    let pad_mode = use_query_map().with_untracked(|q| {
+        q.get("pad")
+            .map(|v| v == "1" || v == "true")
+            .unwrap_or(false)
+    });
+    let pad_clock_base = RwSignal::new(0.0_f64);
     let volume = RwSignal::new(crate::components::player::saved_volume());
     let display_chat = RwSignal::new(true);
     let podium_open = RwSignal::new(false);
@@ -544,6 +553,7 @@ pub fn RoomPage() -> impl IntoView {
             round.set(data.round);
             track.set(data.track);
             start_offset.set(data.start_time);
+            pad_clock_base.set(js_sys::Date::now() / 1000.0 - data.start_time);
             scores.set(parse_scores(&data.scores));
             round_id.set(data.round_id);
             played_tracks.set(data.played_tracks);
@@ -768,6 +778,13 @@ pub fn RoomPage() -> impl IntoView {
             }
         });
         on!("TrackPlayed", move |e| {
+            pad_clock_base.set(
+                e["round"]["current_track_started_at"]
+                    .as_str()
+                    .map(|s| js_sys::Date::parse(s) / 1000.0)
+                    .filter(|v| v.is_finite())
+                    .unwrap_or_else(|| js_sys::Date::now() / 1000.0),
+            );
             if let Ok(r) = serde_json::from_value::<Round>(e["round"].clone()) {
                 round.set(Some(r));
             }
@@ -932,6 +949,19 @@ pub fn RoomPage() -> impl IntoView {
             .map(|r| r.conn_state().get())
             .unwrap_or("reconnecting")
     };
+    let conn_label = Signal::derive(move || conn().to_string());
+
+    // Pad clock: no audio element exists, so `current_time` follows the
+    // server-emitted track start instead of <audio>.timeupdate.
+    if pad_mode {
+        let iv = SendWrapper::new(gloo_timers::callback::Interval::new(250, move || {
+            if track.try_get().flatten().is_some() && !paused.try_get().unwrap_or(true) {
+                let now = js_sys::Date::now() / 1000.0;
+                let _ = current_time.try_set(now - pad_clock_base.try_get().unwrap_or(now));
+            }
+        }));
+        on_cleanup(move || drop(iv));
+    }
     let _me_id = auth.user.get_untracked().map(|u| u.id);
     let can_moderate_chat = auth
         .user
@@ -1049,6 +1079,27 @@ pub fn RoomPage() -> impl IntoView {
             </Show>
                 }
             >
+                <Show
+                    when=move || !pad_mode
+                    fallback=move || {
+                        view! {
+                            <RoomPadView
+                                room=room
+                                round=round
+                                track=track
+                                current_time=current_time
+                                volume=volume
+                                scores=scores
+                                users=users
+                                played_tracks=played_tracks
+                                found_all=found_all_markers
+                                paused=paused
+                                me_id=me_sig
+                                conn_label=conn_label
+                            />
+                        }
+                    }
+                >
                 <div class="room-show-root h-full min-w-0 overflow-x-hidden md:flex"
                     style="height:calc(100dvh - 3.5rem)">
                     <div class="room-show-scroll relative min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:px-12 md:py-8">
@@ -1277,6 +1328,7 @@ pub fn RoomPage() -> impl IntoView {
                         </div>
                     </Show>
                 </div>
+                </Show>
 
                 <Show when=move || finalizing.get() && !round_finished.get()>
                     <div class="round-finalizing-overlay">
@@ -1946,5 +1998,151 @@ fn PartyPanel(
                 </div>
             }.into_any())
         }}
+    }
+}
+
+// ---- pad (buzzer) view -------------------------------------------------------
+
+/// `?pad=1` layout: what the QR-code joiner gets on their phone in a bar.
+/// No audio element (the TV plays the extract for everyone) — just the
+/// answer input, the running score and a compact podium.
+#[component]
+fn RoomPadView(
+    room: RwSignal<RoomConfig>,
+    round: RwSignal<Option<Round>>,
+    track: RwSignal<Option<Track>>,
+    current_time: RwSignal<f64>,
+    volume: RwSignal<f64>,
+    scores: RwSignal<HashMap<i64, f64>>,
+    users: RwSignal<Vec<RoomUser>>,
+    played_tracks: RwSignal<Vec<Value>>,
+    found_all: RwSignal<Vec<Value>>,
+    paused: RwSignal<bool>,
+    me_id: Signal<Option<i64>>,
+    conn_label: Signal<String>,
+) -> impl IntoView {
+    let my_score = Signal::derive(move || {
+        me_id
+            .get()
+            .and_then(|id| scores.get().get(&id).copied())
+            .unwrap_or(0.0)
+    });
+    let top = Signal::derive(move || {
+        let sc = scores.get();
+        let mut rows: Vec<(String, f64)> = users
+            .get()
+            .iter()
+            .map(|u| (u.name.clone(), sc.get(&u.id).copied().unwrap_or(0.0)))
+            .collect();
+        rows.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        rows.truncate(5);
+        rows
+    });
+    let i_found_all = Signal::derive(move || {
+        me_id
+            .get()
+            .is_some_and(|me| found_all.get().iter().any(|u| u["id"].as_i64() == Some(me)))
+    });
+    let progress = Signal::derive(move || {
+        let dur = room.get().track_duration.max(1.0);
+        (current_time.get() / dur * 100.0).clamp(0.0, 100.0)
+    });
+
+    view! {
+        <div class="mx-auto flex min-h-[calc(100dvh-3.5rem)] w-full max-w-lg flex-col gap-4 px-4 py-4">
+            <div class="flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                    <h1 class="truncate text-lg font-black text-white">
+                        {move || if room.get().name.is_empty() { t("Blind test").to_string() } else { room.get().name } }
+                    </h1>
+                    <p class="mt-0.5 flex items-center gap-1.5 text-xs text-white/50">
+                        <span class=move || format!(
+                            "h-2 w-2 shrink-0 rounded-full {}",
+                            if conn_label.get() == "connected" { "bg-brand-accent" } else { "animate-pulse bg-brand-secondary" }
+                        )></span>
+                        {move || if conn_label.get() == "connected" { t("Connected") } else { t("Reconnecting") }}
+                    </p>
+                </div>
+                <span class="shrink-0 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-bold text-white">
+                    {move || format!(
+                        "{}/{}",
+                        round.get().map(|r| r.current).unwrap_or(0),
+                        room.get().tracks_by_round,
+                    )}
+                </span>
+            </div>
+
+            <div class="rounded-2xl border border-white/10 bg-neutral-900/80 p-6 text-center">
+                {move || {
+                    if paused.get() {
+                        return view! {
+                            <p class="text-xs font-bold uppercase tracking-[0.3em] text-amber-300">{t("Paused")}</p>
+                            <p class="mt-3 text-sm text-white/60">{t("The game is paused by the host.")}</p>
+                        }.into_any();
+                    }
+                    if track.get().is_some() {
+                        return view! {
+                            <div>
+                                <p class="text-2xl">"🎧"</p>
+                                <p class="mt-2 text-xs font-bold uppercase tracking-[0.3em] text-purple-300">
+                                    {t("Listen on the big screen!")}
+                                </p>
+                                <div class="mx-auto mt-5 h-2.5 w-full max-w-xs overflow-hidden rounded-full bg-white/10">
+                                    <div class="h-full rounded-full bg-gradient-to-r from-purple-500 to-teal-400 transition-[width] duration-200"
+                                        style=move || format!("width:{}%", progress.get())></div>
+                                </div>
+                            </div>
+                        }.into_any();
+                    }
+                    if let Some(last) = played_tracks.get().last().cloned() {
+                        let answers = last["answers"].as_array().cloned().unwrap_or_default();
+                        return view! {
+                            <div>
+                                <p class="text-xs font-bold uppercase tracking-[0.3em] text-amber-300">{t("It was")}</p>
+                                <div class="mt-4 flex flex-wrap justify-center gap-2">
+                                    {answers.iter().map(|a| view! {
+                                        <span class="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm font-semibold text-white">
+                                            {a["value"].as_str().unwrap_or("").to_string()}
+                                        </span>
+                                    }).collect::<Vec<_>>()}
+                                </div>
+                            </div>
+                        }.into_any();
+                    }
+                    view! {
+                        <p class="text-sm text-white/60">{t("Waiting for the next round…")}</p>
+                    }.into_any()
+                }}
+            </div>
+
+            <AnswerInput round=round track=track current_time=current_time.read_only() volume=volume/>
+
+            {move || i_found_all.get().then(|| view! {
+                <p class="rounded-xl border border-teal-500/30 bg-teal-500/10 px-4 py-3 text-center text-sm font-bold text-teal-300">
+                    "🎉 "{t("You found all the answers!")}
+                </p>
+            })}
+
+            <div class="rounded-2xl border border-white/10 bg-neutral-900/80 p-5">
+                <div class="flex items-center justify-between border-b border-white/10 pb-3">
+                    <span class="text-sm font-bold text-white/70">{t("Your score")}</span>
+                    <span class="text-xl font-black text-teal-300">{move || format!("{:.0}", my_score.get())}</span>
+                </div>
+                <ol class="mt-3 space-y-1.5">
+                    {move || top.get().iter().enumerate().map(|(i, (name, sc))| {
+                        let medal = match i { 0 => "🥇", 1 => "🥈", 2 => "🥉", _ => "" };
+                        view! {
+                            <li class="flex items-center gap-2.5 text-sm">
+                                <span class="w-6 text-center font-black text-white/50">
+                                    {if medal.is_empty() { (i + 1).to_string() } else { medal.to_string() }}
+                                </span>
+                                <span class="flex-1 truncate font-semibold text-white">{name.clone()}</span>
+                                <span class="font-black text-teal-300/80">{format!("{sc:.0}")}</span>
+                            </li>
+                        }
+                    }).collect::<Vec<_>>()}
+                </ol>
+            </div>
+        </div>
     }
 }

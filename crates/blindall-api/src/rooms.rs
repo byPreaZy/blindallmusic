@@ -826,7 +826,13 @@ pub async fn qr_code(State(state): State<AppState>, Path(id): Path<i64>) -> Resp
     if state.store.room_config(id).await.is_err() {
         return StatusCode::NOT_FOUND.into_response();
     }
-    let url = format!("{}/rooms/{}", state.mail.app_url.trim_end_matches('/'), id);
+    // `?pad=1` opens the buzzer layout on the phone: answers only, the
+    // extract is played by the TV — never on the scanning device.
+    let url = format!(
+        "{}/rooms/{}?pad=1",
+        state.mail.app_url.trim_end_matches('/'),
+        id
+    );
     let Ok(code) = qrcode::QrCode::new(url.as_bytes()) else {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     };
