@@ -47,3 +47,4 @@ blindall_seed.sql.gz
 
 # Local agent notes (not committed)
 AGENTS.md
+e2e-*.png
