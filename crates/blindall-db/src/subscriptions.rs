@@ -48,7 +48,9 @@ impl SubscriptionRepo {
              (user_id, plan, status, stripe_checkout_session_id, \
               stripe_customer_id, stripe_subscription_id, created_at, updated_at) \
              VALUES ($1, $2, 'active', $3, $4, $5, $6, $6) \
-             ON CONFLICT (stripe_checkout_session_id) DO NOTHING",
+             ON CONFLICT (stripe_checkout_session_id) \
+             WHERE stripe_checkout_session_id IS NOT NULL \
+             DO NOTHING",
         )
         .bind(user_id)
         .bind(plan)
