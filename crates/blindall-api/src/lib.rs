@@ -243,6 +243,10 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/daily-challenge/answer",
             post(minigames::daily_answer),
         )
+        .route(
+            "/api/v1/daily-challenge/revive",
+            post(minigames::daily_revive),
+        )
         .route("/api/v1/moderation", get(moderation::dashboard))
         .route(
             "/api/v1/moderation/suggestions",

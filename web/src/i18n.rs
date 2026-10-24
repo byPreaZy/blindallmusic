@@ -913,6 +913,11 @@ fn en<'a>(key: &'a str) -> &'a str {
         "/month per venue" => "/month per venue",
         "Active plan" => "Active plan",
         "Available soon" => "Available soon",
+        "Subscribe" => "Subscribe",
+        "Retry with Plus" => "Retry with Plus",
+        "No ads, forever" => "No ads, forever",
+        "Daily-challenge revive" => "Daily-challenge revive",
+        "All supporter perks" => "All supporter perks",
         k => k,
     }
 }
@@ -1867,6 +1872,11 @@ fn es<'a>(key: &'a str) -> &'a str {
         "/month per venue" => "/mes por local",
         "Active plan" => "Plan activo",
         "Available soon" => "Próximamente",
+        "Subscribe" => "Suscribirse",
+        "Retry with Plus" => "Reintentar con Plus",
+        "No ads, forever" => "Sin anuncios, para siempre",
+        "Daily-challenge revive" => "Revive diario del desafío",
+        "All supporter perks" => "Todas las ventajas de supporter",
         k => k,
     }
 }
@@ -2822,6 +2832,11 @@ fn fr<'a>(key: &'a str) -> &'a str {
         "/month per venue" => "/mois par lieu",
         "Active plan" => "Abonnement actif",
         "Available soon" => "Bientôt disponible",
+        "Subscribe" => "S'abonner",
+        "Retry with Plus" => "Réessayer (Plus)",
+        "No ads, forever" => "Zéro pub, pour toujours",
+        "Daily-challenge revive" => "Un revive par jour au daily",
+        "All supporter perks" => "Tous les avantages supporter",
         k => k,
     }
 }

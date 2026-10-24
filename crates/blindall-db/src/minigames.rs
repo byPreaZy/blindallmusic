@@ -1037,6 +1037,52 @@ impl MinigameRepo {
         }))
     }
 
+    /// Plus revive: rewrite a previously WRONG answer for `idx`. The score is
+    /// only bumped when the new answer is correct. Returns None when `idx`
+    /// isn't a recorded wrong answer.
+    pub async fn daily_revive(
+        &self,
+        user_id: i64,
+        day: chrono::NaiveDate,
+        game_type: &str,
+        idx: i64,
+        correct: bool,
+        given: &str,
+    ) -> Result<Option<(i64, i64)>, sqlx::Error> {
+        let entry = serde_json::json!({"idx": idx, "correct": correct, "value": given});
+        let res = sqlx::query(
+            "UPDATE minigame_daily_scores SET
+               answers = (
+                 SELECT jsonb_agg(CASE WHEN (a->>'idx')::bigint = $4
+                                       THEN $5::jsonb ELSE a END)
+                 FROM jsonb_array_elements(answers) a
+               ),
+               score = score + $6,
+               updated_at = NOW()
+             WHERE user_id = $1 AND day = $2 AND game_type = $3
+               AND EXISTS (
+                 SELECT 1 FROM jsonb_array_elements(answers) a
+                 WHERE (a->>'idx')::bigint = $4
+                   AND (a->>'correct')::boolean = false
+               )
+             RETURNING score, jsonb_array_length(answers)::bigint",
+        )
+        .bind(user_id)
+        .bind(day)
+        .bind(game_type)
+        .bind(idx)
+        .bind(entry.to_string())
+        .bind(if correct { 1i32 } else { 0i32 })
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(res.map(|r| {
+            (
+                r.get::<i32, _>("score") as i64,
+                r.get::<i64, _>("jsonb_array_length"),
+            )
+        }))
+    }
+
     pub async fn daily_progress(
         &self,
         user_id: i64,

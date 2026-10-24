@@ -655,6 +655,15 @@ pub fn DailyPage() -> impl IntoView {
     let daily_type = RwSignal::new("quiz");
     let copied = RwSignal::new(false);
     let marks = RwSignal::new(Vec::<Value>::new());
+    // Plus perk: re-answer one wrong daily question. Once armed, the next
+    // submit goes to /revive instead of /answer.
+    let revive_armed = RwSignal::new(false);
+    let can_revive = move || {
+        auth.user
+            .get()
+            .map(|u| u.donor_perks.iter().any(|p| p == "daily_revive"))
+            .unwrap_or(false)
+    };
 
     let load = move |ty: &'static str| {
         daily_type.set(ty);
@@ -688,19 +697,36 @@ pub fn DailyPage() -> impl IntoView {
         }
         let i = idx.get();
         let gt = daily_type.get();
+        let revived = revive_armed.get_untracked();
+        revive_armed.set(false);
         checking.set(true);
         leptos::task::spawn_local(async move {
             let body = json!({"game_type": gt, "idx": i, "value": value});
-            match api::post::<Value, _>("/api/v1/daily-challenge/answer", &body).await {
+            let url = if revived {
+                "/api/v1/daily-challenge/revive"
+            } else {
+                "/api/v1/daily-challenge/answer"
+            };
+            match api::post::<Value, _>(url, &body).await {
                 Ok(d) => {
                     wrong.set(!d["correct"].as_bool().unwrap_or(false));
                     score.set(d["score"].as_i64().unwrap_or(0));
                     total.set(d["total"].as_i64().unwrap_or(0));
                     marks.update(|m| {
-                        m.push(json!({
-                            "idx": i as i64,
-                            "correct": d["correct"].as_bool().unwrap_or(false),
-                        }))
+                        if let Some(e) = m
+                            .iter_mut()
+                            .find(|e| e["idx"].as_i64() == Some(i as i64))
+                        {
+                            *e = json!({
+                                "idx": i as i64,
+                                "correct": d["correct"].as_bool().unwrap_or(false),
+                            });
+                        } else {
+                            m.push(json!({
+                                "idx": i as i64,
+                                "correct": d["correct"].as_bool().unwrap_or(false),
+                            }));
+                        }
                     });
                     result.set(Some(d));
                 }
@@ -846,6 +872,17 @@ pub fn DailyPage() -> impl IntoView {
                                                 <p class="text-center text-white/60">
                                                     {t("Correct answer")}": "<span class="font-semibold text-white">{cv}</span>
                                                 </p>
+                                            })}
+                                            {(wrong.get() && can_revive()).then(|| view! {
+                                                <button type="button"
+                                                    class="w-full rounded-lg border border-amber-400/50 bg-amber-400/10 px-4 py-2 text-sm font-semibold text-amber-300 transition hover:bg-amber-400/20"
+                                                    on:click=move |_| {
+                                                        revive_armed.set(true);
+                                                        result.set(None);
+                                                        wrong.set(false);
+                                                    }>
+                                                    "💛 " {t("Retry with Plus")}
+                                                </button>
                                             })}
                                             <button type="button" class="btn-primary w-full" on:click=move |_| next()>
                                                 {move || if idx.get() + 1 >= total.get() as usize { t("See results") } else { t("Next question") }}

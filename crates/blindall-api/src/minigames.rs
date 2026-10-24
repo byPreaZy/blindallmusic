@@ -809,3 +809,116 @@ pub async fn daily_answer(
         }
     }
 }
+
+/// Plus perk: retry one wrongly-answered daily question per (day, game_type).
+pub async fn daily_revive(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Json(body): Json<DailyAnswerBody>,
+) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
+    let has_revive = state
+        .subscriptions
+        .active_plan(user.id)
+        .await
+        .ok()
+        .flatten()
+        .is_some();
+    if !has_revive {
+        return duel_err(StatusCode::FORBIDDEN, "Blind'All Plus required.");
+    }
+    let game_type = body.game_type.replace('-', "_");
+    if !VALID_TYPES.contains(&game_type.as_str()) {
+        return duel_err(StatusCode::UNPROCESSABLE_ENTITY, "Invalid game type.");
+    }
+    let today = chrono::Utc::now().date_naive();
+    let (_, _, my_answers) = state
+        .minigames
+        .daily_progress(user.id, today, &game_type)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or((0, 0, json!([])));
+    let was_wrong = my_answers.as_array().map(|a| {
+        a.iter().any(|e| {
+            e["idx"].as_i64() == Some(body.idx as i64)
+                && e["correct"].as_bool() == Some(false)
+        })
+    });
+    if was_wrong != Some(true) {
+        return duel_err(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Only a wrong answer can be revived.",
+        );
+    }
+    // Claim the (user, day, game) slot atomically — the unique index does the
+    // race protection.
+    match state
+        .subscriptions
+        .record_revive(user.id, &game_type)
+        .await
+    {
+        Ok(true) => {}
+        Ok(false) => {
+            return duel_err(StatusCode::UNPROCESSABLE_ENTITY, "Revive already used today.");
+        }
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+    let questions = match state
+        .minigames
+        .daily_questions(today, &game_type, DAILY_QUESTIONS_CONST)
+        .await
+    {
+        Ok(q) => q,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+    let Some(q) = questions.get(body.idx) else {
+        return duel_err(StatusCode::UNPROCESSABLE_ENTITY, "Invalid question index.");
+    };
+    let Some(correct_value) = q["correct_value"].as_str() else {
+        return duel_err(StatusCode::UNPROCESSABLE_ENTITY, "Invalid question.");
+    };
+    let correct = question_correct(&game_type, correct_value, &body.value);
+    match state
+        .minigames
+        .daily_revive(
+            user.id,
+            today,
+            &game_type,
+            body.idx as i64,
+            correct,
+            body.value.trim(),
+        )
+        .await
+    {
+        Ok(Some((score, answered))) => {
+            if correct {
+                let _ = state
+                    .minigames
+                    .record_score(
+                        user.id,
+                        &game_type,
+                        POINTS_CORRECT,
+                        json!({"daily": today.to_string(), "revive": true}),
+                    )
+                    .await;
+                state
+                    .levels
+                    .dispatch(user.id, blindall_db::LevelTrigger::Score);
+            }
+            Json(json!({
+                "correct": correct,
+                "correct_value": correct_value,
+                "score": score,
+                "answered": answered,
+                "total": questions.len(),
+                "revived": true,
+            }))
+            .into_response()
+        }
+        Ok(None) => duel_err(StatusCode::UNPROCESSABLE_ENTITY, "Nothing to revive."),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}

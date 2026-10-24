@@ -15,16 +15,24 @@ pub const DONOR_PERKS: [&str; 3] = ["ad_free", "avatar_crown", "supporter_reacti
 pub struct DonationsConfig {
     pub monthly_goal_cents: i64,
     pub stripe_payment_url: String,
+    pub stripe_plus_payment_url: String,
+    pub stripe_pro_payment_url: String,
     pub stripe_webhook_secret: String,
     pub supporter_perks: Vec<String>,
     pub supporter_reaction_emojis: Vec<String>,
 }
+
+/// Perks granted while a Plus subscription is active — independent of the
+/// monthly donation (donating also gives `supporter_perks` for that month).
+pub const PLUS_PERKS: [&str; 2] = ["ad_free", "daily_revive"];
 
 impl Default for DonationsConfig {
     fn default() -> Self {
         Self {
             monthly_goal_cents: 6_000,
             stripe_payment_url: String::new(),
+            stripe_plus_payment_url: String::new(),
+            stripe_pro_payment_url: String::new(),
             stripe_webhook_secret: String::new(),
             supporter_perks: DONOR_PERKS.iter().map(|s| s.to_string()).collect(),
             supporter_reaction_emojis: ["☕", "💎", "🙏", "✨", "🎁", "🫶"]
@@ -102,12 +110,115 @@ pub async fn stripe_webhook(
     let Ok(event) = serde_json::from_slice::<Value>(&body) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
-    if event["type"].as_str() == Some("checkout.session.completed") {
-        if let Err(r) = record_session(&state, &event["data"]["object"]).await {
-            return r;
+    let obj = &event["data"]["object"];
+    match event["type"].as_str() {
+        Some("checkout.session.completed") => {
+            let r = if obj["mode"].as_str() == Some("subscription") {
+                record_subscription_session(&state, obj).await
+            } else {
+                record_session(&state, obj).await
+            };
+            if let Err(r) = r {
+                return r;
+            }
         }
+        Some("customer.subscription.updated") | Some("customer.subscription.created") => {
+            sync_subscription(&state, obj).await;
+        }
+        Some("customer.subscription.deleted") => {
+            if let Some(sid) = obj["id"].as_str() {
+                let _ = state.subscriptions.cancel(sid).await;
+            }
+        }
+        _ => {}
     }
     Json(json!({"received": true})).into_response()
+}
+
+/// checkout.session.completed for a Payment Link in subscription mode:
+/// `client_reference_id` = "<user_id>:<plan>".
+async fn record_subscription_session(state: &AppState, session: &Value) -> Result<i64, Response> {
+    let Some(session_id) = session["id"].as_str().filter(|s| !s.is_empty()) else {
+        return Ok(0);
+    };
+    if !matches!(
+        session["payment_status"].as_str(),
+        Some("paid") | Some("no_payment_required")
+    ) {
+        return Ok(0);
+    }
+    let reference = session["client_reference_id"].as_str().unwrap_or("");
+    let (ref_uid, ref_plan) = reference.split_once(':').unwrap_or((reference, "plus"));
+    let plan = match ref_plan {
+        blindall_db::subscriptions::PLAN_PRO => blindall_db::subscriptions::PLAN_PRO,
+        _ => blindall_db::subscriptions::PLAN_PLUS,
+    };
+    let user_id = match ref_uid.parse::<i64>() {
+        Ok(id) => Some(id),
+        Err(_) => {
+            let email = session["customer_details"]["email"]
+                .as_str()
+                .map(|e| e.to_lowercase());
+            state
+                .donations_repo
+                .resolve_donor(None, email.as_deref())
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())?
+        }
+    };
+    let Some(uid) = user_id else {
+        tracing::warn!(%session_id, "subscription checkout without resolvable user");
+        return Ok(0);
+    };
+    match state
+        .subscriptions
+        .record_checkout(
+            uid,
+            plan,
+            session_id,
+            session["customer"].as_str(),
+            session["subscription"].as_str(),
+        )
+        .await
+    {
+        Ok(true) => {
+            if let Ok(Some(email)) = state.auth.email_of(uid).await {
+                let _ = crate::mail::send(
+                    &state.mail,
+                    &email,
+                    "",
+                    "Bienvenue dans Blind'All Plus",
+                    "<p>Merci pour votre abonnement Blind'All Plus ! Vos avantages \
+                     sont actifs : plus de pubs et un revive quotidien sur le \
+                     daily challenge.</p>",
+                )
+                .await;
+            }
+        }
+        Ok(false) => {}
+        Err(e) => {
+            tracing::warn!(error = %e, "subscription record failed");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR.into_response());
+        }
+    }
+    Ok(0)
+}
+
+async fn sync_subscription(state: &AppState, obj: &Value) {
+    let Some(sid) = obj["id"].as_str() else { return };
+    let status = obj["status"].as_str().unwrap_or("active");
+    let period_end = obj["current_period_end"]
+        .as_i64()
+        .and_then(|t| chrono::DateTime::from_timestamp(t, 0));
+    let cancel_at_period_end = obj["cancel_at_period_end"].as_bool().unwrap_or(false)
+        || !obj["canceled_at"].is_null();
+    if let Err(e) = state
+        .subscriptions
+        .sync(sid, status, period_end, cancel_at_period_end)
+        .await
+    {
+        tracing::warn!(error = %e, "subscription sync failed");
+    }
 }
 
 async fn record_session(state: &AppState, session: &Value) -> Result<i64, Response> {
@@ -196,13 +307,55 @@ pub fn payment_url_for_user(
             }
         }
     }
-    let base = &cfg.stripe_payment_url;
+    finish_payment_url(&cfg.stripe_payment_url, query)
+}
+
+/// Payment Link for a subscription plan — `client_reference_id` carries
+/// "<user_id>:<plan>" so the webhook can attach the subscription.
+pub fn plan_payment_url_for_user(
+    cfg: &DonationsConfig,
+    plan: &str,
+    user: Option<&blindall_db::entities::User>,
+    email: Option<&str>,
+    locale: Option<&str>,
+) -> String {
+    let base = match plan {
+        blindall_db::subscriptions::PLAN_PRO => &cfg.stripe_pro_payment_url,
+        _ => &cfg.stripe_plus_payment_url,
+    };
+    if base.is_empty() {
+        return String::new();
+    }
+    let mut query: Vec<(String, String)> = vec![];
+    if let Some(l) = locale {
+        if ["fr", "en", "es"].contains(&l) {
+            query.push(("locale".into(), l.into()));
+        }
+    }
+    if let Some(u) = user {
+        if !u.is_guest {
+            query.push((
+                "client_reference_id".into(),
+                format!("{}:{plan}", u.id),
+            ));
+            if let Some(e) = email.filter(|e| e.contains('@')) {
+                query.push(("locked_prefilled_email".into(), e.into()));
+            }
+        }
+    }
+    finish_payment_url(base, query)
+}
+
+fn finish_payment_url(base: &str, query: Vec<(String, String)>) -> String {
+    if base.is_empty() {
+        return String::new();
+    }
     if query.is_empty() {
-        return base.clone();
+        return base.to_string();
     }
     let (base, fragment) = match base.split_once('#') {
         Some((b, f)) => (b.to_string(), format!("#{f}")),
-        None => (base.clone(), String::new()),
+        None => (base.to_string(), String::new()),
     };
     let sep = if base.contains('?') { "&" } else { "?" };
     let qs: Vec<String> = query
@@ -279,9 +432,20 @@ pub async fn progress(State(state): State<AppState>, OptionalUser(user): Optiona
             .unwrap_or(false),
         _ => false,
     };
+    // Ad-free perk covers the active paid plan as well as this month's donors.
+    let plan = match &user {
+        Some(u) if !u.is_guest => state
+            .subscriptions
+            .active_plan(u.id)
+            .await
+            .ok()
+            .flatten(),
+        _ => None,
+    };
     if let Some(o) = progress.as_object_mut() {
         o.insert("days_remaining".into(), json!(days_remaining));
-        o.insert("ads_disabled".into(), json!(user_supporter));
+        o.insert("ads_disabled".into(), json!(user_supporter || plan.is_some()));
+        o.insert("plan".into(), json!(plan));
         o.insert("adsense_client".into(), json!(state.adsense_client));
         o.insert("adsense_slot".into(), json!(state.adsense_slot));
         o.insert(
@@ -291,6 +455,20 @@ pub async fn progress(State(state): State<AppState>, OptionalUser(user): Optiona
     }
     progress["payment_url"] = json!(payment_url_for_user(
         &state.donations,
+        user.as_ref(),
+        email.as_deref(),
+        None
+    ));
+    progress["plus_url"] = json!(plan_payment_url_for_user(
+        &state.donations,
+        blindall_db::subscriptions::PLAN_PLUS,
+        user.as_ref(),
+        email.as_deref(),
+        None
+    ));
+    progress["pro_url"] = json!(plan_payment_url_for_user(
+        &state.donations,
+        blindall_db::subscriptions::PLAN_PRO,
         user.as_ref(),
         email.as_deref(),
         None

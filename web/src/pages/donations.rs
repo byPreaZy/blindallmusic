@@ -132,6 +132,43 @@ pub fn DonationsPage() -> impl IntoView {
                                 </div>
                             </Show>
                         </div>
+
+                        // Blind'All Plus — subscription card (hidden until
+                        // STRIPE_PLUS_URL is configured server-side).
+                        {move || {
+                            let plus_url = p["plus_url"].as_str().unwrap_or("").to_string();
+                            let plan = p["plan"].as_str().unwrap_or("").to_string();
+                            if plus_url.is_empty() && plan.is_empty() {
+                                return view! { <div/> }.into_any();
+                            }
+                            view! {
+                                <div class="mt-6 rounded-2xl border border-amber-400/30 bg-gradient-to-br from-amber-500/10 to-transparent p-5">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <div>
+                                            <h3 class="text-lg font-bold text-amber-300">
+                                                "⭐ Blind'All Plus"
+                                                {(!plan.is_empty()).then(|| view! {
+                                                    <span class="ml-2 rounded bg-amber-400/20 px-2 py-0.5 text-xs uppercase text-amber-200">
+                                                        {t("Active plan")}
+                                                    </span>
+                                                })}
+                                            </h3>
+                                            <ul class="mt-2 space-y-1 text-sm text-white/70">
+                                                <li>"🚫 " {t("No ads, forever")}</li>
+                                                <li>"💛 " {t("Daily-challenge revive")}</li>
+                                                <li>"👑 " {t("All supporter perks")}</li>
+                                            </ul>
+                                        </div>
+                                        {(!plus_url.is_empty() && plan.is_empty()).then(|| view! {
+                                            <a href=plus_url.clone()
+                                                class="btn-primary !px-5 !py-2" target="_blank" rel="noopener">
+                                                {t("Subscribe")}
+                                            </a>
+                                        })}
+                                    </div>
+                                </div>
+                            }.into_any()
+                        }}
                     }.into_any()
                 }}
 

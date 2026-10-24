@@ -48,6 +48,8 @@ pub struct User {
     #[serde(default)]
     pub is_supporter: bool,
     #[serde(default)]
+    pub plan: Option<String>,
+    #[serde(default)]
     pub custom_tag: String,
 }
 

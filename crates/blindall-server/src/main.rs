@@ -222,6 +222,7 @@ async fn main() -> anyhow::Result<()> {
             .filter_map(|s| s.trim().parse::<i64>().ok())
             .collect(),
         donations_repo: blindall_db::DonationRepo::new(pool.clone()),
+        subscriptions: blindall_db::SubscriptionRepo::new(pool.clone()),
         donations: {
             let mut cfg = blindall_api::donations::DonationsConfig::default();
             if let Ok(v) = std::env::var("DONATIONS_MONTHLY_GOAL_CENTS") {
@@ -229,6 +230,12 @@ async fn main() -> anyhow::Result<()> {
             }
             if let Ok(v) = std::env::var("STRIPE_DONATION_URL") {
                 cfg.stripe_payment_url = v;
+            }
+            if let Ok(v) = std::env::var("STRIPE_PLUS_URL") {
+                cfg.stripe_plus_payment_url = v;
+            }
+            if let Ok(v) = std::env::var("STRIPE_PRO_URL") {
+                cfg.stripe_pro_payment_url = v;
             }
             cfg.stripe_webhook_secret = std::env::var("STRIPE_WEBHOOK_SECRET").unwrap_or_default();
             cfg

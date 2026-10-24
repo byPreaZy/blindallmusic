@@ -297,11 +297,24 @@ pub async fn me(State(state): State<AppState>, CurrentUser(user): CurrentUser) -
         .user_is_supporter(user.id, &key)
         .await
         .unwrap_or(false);
-    let perks: Vec<String> = if is_supporter {
+    let plan = state
+        .subscriptions
+        .active_plan(user.id)
+        .await
+        .ok()
+        .flatten();
+    let mut perks: Vec<String> = if is_supporter || plan.is_some() {
         state.donations.supporter_perks.clone()
     } else {
         vec![]
     };
+    if plan.is_some() {
+        for p in crate::donations::PLUS_PERKS {
+            if !perks.iter().any(|x| x == p) {
+                perks.push(p.to_string());
+            }
+        }
+    }
     let donation_summary = state
         .donations_repo
         .user_summary(user.id)
@@ -339,7 +352,8 @@ pub async fn me(State(state): State<AppState>, CurrentUser(user): CurrentUser) -
                 .map(|h| h["show_donation_history_on_profile"].as_bool().unwrap_or(true))
                 .unwrap_or(true),
             "donor_perks": perks,
-            "is_supporter": is_supporter,
+            "is_supporter": is_supporter || plan.is_some(),
+            "plan": plan,
             "is_administrator": user.is_administrator,
             "custom_tag": state
                 .auth

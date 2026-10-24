@@ -159,13 +159,33 @@ pub(crate) async fn enriched_user_json(
             .user_is_supporter(u.id, &blindall_db::donations::current_month_key())
             .await
             .unwrap_or(false);
-    let perks: Vec<&String> = if is_supporter {
-        state.donations.supporter_perks.iter().collect()
+    // An active paid plan grants the supporter perks plus its own
+    // (PLUS_PERKS) — a Plus member is at least a supporter.
+    let plan = if u.is_guest {
+        None
+    } else {
+        state
+            .subscriptions
+            .active_plan(u.id)
+            .await
+            .ok()
+            .flatten()
+    };
+    let mut perks: Vec<String> = if is_supporter || plan.is_some() {
+        state.donations.supporter_perks.clone()
     } else {
         vec![]
     };
+    if plan.is_some() {
+        for p in crate::donations::PLUS_PERKS {
+            if !perks.iter().any(|x| x == p) {
+                perks.push(p.to_string());
+            }
+        }
+    }
+    base["plan"] = json!(plan);
     base["donor_perks"] = json!(perks);
-    base["is_supporter"] = json!(!perks.is_empty());
+    base["is_supporter"] = json!(is_supporter || plan.is_some());
     base
 }
 
