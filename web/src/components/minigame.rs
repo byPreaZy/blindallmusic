@@ -79,19 +79,24 @@ pub fn MinigameAudio(
     // mount the gesture button must surface — silence is the bug.
     {
         let node = node.clone();
-        gloo_timers::callback::Timeout::new(1_200, move || {
-            let paused = node
-                .get_untracked()
-                .map(|a| {
-                    let el: &web_sys::HtmlAudioElement = &a;
-                    el.paused()
-                })
-                .unwrap_or(false);
-            if paused {
-                let _ = needs_gesture.try_set(true);
-            }
-        })
-        .forget();
+        // Held until cleanup: answering disposes the view <1.2s in, and a
+        // forgotten timer would touch disposed signals/noderef -> panic.
+        let t = send_wrapper::SendWrapper::new(gloo_timers::callback::Timeout::new(
+            1_200,
+            move || {
+                let paused = node
+                    .get_untracked()
+                    .map(|a| {
+                        let el: &web_sys::HtmlAudioElement = &a;
+                        el.paused()
+                    })
+                    .unwrap_or(false);
+                if paused {
+                    let _ = needs_gesture.try_set(true);
+                }
+            },
+        ));
+        on_cleanup(move || drop(t));
     }
 
     view! {
@@ -117,7 +122,7 @@ pub fn MinigameAudio(
                                     .and_then(|n| n.as_string())
                                     .unwrap_or_default();
                                 if name == "NotAllowedError" {
-                                    needs_gesture.set(true);
+                                    let _ = needs_gesture.try_set(true);
                                 }
                             }
                         });
