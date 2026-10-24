@@ -415,6 +415,9 @@ pub async fn notification_done(
     Path(id): Path<String>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if let Some(r) = crate::rooms::require_not_guest(&user) {
+        return r;
+    }
     match state.notifications.mark_done(user.id, &id).await {
         Ok(n) => Json(json!({"ok": true, "marked": n})).into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),

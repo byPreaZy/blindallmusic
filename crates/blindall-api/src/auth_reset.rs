@@ -111,6 +111,9 @@ pub async fn verification_notification(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
 ) -> Response {
+    if user.is_guest {
+        return StatusCode::FORBIDDEN.into_response();
+    }
     // PHP parity: verification.send is throttle:6,1.
     if let Some(secs) = state
         .reset_rate

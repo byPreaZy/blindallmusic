@@ -110,6 +110,9 @@ async fn require_participant(state: &AppState, room_id: i64, user_id: i64) -> bo
 }
 
 async fn can_host(state: &AppState, room_id: i64, user: &blindall_db::entities::User) -> bool {
+    if user.is_guest {
+        return false;
+    }
     if user.is_administrator {
         return true;
     }

@@ -519,6 +519,30 @@ impl AuthRepo {
         Ok(res)
     }
 
+    /// Guest → member conversion: keep the account (elo, XP, scores,
+    /// history) and just give it real credentials.
+    pub async fn upgrade_guest(
+        &self,
+        user_id: i64,
+        name: &str,
+        email: &str,
+        password_hash: &str,
+    ) -> Result<bool, sqlx::Error> {
+        let rows = sqlx::query(
+            "UPDATE users SET name = $1, email = $2, password = $3, \
+             is_guest = false, guest_token = NULL, updated_at = $4 \
+             WHERE id = $5 AND is_guest = true AND deleted_at IS NULL",
+        )
+        .bind(name)
+        .bind(email)
+        .bind(password_hash)
+        .bind(chrono::Utc::now())
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(rows.rows_affected() == 1)
+    }
+
     pub async fn find_by_email(&self, email: &str) -> Result<Option<(i64, String)>, sqlx::Error> {
         sqlx::query("SELECT id, name FROM users WHERE email = $1 LIMIT 1")
             .bind(email)

@@ -254,7 +254,25 @@ pub async fn register(
     if let Err(msg) = validate_name(name, &moderator_names) {
         return validation_error("name", msg);
     }
-    if state.auth.name_taken(name).await.unwrap_or(false) {
+    // Guest → member conversion: a bearer token belonging to a guest
+    // upgrades that account instead of creating a fresh one — the UI
+    // promises stats/XP are kept when registering from the gate.
+    let guest_upgrade = match bearer_token_str(&headers) {
+        Some(t) => state
+            .auth
+            .user_for_token(&t)
+            .await
+            .ok()
+            .flatten()
+            .filter(|u| u.is_guest),
+        None => None,
+    };
+    if state.auth.name_taken(name).await.unwrap_or(false)
+        && guest_upgrade
+            .as_ref()
+            .map(|u| u.name != name)
+            .unwrap_or(true)
+    {
         return validation_error("name", "The name has already been taken.");
     }
     let email = body.email.trim();
@@ -284,12 +302,25 @@ pub async fn register(
         Ok(h) => h,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
-    let user_id = match state.auth.create_user(name, email, &hash, Some(&ip)).await {
-        Ok(id) => id,
-        Err(e) => {
-            tracing::warn!(error = %e, "register: create_user failed");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
+    let user_id = match &guest_upgrade {
+        Some(u) => match state.auth.upgrade_guest(u.id, name, email, &hash).await {
+            Ok(true) => u.id,
+            Ok(false) | Err(_) => {
+                // Fallback: the row changed under us — plain create keeps
+                // registration working (the guest simply isn't converted).
+                match state.auth.create_user(name, email, &hash, Some(&ip)).await {
+                    Ok(id) => id,
+                    Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+                }
+            }
+        },
+        None => match state.auth.create_user(name, email, &hash, Some(&ip)).await {
+            Ok(id) => id,
+            Err(e) => {
+                tracing::warn!(error = %e, "register: create_user failed");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        },
     };
     {
         let (mail, email, name) = (state.mail.clone(), email.to_string(), name.to_string());
@@ -306,11 +337,13 @@ pub async fn register(
     let user = blindall_db::entities::User {
         id: user_id,
         name: name.to_string(),
-        photo_path: None,
-        elo: 1500,
+        photo_path: guest_upgrade
+            .as_ref()
+            .and_then(|u| u.photo_path.clone()),
+        elo: guest_upgrade.as_ref().map(|u| u.elo).unwrap_or(1500),
         is_guest: false,
         is_administrator: false,
-        team_id: None,
+        team_id: guest_upgrade.as_ref().and_then(|u| u.team_id),
     };
     (
         StatusCode::CREATED,
