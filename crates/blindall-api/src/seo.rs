@@ -1,7 +1,7 @@
 use crate::state::AppState;
 use axum::{
     extract::State,
-    http::{HeaderValue, header},
+    http::{HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use std::fmt::Write as _;
@@ -49,6 +49,22 @@ pub async fn robots(State(state): State<AppState>) -> Response {
          User-agent: Google-Extended\nAllow: /\n\n\
          Sitemap: {base}/sitemap.xml\n\n\
          # LLM content index: {base}/llms.txt\n"
+    ))
+}
+
+// ads.txt — required by AdSense site verification. Served only when an
+// ADSENSE_CLIENT_ID (ca-pub-…) is configured; 404 otherwise.
+pub async fn ads_txt(State(state): State<AppState>) -> Response {
+    let pub_id = state
+        .adsense_client
+        .strip_prefix("ca-pub-")
+        .unwrap_or(&state.adsense_client)
+        .trim();
+    if pub_id.is_empty() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    text_response(format!(
+        "google.com, pub-{pub_id}, DIRECT, f08c47fec0942fa0\n"
     ))
 }
 

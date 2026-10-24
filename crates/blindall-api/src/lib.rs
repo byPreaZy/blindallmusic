@@ -402,6 +402,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/v1/stripe/webhook", post(donations::stripe_webhook))
         .route("/robots.txt", get(seo::robots))
+        .route("/ads.txt", get(seo::ads_txt))
         .route("/llms.txt", get(seo::llms))
         .route("/sitemap.xml", get(seo::sitemap))
         .route("/contact", post(content::contact).get(seo_pages::spa_page))
