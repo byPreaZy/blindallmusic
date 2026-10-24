@@ -61,6 +61,11 @@ pub struct AppState {
     pub donations: crate::donations::DonationsConfig,
     pub adsense_client: String,
     pub adsense_slot: String,
+    // Android TWA (Play Store): package name + signing cert fingerprint
+    // served at /.well-known/assetlinks.json so the app can open the
+    // domain full-screen without the browser URL bar.
+    pub android_package: String,
+    pub android_sha256: String,
     pub chat_reaction_emojis: Vec<String>,
     pub spa_dir: std::path::PathBuf,
     pub redis: fred::clients::Client,

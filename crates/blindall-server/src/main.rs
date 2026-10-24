@@ -242,6 +242,8 @@ async fn main() -> anyhow::Result<()> {
         },
         adsense_client: std::env::var("ADSENSE_CLIENT_ID").unwrap_or_default(),
         adsense_slot: std::env::var("ADSENSE_SLOT").unwrap_or_default(),
+        android_package: std::env::var("ANDROID_PACKAGE_NAME").unwrap_or_default(),
+        android_sha256: std::env::var("ANDROID_SHA256_FINGERPRINT").unwrap_or_default(),
         spa_dir: std::env::var("SPA_DIR")
             .unwrap_or_else(|_| "web/dist".into())
             .into(),

@@ -68,6 +68,31 @@ pub async fn ads_txt(State(state): State<AppState>) -> Response {
     ))
 }
 
+// assetlinks.json — Digital Asset Links statement required by the Android
+// TWA (Play Store package). Served only when ANDROID_PACKAGE_NAME and
+// ANDROID_SHA256_FINGERPRINT are configured; 404 otherwise so a missing
+// config can never silently break domain verification.
+pub async fn assetlinks(State(state): State<AppState>) -> Response {
+    if state.android_package.is_empty() || state.android_sha256.is_empty() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let body = serde_json::json!([{
+        "relation": ["delegate_permission/common.handle_all_urls"],
+        "target": {
+            "namespace": "android_app",
+            "package_name": state.android_package,
+            "sha256_cert_fingerprints": [state.android_sha256],
+        }
+    }])
+    .to_string();
+    let mut res = body.into_response();
+    res.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    res
+}
+
 pub async fn llms(State(state): State<AppState>) -> Response {
     let base = state.app_url.trim_end_matches('/');
     text_response(format!(
