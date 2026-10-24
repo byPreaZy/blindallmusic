@@ -105,7 +105,7 @@ UPDATE pages SET content = $c$
 <ul>
 <li><strong>Stripe</strong> (Stripe Payments Europe, Dublin) : traitement des paiements — dons <strong>et abonnements</strong> (Blind'All Plus/Pro). Blind'All Music ne stocke aucune donnée bancaire ; Stripe traite vos données selon sa propre politique de confidentialité et les garanties UE-États-Unis (Data Privacy Framework).</li>
 <li><strong>IONOS</strong> (Allemagne/France) : hébergement des serveurs et bases de données.</li>
-<li><strong>Brevo</strong> (ex-Sendinblue, France) : envoi des e-mails transactionnels (vérification, mot de passe, bienvenue).</li>
+<li><strong>Google / Gmail SMTP</strong> (Irlande/UE via Google Ireland Ltd) : relais des e-mails transactionnels (vérification, mot de passe, bienvenue) — votre adresse e-mail et le contenu du message transitent par les serveurs Google.</li>
 <li><strong>Google AdSense</strong> (via Google Funding Choices) : affichage publicitaire — uniquement avec votre consentement, et jamais aux supporters/abonnés.</li>
 </ul>
 <h2>Durées de conservation</h2>

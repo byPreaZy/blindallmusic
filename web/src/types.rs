@@ -51,6 +51,8 @@ pub struct User {
     pub plan: Option<String>,
     #[serde(default)]
     pub custom_tag: String,
+    #[serde(default)]
+    pub portal_url: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]

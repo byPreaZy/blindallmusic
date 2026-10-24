@@ -186,6 +186,13 @@ pub(crate) async fn enriched_user_json(
     base["plan"] = json!(plan);
     base["donor_perks"] = json!(perks);
     base["is_supporter"] = json!(is_supporter || plan.is_some());
+    // Stripe Customer Portal self-service link (dashboard "share a link" URL).
+    // Exposed only to subscribers — it's useless (and confusing) otherwise.
+    base["portal_url"] = if plan.is_some() {
+        json!(std::env::var("STRIPE_PORTAL_URL").unwrap_or_default())
+    } else {
+        json!("")
+    };
     // custom_tag is a paid perk — only surface the stored tag while the
     // user is entitled (it stays in the DB and returns on re-subscribe).
     if !(is_supporter || plan.is_some()) {

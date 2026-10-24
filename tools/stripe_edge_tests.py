@@ -20,6 +20,11 @@ def load_secret():
     raise RuntimeError("STRIPE_WEBHOOK_SECRET not found in .env")
 
 SECRET = load_secret()
+RUN = uuid.uuid4().hex[:6]
+
+def sid(base):
+    """Uniquify stripe ids per run (idempotency keys persist in the DB)."""
+    return f"{base}_{RUN}"
 
 def psql(sql):
     out = subprocess.run(
@@ -126,11 +131,11 @@ def main():
     tok, u = register("t1")
     uid = u["id"]
     print("\n--- T1 setup: user", uid)
-    sc, b = webhook(checkout_session(uid, "plus", "cs_plus_A", "sub_plus_A"))
+    sc, b = webhook(checkout_session(uid, "plus", sid("cs_plus_A"), sid("sub_plus_A")))
     print("plus checkout:", sc, b)
     m = me(tok)
     print("me after plus:", m["plan"], m["donor_perks"], m["is_supporter"])
-    sc, b = webhook(checkout_session(uid, "pro", "cs_pro_B", "sub_pro_B"))
+    sc, b = webhook(checkout_session(uid, "pro", sid("cs_pro_B"), sid("sub_pro_B")))
     print("pro checkout:", sc, b)
     m = me(tok)
     print("subs:", subs_db(uid))
@@ -139,7 +144,7 @@ def main():
 
     # extra edge: a renewal 'updated' event for the OLD plus sub bumps its
     # updated_at — does plan stay pro? (ordering by updated_at vs plan prio)
-    sc, _ = webhook(sub_event("updated", "sub_plus_A", status="active"))
+    sc, _ = webhook(sub_event("updated", sid("sub_plus_A"), status="active"))
     m2 = me(tok)
     print("me after plus renewal updated event:", m2["plan"])
     report("1b", "plus renewal updated-event must not downgrade pro",
@@ -152,8 +157,8 @@ def main():
     tok, u = register("t2")
     uid = u["id"]
     print("\n--- T2 setup: user", uid)
-    webhook(checkout_session(uid, "plus", "cs_t2_plus", "sub_t2_plus"))
-    webhook(checkout_session(uid, "pro", "cs_t2_pro", "sub_t2_pro"))
+    webhook(checkout_session(uid, "plus", sid("cs_t2_plus"), sid("sub_t2_plus")))
+    webhook(checkout_session(uid, "pro", sid("cs_t2_pro"), sid("sub_t2_pro")))
     # create a room + set venue_name (pro perk)
     r = requests.post(f"{BASE}/api/v1/rooms",
                       headers={"Authorization": f"Bearer {tok}"},
@@ -171,7 +176,7 @@ def main():
     print("set venue:", r.status_code, r.text[:200])
     venue_db = psql(f"SELECT is_pro, venue_name FROM rooms WHERE id={rid}")
     print("room db:", venue_db)
-    sc, b = webhook(sub_event("deleted", "sub_t2_plus", status="canceled"))
+    sc, b = webhook(sub_event("deleted", sid("sub_t2_plus"), status="canceled"))
     print("deleted plus:", sc, b)
     m = me(tok)
     venue_db2 = psql(f"SELECT is_pro, venue_name FROM rooms WHERE id={rid}")
@@ -185,7 +190,7 @@ def main():
     tok, u = register("t3")
     uid = u["id"]
     print("\n--- T3 setup: user", uid)
-    webhook(checkout_session(uid, "plus", "cs_t3_a", "sub_t3_a"))
+    webhook(checkout_session(uid, "plus", sid("cs_t3_a"), sid("sub_t3_a")))
     # set custom_tag while entitled
     r = requests.post(f"{BASE}/api/v1/users/{uid}",
                       headers={"Authorization": f"Bearer {tok}"},
@@ -195,11 +200,11 @@ def main():
     m = me(tok)
     print("me with tag:", m["plan"], m["custom_tag"])
     tag_before = m["custom_tag"]
-    webhook(sub_event("deleted", "sub_t3_a", status="canceled"))
+    webhook(sub_event("deleted", sid("sub_t3_a"), status="canceled"))
     m = me(tok)
     print("after cancel: plan=", m["plan"], "tag=", repr(m["custom_tag"]))
     stored = psql(f"SELECT custom_tag FROM users WHERE id={uid}")
-    sc, b = webhook(checkout_session(uid, "pro", "cs_t3_b", "sub_t3_b"))
+    sc, b = webhook(checkout_session(uid, "pro", sid("cs_t3_b"), sid("sub_t3_b")))
     print("resubscribe:", sc, b)
     m = me(tok)
     print("after resub: plan=", m["plan"], "tag=", repr(m["custom_tag"]))
@@ -212,11 +217,12 @@ def main():
     tok, u = register("t4")
     uid = u["id"]
     print("\n--- T4 setup: user", uid)
-    ev = checkout_session(uid, "plus", "cs_t4_replay", "sub_t4_replay")
+    s4 = sid("cs_t4_replay")
+    ev = checkout_session(uid, "plus", s4, sid("sub_t4_replay"))
     sc1, b1 = webhook(ev)
     sc2, b2 = webhook(ev)
     n = psql(f"SELECT count(*) FROM user_subscriptions WHERE user_id={uid} "
-             f"AND stripe_checkout_session_id='cs_t4_replay'")
+             f"AND stripe_checkout_session_id='{s4}'")
     report(4, "replay same checkout event -> 1 row, no 500",
            sc1 == 200 and sc2 == 200 and n == "1",
            f"statuses {sc1}/{sc2}, rows={n}")
@@ -226,8 +232,8 @@ def main():
     tok, u = register("t5")
     uid = u["id"]
     print("\n--- T5 setup: user", uid)
-    sc1, _ = webhook(donation_session(uid, "cs_t5_don", 500))
-    sc2, _ = webhook(checkout_session(uid, "plus", "cs_t5_sub", "sub_t5"))
+    sc1, _ = webhook(donation_session(uid, sid("cs_t5_don"), 500))
+    sc2, _ = webhook(checkout_session(uid, "plus", sid("cs_t5_sub"), sid("sub_t5")))
     m = me(tok)
     don = psql(f"SELECT amount_cents, month_key FROM donations WHERE user_id={uid}")
     prog = requests.get(f"{BASE}/api/v1/donations/progress",
@@ -241,7 +247,7 @@ def main():
     tok, u = register("t6")
     uid = u["id"]
     print("\n--- T6 setup: user", uid)
-    webhook(checkout_session(uid, "plus", "cs_t6", "sub_t6"))
+    webhook(checkout_session(uid, "plus", sid("cs_t6"), sid("sub_t6")))
     r = requests.post(f"{BASE}/api/v1/daily-challenge/answer",
                       headers={"Authorization": f"Bearer {tok}"},
                       json={"game_type": "quiz", "idx": 0, "value": "zzz_wrong_zzz"},
@@ -304,7 +310,7 @@ def main():
     tok, u = register("t8")
     uid = u["id"]
     print("\n--- T8 setup: user", uid)
-    webhook(checkout_session(uid, "pro", "cs_t8", "sub_t8"))
+    webhook(checkout_session(uid, "pro", sid("cs_t8"), sid("sub_t8")))
     r = requests.post(f"{BASE}/api/v1/rooms",
                       headers={"Authorization": f"Bearer {tok}"},
                       json={"name": f"T8 room {uid}", "category_id": 1}, timeout=15)
@@ -319,7 +325,7 @@ def main():
                       timeout=15)
     print("venue set:", rv.status_code, rv.text[:150])
     print("room db:", psql(f"SELECT is_pro, venue_name FROM rooms WHERE id={rid8}"))
-    webhook(sub_event("updated", "sub_t8", status="unpaid"))
+    webhook(sub_event("updated", sid("sub_t8"), status="unpaid"))
     m = me(tok)
     roomdb = psql(f"SELECT is_pro, venue_name FROM rooms WHERE id={rid8}")
     print("after unpaid: plan=", m["plan"], "room:", roomdb)
@@ -332,7 +338,7 @@ def main():
     tok, u = register("t9")
     uid = u["id"]
     print("\n--- T9 setup: user", uid)
-    webhook(checkout_session(uid, "pro", "cs_t9", "sub_t9"))
+    webhook(checkout_session(uid, "pro", sid("cs_t9"), sid("sub_t9")))
     r = requests.post(f"{BASE}/api/v1/rooms",
                       headers={"Authorization": f"Bearer {tok}"},
                       json={"name": f"T9 room {uid}", "category_id": 1}, timeout=15)
@@ -345,7 +351,7 @@ def main():
                        "is_chat_active": True, "is_autostart": False,
                        "is_random": True, "venue_name": "Salle T9"},
                  timeout=15)
-    webhook(sub_event("updated", "sub_t9", status="active",
+    webhook(sub_event("updated", sid("sub_t9"), status="active",
                       cancel_at_period_end=True, canceled_at=int(time.time())))
     m = me(tok)
     roomdb = psql(f"SELECT is_pro, venue_name FROM rooms WHERE id={rid9}")
@@ -360,7 +366,7 @@ def main():
     tok, u = register("t10")
     uid = u["id"]
     print("\n--- T10 setup: user", uid)
-    webhook(checkout_session(uid, "pro", "cs_t10", "sub_t10"))
+    webhook(checkout_session(uid, "pro", sid("cs_t10"), sid("sub_t10")))
     r = requests.post(f"{BASE}/api/v1/rooms",
                       headers={"Authorization": f"Bearer {tok}"},
                       json={"name": f"T10 room {uid}", "category_id": 1}, timeout=15)
@@ -373,7 +379,7 @@ def main():
                        "is_chat_active": True, "is_autostart": False,
                        "is_random": True, "venue_name": "Club T10"},
                  timeout=15)
-    webhook(sub_event("updated", "sub_t10", status="past_due"))
+    webhook(sub_event("updated", sid("sub_t10"), status="past_due"))
     m = me(tok)
     roomdb = psql(f"SELECT is_pro, venue_name FROM rooms WHERE id={rid10}")
     print("after past_due: plan=", m["plan"], "room:", roomdb)

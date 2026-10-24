@@ -295,13 +295,23 @@ pub fn SettingsPage() -> impl IntoView {
                         if let Some(plan) = plan {
                             let name = if plan == "pro" { "Blind'All Pro" } else { "Blind'All Plus" };
                             let price = if plan == "pro" { "29,00 € TTC/mois" } else { "4,99 € TTC/mois" };
+                            let portal = auth.user.get().map(|u| u.portal_url.clone()).unwrap_or_default();
                             view! {
                                 <div class="flex items-center justify-between gap-3">
                                     <div>
                                         <p class="font-semibold text-amber-300">{name}</p>
                                         <p class="text-sm text-white/50">{price}" — "{t("monthly, cancel anytime")}</p>
                                     </div>
-                                    <A href="/donations" attr:class="btn-secondary !px-4 !py-1.5 text-sm">{t("Manage subscription")}</A>
+                                    {if portal.is_empty() {
+                                        view! {
+                                            <A href="/donations" attr:class="btn-secondary !px-4 !py-1.5 text-sm">{t("Manage subscription")}</A>
+                                        }.into_any()
+                                    } else {
+                                        view! {
+                                            <a href=portal target="_blank" rel="noopener"
+                                                class="btn-primary !px-4 !py-1.5 text-sm">{t("Manage subscription")}</a>
+                                        }.into_any()
+                                    }}
                                 </div>
                                 <p class="mt-3 text-xs text-white/40">
                                     {t("To cancel: use the link in your Stripe receipt e-mail, or contact us. Access stays active until the end of the paid period.")}
