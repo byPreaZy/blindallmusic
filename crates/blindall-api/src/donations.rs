@@ -112,7 +112,9 @@ pub async fn stripe_webhook(
     };
     let obj = &event["data"]["object"];
     match event["type"].as_str() {
-        Some("checkout.session.completed") => {
+        // async_payment_succeeded arrives when an async payment method (SEPA,
+        // bank transfer) clears after checkout.session.completed=unpaid.
+        Some("checkout.session.completed") | Some("checkout.session.async_payment_succeeded") => {
             let r = if obj["mode"].as_str() == Some("subscription") {
                 record_subscription_session(&state, obj).await
             } else {

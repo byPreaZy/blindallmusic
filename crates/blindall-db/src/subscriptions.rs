@@ -21,9 +21,11 @@ impl SubscriptionRepo {
     /// status `active` in that window; the `deleted` event ends it).
     pub async fn active_plan(&self, user_id: i64) -> Result<Option<String>, sqlx::Error> {
         sqlx::query_scalar::<_, String>(
+            // 'past_due' keeps entitlement: Stripe retries the charge for a few
+            // days — cutting perks instantly on a failed renewal is hostile.
             "SELECT plan::text FROM user_subscriptions \
              WHERE user_id = $1 \
-               AND status IN ('active', 'trialing') \
+               AND status IN ('active', 'trialing', 'past_due') \
                AND (current_period_end IS NULL OR current_period_end > now()) \
              ORDER BY updated_at DESC NULLS LAST, id DESC LIMIT 1",
         )
