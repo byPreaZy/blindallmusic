@@ -1134,6 +1134,26 @@ pub async fn update_options(
             "The venue name field must be at most 80 characters.",
         );
     }
+    // Venue branding is a Blind'All Pro feature (bars/events running
+    // branded quiz nights). Losing Pro strips venue_name + is_pro via
+    // the subscription webhook.
+    if venue_name.is_some() {
+        let is_pro_member = user.is_administrator
+            || state
+                .subscriptions
+                .active_plan(user.id)
+                .await
+                .ok()
+                .flatten()
+                .as_deref()
+                == Some("pro");
+        if !is_pro_member {
+            return validation(
+                "venue_name",
+                "Venue branding requires a Blind'All Pro subscription.",
+            );
+        }
+    }
     let options = RoomOptions {
         password: body.password,
         has_password: body.has_password.unwrap_or(false),

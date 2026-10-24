@@ -209,7 +209,9 @@ impl RoomRepo {
             "UPDATE rooms SET tracks_by_round = $1, track_duration = $2, \
              pause_between_tracks = $3, pause_between_rounds = $4, \
              is_chat_active = $5, is_autostart = $6, is_random = $7, color = $8, \
-             venue_name = $10 WHERE id = $9",
+             venue_name = $10, \
+             is_pro = CASE WHEN $10 IS NOT NULL THEN true ELSE is_pro END \
+             WHERE id = $9",
         )
         .bind(o.tracks_by_round)
         .bind(o.track_duration)

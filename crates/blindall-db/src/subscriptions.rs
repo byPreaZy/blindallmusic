@@ -1,4 +1,4 @@
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 
 pub const PLAN_PLUS: &str = "plus";
 pub const PLAN_PRO: &str = "pro";
@@ -99,38 +99,58 @@ impl SubscriptionRepo {
         status: &str,
         current_period_end: Option<chrono::DateTime<chrono::Utc>>,
         cancel_at_period_end: bool,
-    ) -> Result<(), sqlx::Error> {
+    ) -> Result<Option<i64>, sqlx::Error> {
         sqlx::query(
             "UPDATE user_subscriptions \
              SET status = $2, current_period_end = $3, \
                  canceled_at = CASE WHEN $4 THEN COALESCE(canceled_at, $5) \
                                     ELSE NULL END, \
                  updated_at = $5 \
-             WHERE stripe_subscription_id = $1",
+             WHERE stripe_subscription_id = $1 \
+             RETURNING user_id",
         )
         .bind(subscription_id)
         .bind(status)
         .bind(current_period_end)
         .bind(cancel_at_period_end)
         .bind(chrono::Utc::now())
-        .execute(&self.pool)
-        .await?;
-        Ok(())
+        .fetch_optional(&self.pool)
+        .await
+        .map(|r| r.map(|r| r.get::<i64, _>("user_id")))
     }
 
-    /// customer.subscription.deleted — hard-cancel now.
-    pub async fn cancel(&self, subscription_id: &str) -> Result<(), sqlx::Error> {
+    /// customer.subscription.deleted — hard-cancel now. Returns user_id.
+    pub async fn cancel(&self, subscription_id: &str) -> Result<Option<i64>, sqlx::Error> {
         let now = chrono::Utc::now();
         sqlx::query(
             "UPDATE user_subscriptions SET status = 'canceled', \
              canceled_at = COALESCE(canceled_at, $2), updated_at = $2 \
-             WHERE stripe_subscription_id = $1",
+             WHERE stripe_subscription_id = $1 RETURNING user_id",
         )
         .bind(subscription_id)
         .bind(now)
+        .fetch_optional(&self.pool)
+        .await
+        .map(|r| r.map(|r| r.get::<i64, _>("user_id")))
+    }
+
+    /// A status that keeps paid perks (past_due = Stripe dunning retry window).
+    pub fn entitled_status(status: &str) -> bool {
+        matches!(status, "active" | "trialing" | "past_due")
+    }
+
+    /// Subscription ended -> drop venue branding on rooms the user owns.
+    /// Only strips rooms that were actually branded (venue_name set) so an
+    /// admin-flagged pro room without a venue is left alone.
+    pub async fn strip_venue_perks(&self, user_id: i64) -> Result<u64, sqlx::Error> {
+        Ok(sqlx::query(
+            "UPDATE rooms SET is_pro = false, venue_name = NULL \
+             WHERE user_id = $1 AND venue_name IS NOT NULL",
+        )
+        .bind(user_id)
         .execute(&self.pool)
-        .await?;
-        Ok(())
+        .await?
+        .rows_affected())
     }
 
     // ---- Plus perk ledger: one daily-challenge revive per (day, game) ----

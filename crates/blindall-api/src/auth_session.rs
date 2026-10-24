@@ -186,6 +186,11 @@ pub(crate) async fn enriched_user_json(
     base["plan"] = json!(plan);
     base["donor_perks"] = json!(perks);
     base["is_supporter"] = json!(is_supporter || plan.is_some());
+    // custom_tag is a paid perk — only surface the stored tag while the
+    // user is entitled (it stays in the DB and returns on re-subscribe).
+    if !(is_supporter || plan.is_some()) {
+        base["custom_tag"] = json!("");
+    }
     base
 }
 

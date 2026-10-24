@@ -261,11 +261,28 @@ pub fn SettingsPage() -> impl IntoView {
                         </div>
                         <div>
                             <label class="mb-1 block text-sm text-white/60">{t("Custom tag")}</label>
-                            <input type="text" maxlength="24"
-                                class="w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white outline-none focus:border-brand-accent/50"
-                                prop:value=tag
-                                on:input=move |ev| tag.set(event_target_value(&ev))/>
-                            <p class="mt-1 text-xs text-white/40">{t("Custom tag help")}</p>
+                            {move || {
+                                let entitled = auth.user.get().map(|u| {
+                                    u.is_supporter || u.plan.is_some() || u.is_administrator
+                                }).unwrap_or(false);
+                                if entitled {
+                                    view! {
+                                        <input type="text" maxlength="24"
+                                            class="w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white outline-none focus:border-brand-accent/50"
+                                            prop:value=tag
+                                            on:input=move |ev| tag.set(event_target_value(&ev))/>
+                                        <p class="mt-1 text-xs text-white/40">{t("Custom tag help")}</p>
+                                    }.into_any()
+                                } else {
+                                    view! {
+                                        <div class="w-full rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-sm text-white/50">
+                                            {t("Custom tag is a supporter perk — unlock it with a donation or Plus.")}
+                                            " "
+                                            <A href="/donations" attr:class="text-amber-300 underline underline-offset-2">{t("See options")}</A>
+                                        </div>
+                                    }.into_any()
+                                }
+                            }}
                         </div>
                         <button type="submit" class="btn-primary">{t("Save")}</button>
                     </form>

@@ -122,7 +122,23 @@ pub async fn update(
                 .collect::<String>()
         })
         .filter(|t| !t.is_empty());
-    if let Err(_) = state.auth.update_custom_tag(id, tag.as_deref()).await {
+    // custom_tag is a paid perk: only entitled members (supporter of the
+    // month, active subscription, admin) may write it. Others keep their
+    // stored tag — display-side gating hides it until they re-subscribe.
+    let tag_entitled = user.is_administrator
+        || state
+            .subscriptions
+            .active_plan(id)
+            .await
+            .ok()
+            .flatten()
+            .is_some()
+        || state
+            .donations_repo
+            .user_is_supporter(id, &blindall_db::donations::current_month_key())
+            .await
+            .unwrap_or(false);
+    if tag_entitled && state.auth.update_custom_tag(id, tag.as_deref()).await.is_err() {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
     match state.auth.update_profile(id, name, &email).await {
@@ -355,13 +371,17 @@ pub async fn me(State(state): State<AppState>, CurrentUser(user): CurrentUser) -
             "is_supporter": is_supporter || plan.is_some(),
             "plan": plan,
             "is_administrator": user.is_administrator,
-            "custom_tag": state
-                .auth
-                .custom_tag_of(user.id)
-                .await
-                .ok()
-                .flatten()
-                .unwrap_or_default(),
+            "custom_tag": if is_supporter || plan.is_some() {
+                state
+                    .auth
+                    .custom_tag_of(user.id)
+                    .await
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            },
         }
     }))
     .into_response()

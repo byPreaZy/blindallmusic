@@ -129,7 +129,9 @@ pub async fn stripe_webhook(
         }
         Some("customer.subscription.deleted") => {
             if let Some(sid) = obj["id"].as_str() {
-                let _ = state.subscriptions.cancel(sid).await;
+                if let Ok(Some(uid)) = state.subscriptions.cancel(sid).await {
+                    let _ = state.subscriptions.strip_venue_perks(uid).await;
+                }
             }
         }
         _ => {}
@@ -214,12 +216,20 @@ async fn sync_subscription(state: &AppState, obj: &Value) {
         .and_then(|t| chrono::DateTime::from_timestamp(t, 0));
     let cancel_at_period_end = obj["cancel_at_period_end"].as_bool().unwrap_or(false)
         || !obj["canceled_at"].is_null();
-    if let Err(e) = state
+    match state
         .subscriptions
         .sync(sid, status, period_end, cancel_at_period_end)
         .await
     {
-        tracing::warn!(error = %e, "subscription sync failed");
+        Ok(Some(user_id)) => {
+            // A definitively non-entitled status (canceled/unpaid/expired)
+            // drops the venue branding the moment the perk lapses.
+            if !blindall_db::subscriptions::SubscriptionRepo::entitled_status(status) {
+                let _ = state.subscriptions.strip_venue_perks(user_id).await;
+            }
+        }
+        Ok(None) => {}
+        Err(e) => tracing::warn!(error = %e, "subscription sync failed"),
     }
 }
 

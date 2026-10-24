@@ -2,6 +2,7 @@ use crate::api;
 use crate::i18n::t;
 use crate::types::{Category, IdName};
 use leptos::prelude::*;
+use leptos_router::components::A;
 use leptos_router::hooks::{use_navigate, use_params_map};
 use serde_json::{json, Value};
 
@@ -478,8 +479,25 @@ pub fn RoomEditPage() -> impl IntoView {
                             <label class="mb-1 block text-xs text-white/60">
                                 {t("Venue name (shown on the TV screen)")}
                             </label>
-                            <input type="text" maxlength="80" placeholder=t("e.g. Le Comptoir — jeudi soir") class="w-full max-w-md rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white"
-                                prop:value=venue_name on:input=move |ev| venue_name.set(event_target_value(&ev))/>
+                            {move || {
+                                let pro = crate::auth::use_auth().user.get().map(|u| {
+                                    u.plan.as_deref() == Some("pro") || u.is_administrator
+                                }).unwrap_or(false);
+                                if pro {
+                                    view! {
+                                        <input type="text" maxlength="80" placeholder=t("e.g. Le Comptoir — jeudi soir") class="w-full max-w-md rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white"
+                                            prop:value=venue_name on:input=move |ev| venue_name.set(event_target_value(&ev))/>
+                                    }.into_any()
+                                } else {
+                                    view! {
+                                        <div class="max-w-md rounded-lg border border-purple-500/25 bg-purple-500/5 px-3 py-2 text-sm text-white/50">
+                                            "🏢 " {t("Venue branding is a Pro feature — for bars & events.")}
+                                            " "
+                                            <A href="/donations" attr:class="text-purple-300 underline underline-offset-2">{"Pro"}</A>
+                                        </div>
+                                    }.into_any()
+                                }
+                            }}
                         </div>
                         <div class="flex flex-wrap gap-5 text-sm text-white/70">
                             <label class="flex items-center gap-2">
