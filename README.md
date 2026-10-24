@@ -25,6 +25,11 @@ titre ou l'artiste avant les autres, grimpe au classement ELO.
   passe, vérification d'e-mail
 - **Complet** : i18n fr/en/es, SEO (sitemap, JSON-LD), donations Stripe,
   e-mails transactionnels SMTP, admin back-office
+- **Monétisation** : dons Stripe (avantages supporter du mois) et abonnements
+  **Plus** (4,99 €/mois : zéro pub, revive quotidien, tag personnalisé) et
+  **Pro** (29 €/mois : branding d'établissement sur l'écran TV — bars &
+  événements), cycle de vie complet via webhooks signés (souscription,
+  renouvellement, échec de paiement avec grâce, résiliation)
 
 ## Stack
 

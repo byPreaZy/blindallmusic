@@ -426,11 +426,21 @@ pub async fn toggle_reaction(
     if user.is_guest {
         return StatusCode::FORBIDDEN.into_response();
     }
-    let is_supporter = state
+    // "supporter_reactions" is granted to monthly donors AND any active plan
+    // — /me already advertises the perk to Plus/Pro members, so the check
+    // must match (donation OR subscription), else subscribers get 422s.
+    let is_supporter = (state
         .donations_repo
         .user_is_supporter(user.id, &blindall_db::donations::current_month_key())
         .await
         .unwrap_or(false)
+        || state
+            .subscriptions
+            .active_plan(user.id)
+            .await
+            .ok()
+            .flatten()
+            .is_some())
         && state
             .donations
             .supporter_perks

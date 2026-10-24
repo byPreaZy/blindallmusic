@@ -176,6 +176,7 @@ pub fn Footer() -> impl IntoView {
                         <h3 class="retro-footer-title">{t("Legal")}</h3>
                         <ul class="space-y-2">
                             <li><A href="/pages/conditions-generales" attr:class="text-white/70 transition-colors hover:text-white">{t("Terms and Conditions")}</A></li>
+                            <li><A href="/pages/conditions-generales-vente" attr:class="text-white/70 transition-colors hover:text-white">{t("Terms of Sale")}</A></li>
                             <li><A href="/pages/mentions-legales" attr:class="text-white/70 transition-colors hover:text-white">{t("Legal Notice")}</A></li>
                             <li><A href="/pages/politique-de-confidentialite" attr:class="text-white/70 transition-colors hover:text-white">{t("Privacy Policy")}</A></li>
                         </ul>

@@ -8,6 +8,7 @@ use serde_json::Value;
 /// Cross-links shown under every static page — mirrors the footer "Legal" list.
 const RELATED: &[(&str, &str)] = &[
     ("/pages/conditions-generales", "Terms and Conditions"),
+    ("/pages/conditions-generales-vente", "Terms of Sale"),
     ("/pages/mentions-legales", "Legal Notice"),
     ("/pages/politique-de-confidentialite", "Privacy Policy"),
     ("/docs/faq", "FAQ"),

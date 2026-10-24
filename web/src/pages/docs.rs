@@ -1477,7 +1477,7 @@ pub fn BannedPage() -> impl IntoView {
     view! {
         <div class="mx-auto max-w-xl px-4 py-16">
             <div class=CARD>
-                <h1 class="my-4 text-xl text-red-500">{t("You have been banned from blindallmusic.com!")}</h1>
+                <h1 class="my-4 text-xl text-red-500">{t("You have been banned from Blind'All Music!")}</h1>
                 {move || {
                     if !loaded.get() {
                         view! { <p class="text-white/60">{t("Loading")}"…"</p> }.into_any()

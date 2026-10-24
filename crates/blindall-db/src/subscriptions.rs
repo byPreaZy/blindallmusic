@@ -23,11 +23,16 @@ impl SubscriptionRepo {
         sqlx::query_scalar::<_, String>(
             // 'past_due' keeps entitlement: Stripe retries the charge for a few
             // days — cutting perks instantly on a failed renewal is hostile.
+            // 'pro' outranks 'plus': an entitled pro row must win even when an
+            // older plus row was touched more recently (e.g. a routine
+            // customer.subscription.updated on the legacy sub would otherwise
+            // downgrade a user who upgraded plus->pro).
             "SELECT plan::text FROM user_subscriptions \
              WHERE user_id = $1 \
                AND status IN ('active', 'trialing', 'past_due') \
                AND (current_period_end IS NULL OR current_period_end > now()) \
-             ORDER BY updated_at DESC NULLS LAST, id DESC LIMIT 1",
+             ORDER BY (plan = 'pro') DESC, updated_at DESC NULLS LAST, id DESC \
+             LIMIT 1",
         )
         .bind(user_id)
         .fetch_optional(&self.pool)

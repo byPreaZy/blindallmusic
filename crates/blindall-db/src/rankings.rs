@@ -295,7 +295,12 @@ impl RankingsRepo {
         }
         let user_rows = sqlx::query(
             "SELECT u.id, u.name, u.photo_path, u.elo, u.is_guest, \
-             u.is_administrator, u.custom_tag, \
+             u.is_administrator, \
+             CASE WHEN EXISTS(SELECT 1 FROM donations dn WHERE dn.user_id = u.id AND dn.month_key = $2) \
+                OR EXISTS(SELECT 1 FROM user_subscriptions s WHERE s.user_id = u.id \
+                  AND s.status IN ('active','trialing','past_due') \
+                  AND (s.current_period_end IS NULL OR s.current_period_end > now())) \
+             THEN u.custom_tag ELSE '' END AS custom_tag, \
              EXISTS(SELECT 1 FROM moderables m \
               JOIN rooms rm ON rm.id = m.moderable_id \
               WHERE m.user_id = u.id AND m.moderable_type = 'App\\Models\\Room' \
@@ -306,6 +311,7 @@ impl RankingsRepo {
              WHERE u.id = ANY($1)",
         )
         .bind(user_ids.to_vec())
+        .bind(crate::donations::current_month_key())
         .fetch_all(&self.pool)
         .await?;
         let any_n = if room_id.is_some() { 2 } else { 1 };

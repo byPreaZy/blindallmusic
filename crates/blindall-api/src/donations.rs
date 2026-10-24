@@ -130,7 +130,7 @@ pub async fn stripe_webhook(
         Some("customer.subscription.deleted") => {
             if let Some(sid) = obj["id"].as_str() {
                 if let Ok(Some(uid)) = state.subscriptions.cancel(sid).await {
-                    let _ = state.subscriptions.strip_venue_perks(uid).await;
+                    strip_venue_perks_unless_pro(&state, uid).await;
                 }
             }
         }
@@ -192,9 +192,21 @@ async fn record_subscription_session(state: &AppState, session: &Value) -> Resul
                     &email,
                     "",
                     "Bienvenue dans Blind'All Plus",
-                    "<p>Merci pour votre abonnement Blind'All Plus ! Vos avantages \
-                     sont actifs : plus de pubs et un revive quotidien sur le \
-                     daily challenge.</p>",
+                    &format!(
+                        "<p>Merci pour votre abonnement Blind'All {} !</p>\
+                         <p>Vos avantages sont actifs : {}</p>\
+                         <p><small>Abonnement mensuel sans engagement — résiliable à \
+                         tout moment depuis vos paramètres ou par e-mail. Voir nos \
+                         <a href=\"https://blindallmusic.clerely.fr/pages/conditions-generales-vente\">CGV</a>.</small></p>",
+                        if plan == "pro" { "Pro" } else { "Plus" },
+                        if plan == "pro" {
+                            "branding de salle (nom d'établissement sur l'écran TV) \
+                             pour vos soirées, plus tous les avantages supporter."
+                        } else {
+                            "plus de pubs, un revive quotidien sur le daily \
+                             challenge, et tous les avantages supporter."
+                        }
+                    ),
                 )
                 .await;
             }
@@ -225,11 +237,29 @@ async fn sync_subscription(state: &AppState, obj: &Value) {
             // A definitively non-entitled status (canceled/unpaid/expired)
             // drops the venue branding the moment the perk lapses.
             if !blindall_db::subscriptions::SubscriptionRepo::entitled_status(status) {
-                let _ = state.subscriptions.strip_venue_perks(user_id).await;
+                strip_venue_perks_unless_pro(state, user_id).await;
             }
         }
         Ok(None) => {}
         Err(e) => tracing::warn!(error = %e, "subscription sync failed"),
+    }
+}
+
+/// Venue branding is a Pro perk: strip it only when the user's remaining
+/// active plan is not `pro`. A user holding several subscriptions (e.g. an
+/// old plus sub beside an upgraded pro one) keeps the venue while any pro
+/// row stays entitled — and loses it when downgraded to plain plus.
+async fn strip_venue_perks_unless_pro(state: &AppState, user_id: i64) {
+    let still_pro = state
+        .subscriptions
+        .active_plan(user_id)
+        .await
+        .ok()
+        .flatten()
+        .as_deref()
+        == Some(blindall_db::subscriptions::PLAN_PRO);
+    if !still_pro {
+        let _ = state.subscriptions.strip_venue_perks(user_id).await;
     }
 }
 

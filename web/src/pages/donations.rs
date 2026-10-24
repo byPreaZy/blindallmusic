@@ -133,10 +133,11 @@ pub fn DonationsPage() -> impl IntoView {
                             </Show>
                         </div>
 
-                        // Blind'All Plus — subscription card (hidden until
-                        // STRIPE_PLUS_URL is configured server-side).
+                        // Blind'All Plus / Pro — subscription cards (hidden
+                        // until STRIPE_*_URL is configured server-side).
                         {move || {
                             let plus_url = p["plus_url"].as_str().unwrap_or("").to_string();
+                            let pro_url = p["pro_url"].as_str().unwrap_or("").to_string();
                             let plan = p["plan"].as_str().unwrap_or("").to_string();
                             // Show the card whenever Plus is offered or the
                             // viewer is subscribed — even anonymous (CTA -> /login).
@@ -144,43 +145,87 @@ pub fn DonationsPage() -> impl IntoView {
                             if !offered && plan.is_empty() {
                                 return view! { <div/> }.into_any();
                             }
+                            let sub_btn = move |url: String, label: &'static str| {
+                                // Anonymous/guest gets /login — the
+                                // subscription needs a logged account
+                                // to attach to.
+                                let (href, external) = if url.is_empty() {
+                                    ("/login".to_string(), false)
+                                } else {
+                                    (url, true)
+                                };
+                                view! {
+                                    <a href=href class="btn-primary !px-5 !py-2 whitespace-nowrap"
+                                        target=external.then_some("_blank")
+                                        rel=external.then_some("noopener")>
+                                        {t(label)}
+                                    </a>
+                                }
+                            };
                             view! {
-                                <div class="mt-6 rounded-2xl border border-amber-400/30 bg-gradient-to-br from-amber-500/10 to-transparent p-5">
-                                    <div class="flex items-center justify-between gap-3">
+                                <div class="mt-6 grid gap-4 sm:grid-cols-2">
+                                    <div class="rounded-2xl border border-amber-400/30 bg-gradient-to-br from-amber-500/10 to-transparent p-5">
                                         <div>
                                             <h3 class="text-lg font-bold text-amber-300">
                                                 "⭐ Blind'All Plus"
-                                                {(!plan.is_empty()).then(|| view! {
+                                                {(plan == "plus").then(|| view! {
                                                     <span class="ml-2 rounded bg-amber-400/20 px-2 py-0.5 text-xs uppercase text-amber-200">
                                                         {t("Active plan")}
                                                     </span>
                                                 })}
                                             </h3>
+                                            <p class="mt-1 text-sm font-semibold text-amber-200">
+                                                {t("4.99 €/month — cancel anytime")}
+                                            </p>
                                             <ul class="mt-2 space-y-1 text-sm text-white/70">
                                                 <li>"🚫 " {t("No ads, forever")}</li>
                                                 <li>"💛 " {t("Daily-challenge revive")}</li>
+                                                <li>"🏷️ " {t("Custom tag")}</li>
                                                 <li>"👑 " {t("All supporter perks")}</li>
                                             </ul>
                                         </div>
-                                        {(plan.is_empty()).then(|| {
-                                            // Anonymous/guest gets /login — the
-                                            // subscription needs a logged account
-                                            // to attach to.
-                                            let (href, external) = if plus_url.is_empty() {
-                                                ("/login".to_string(), false)
-                                            } else {
-                                                (plus_url.clone(), true)
-                                            };
-                                            view! {
-                                                <a href=href class="btn-primary !px-5 !py-2"
-                                                    target=external.then_some("_blank")
-                                                    rel=external.then_some("noopener")>
-                                                    {t("Subscribe")}
-                                                </a>
-                                            }
-                                        })}
+                                        <div class="mt-4">
+                                            {(plan.is_empty()).then(|| sub_btn(plus_url.clone(), "Subscribe"))}
+                                        </div>
+                                    </div>
+                                    <div class="rounded-2xl border border-purple-400/30 bg-gradient-to-br from-purple-500/10 to-transparent p-5">
+                                        <div>
+                                            <h3 class="text-lg font-bold text-purple-300">
+                                                "🏢 Blind'All Pro"
+                                                {(plan == "pro").then(|| view! {
+                                                    <span class="ml-2 rounded bg-purple-400/20 px-2 py-0.5 text-xs uppercase text-purple-200">
+                                                        {t("Active plan")}
+                                                    </span>
+                                                })}
+                                            </h3>
+                                            <p class="mt-1 text-sm font-semibold text-purple-200">
+                                                {t("29.00 €/month — cancel anytime")}
+                                            </p>
+                                            <ul class="mt-2 space-y-1 text-sm text-white/70">
+                                                <li>"📍 " {t("Venue branding on the TV screen")}</li>
+                                                <li>"📺 " {t("Room photo for your venue")}</li>
+                                                <li>"👑 " {t("All supporter perks")}</li>
+                                            </ul>
+                                            <p class="mt-2 text-xs text-purple-200/60">
+                                                {t("For bars & events")}
+                                            </p>
+                                        </div>
+                                        <div class="mt-4">
+                                            {(plan.is_empty()).then(|| sub_btn(pro_url.clone(), "Subscribe"))}
+                                        </div>
                                     </div>
                                 </div>
+                                // Art. L221-28 13° C. conso: immediate execution
+                                // of digital content requires express waiver of
+                                // the 14-day withdrawal right — stated before the
+                                // Stripe redirect.
+                                <p class="mt-3 text-xs leading-relaxed text-white/40">
+                                    {t("By subscribing you accept our")}
+                                    " "
+                                    <A href="/pages/conditions-generales-vente" attr:class="underline hover:text-white/70">{t("Terms of Sale")}</A>
+                                    ". "
+                                    {t("You expressly request immediate access and waive your 14-day withdrawal right (art. L221-28 French Consumer Code).")}
+                                </p>
                             }.into_any()
                         }}
                     }.into_any()

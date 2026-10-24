@@ -81,7 +81,7 @@ pub async fn players(
     let cache_room = room_id
         .map(|r| r.to_string())
         .unwrap_or_else(|| "all".into());
-    let lb_key = format!("global_leaderboard:v3:{sort}:room:{cache_room}:page:{page}");
+    let lb_key = format!("global_leaderboard:v4:{sort}:room:{cache_room}:page:{page}");
     let mut leaderboard = state.rankings_cache.get(&lb_key);
     if leaderboard.is_none() {
         match state.rankings.leaderboard(sort, page, room_id).await {
@@ -100,7 +100,7 @@ pub async fn players(
     let mut user_context = Value::Null;
     if let Some(u) = user {
         let ctx_key = format!(
-            "global_leaderboard:v3:user:{}:sort:{sort}:room:{cache_room}:context",
+            "global_leaderboard:v4:user:{}:sort:{sort}:room:{cache_room}:context",
             u.id
         );
         let mut ctx = state.rankings_cache.get(&ctx_key);

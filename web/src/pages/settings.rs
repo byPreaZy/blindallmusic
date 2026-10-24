@@ -289,6 +289,36 @@ pub fn SettingsPage() -> impl IntoView {
                 </section>
 
                 <section class="rounded-xl border border-white/10 bg-surface-raised/60 p-6">
+                    <h2 class="mb-4 text-lg font-semibold text-white">{t("My subscription")}</h2>
+                    {move || {
+                        let plan = auth.user.get().and_then(|u| u.plan.clone());
+                        if let Some(plan) = plan {
+                            let name = if plan == "pro" { "Blind'All Pro" } else { "Blind'All Plus" };
+                            let price = if plan == "pro" { "29,00 € TTC/mois" } else { "4,99 € TTC/mois" };
+                            view! {
+                                <div class="flex items-center justify-between gap-3">
+                                    <div>
+                                        <p class="font-semibold text-amber-300">{name}</p>
+                                        <p class="text-sm text-white/50">{price}" — "{t("monthly, cancel anytime")}</p>
+                                    </div>
+                                    <A href="/donations" attr:class="btn-secondary !px-4 !py-1.5 text-sm">{t("Manage subscription")}</A>
+                                </div>
+                                <p class="mt-3 text-xs text-white/40">
+                                    {t("To cancel: use the link in your Stripe receipt e-mail, or contact us. Access stays active until the end of the paid period.")}
+                                </p>
+                            }.into_any()
+                        } else {
+                            view! {
+                                <div class="flex items-center justify-between gap-3">
+                                    <p class="text-sm text-white/50">{t("No active subscription.")}</p>
+                                    <A href="/donations" attr:class="btn-primary !px-4 !py-1.5 text-sm">{t("See options")}</A>
+                                </div>
+                            }.into_any()
+                        }
+                    }}
+                </section>
+
+                <section class="rounded-xl border border-white/10 bg-surface-raised/60 p-6">
                     <h2 class="mb-4 text-lg font-semibold text-white">{t("Password")}</h2>
                     <form class="space-y-4" on:submit=save_password>
                         <Show when=move || has_password()>

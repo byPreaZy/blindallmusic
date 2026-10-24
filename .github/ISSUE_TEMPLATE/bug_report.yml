@@ -33,7 +33,7 @@ body:
     attributes:
       label: Où ?
       options:
-        - Production (blindallmusic.com)
+        - Production (blindallmusic.clerely.fr)
         - Local / dev
         - Les deux
     validations:

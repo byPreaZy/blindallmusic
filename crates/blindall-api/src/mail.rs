@@ -84,7 +84,7 @@ pub async fn send_opts(
 pub async fn send_welcome(cfg: &MailConfig, to_email: &str, to_name: &str) -> anyhow::Result<()> {
     let html = format!(
         "<p>Bienvenue {name}</p>\
-         <p>Si tu reçois cet e-mail, cela signifie que tu viens de créer un compte sur blindallmusic.com.</p>\
+         <p>Si tu reçois cet e-mail, cela signifie que tu viens de créer un compte sur Blind'All Music.</p>\
          <p>Merci d'avoir rejoins la plus grande communauté de blind testeur et testeuse en ligne. \
          Tu peux maintenant créer tes propres playlists, des parties privées et rejoindre ou créer une team.</p>\
          <p><a href=\"{url}\">Jouer sur Blind'All Music</a></p>\
