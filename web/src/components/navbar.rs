@@ -144,6 +144,14 @@ fn trophy_icon(cls: &'static str) -> impl IntoView {
     }
 }
 
+fn crown_icon(cls: &'static str) -> impl IntoView {
+    view! {
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class=cls aria-hidden="true">
+            <path d="M3 6.2l4.2 4.1L12 5l4.8 5.3L21 6.2 19.2 18H4.8L3 6.2zm1.9 13.6h14.2a1 1 0 010 2H4.9a1 1 0 010-2z"/>
+        </svg>
+    }
+}
+
 fn help_icon(cls: &'static str) -> impl IntoView {
     view! {
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class=cls aria-hidden="true">
@@ -403,6 +411,11 @@ pub fn Navbar() -> impl IntoView {
                         <A href="/rankings" attr:title=t("Rankings")
                             attr:class="retro-icon-btn text-brand-secondary hover:text-brand-secondary">
                             {trophy_icon("h-5 w-5 drop-shadow-[0_0_8px_rgb(242_201_76/0.5)]")}
+                        </A>
+                        // Plus/Pro discovery — visible to everyone, amber glow.
+                        <A href="/donations" attr:title=t("Plus & Pro")
+                            attr:class="retro-icon-btn text-amber-400 hover:text-amber-300">
+                            {crown_icon("h-5 w-5 drop-shadow-[0_0_8px_rgb(251_191_36/0.6)]")}
                         </A>
                         <Show
                             when=move || auth.user.get().map(|u| !u.is_guest).unwrap_or(false)

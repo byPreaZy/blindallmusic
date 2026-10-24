@@ -727,6 +727,38 @@ fn urlencoding(s: &str) -> String {
         .collect()
 }
 
+// Compact Plus/Pro pitch — keeps subscriptions discoverable from the home
+// page without an extra tab. Hidden when the viewer already has a plan
+// (settings covers management).
+#[component]
+fn PlusPitchCard() -> impl IntoView {
+    let offered = RwSignal::new(true);
+    let has_plan = RwSignal::new(false);
+    leptos::task::spawn_local(async move {
+        if let Ok(v) = api::get::<Value>("/api/v1/donations/progress").await {
+            offered.set(v["plus_offered"].as_bool().unwrap_or(true));
+            has_plan.set(!v["plan"].as_str().unwrap_or("").is_empty());
+        }
+    });
+    view! {
+        <Show when=move || offered.get() && !has_plan.get()>
+            <div class="rounded-xl border border-amber-400/25 bg-gradient-to-br from-amber-500/10 via-purple-500/5 to-transparent p-4">
+                <p class="game-section-kicker">{t("Go further")}</p>
+                <p class="mt-1 font-bold text-amber-300">"⭐ Blind'All Plus"</p>
+                <p class="text-sm text-white/70">
+                    {t("No ads, daily revive, custom tag — 4.99 €/month.")}
+                </p>
+                <p class="mt-1 text-xs text-white/45">
+                    {t("Pro 29 €/month for bars & events: your venue name on the TV screen.")}
+                </p>
+                <A href="/donations" attr:class="mt-3 inline-flex w-full justify-center rounded-lg border border-amber-400/40 bg-amber-400/15 px-3 py-1.5 text-sm font-semibold text-amber-200 transition-colors hover:bg-amber-400/25">
+                    {t("See plans")}
+                </A>
+            </div>
+        </Show>
+    }
+}
+
 #[component]
 fn DonationGoalCard() -> impl IntoView {
     let goal = RwSignal::new(Option::<Value>::None);
@@ -818,6 +850,10 @@ fn HomeSidebar(
             <div class="retro-panel lg:sticky lg:top-6 lg:self-start">
                 <div id="home-donation-goal" class="scroll-mt-24 border-b border-white/10 p-4">
                     <DonationGoalCard />
+                </div>
+
+                <div class="border-b border-white/10 p-4">
+                    <PlusPitchCard />
                 </div>
 
                 {move || featured.get().into_iter().map(|r| view! {

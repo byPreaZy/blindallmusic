@@ -259,6 +259,41 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0030_remove_em_dashes.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            31,
+            "legal_commercial".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0031_legal_commercial.sql").into(),
+            false,
+        ),
+        sqlx::migrate::Migration::new(
+            32,
+            "privacy_smtp_correction".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0032_privacy_smtp_correction.sql").into(),
+            false,
+        ),
+        sqlx::migrate::Migration::new(
+            33,
+            "legal_identity".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0033_legal_identity.sql").into(),
+            false,
+        ),
+        sqlx::migrate::Migration::new(
+            34,
+            "legal_address_no_mediator".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0034_legal_address_no_mediator.sql").into(),
+            false,
+        ),
+        sqlx::migrate::Migration::new(
+            35,
+            "update_cgu".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0035_update_cgu.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {
