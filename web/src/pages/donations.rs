@@ -138,7 +138,10 @@ pub fn DonationsPage() -> impl IntoView {
                         {move || {
                             let plus_url = p["plus_url"].as_str().unwrap_or("").to_string();
                             let plan = p["plan"].as_str().unwrap_or("").to_string();
-                            if plus_url.is_empty() && plan.is_empty() {
+                            // Show the card whenever Plus is offered or the
+                            // viewer is subscribed — even anonymous (CTA -> /login).
+                            let offered = p["plus_offered"].as_bool().unwrap_or(false);
+                            if !offered && plan.is_empty() {
                                 return view! { <div/> }.into_any();
                             }
                             view! {
@@ -159,11 +162,22 @@ pub fn DonationsPage() -> impl IntoView {
                                                 <li>"👑 " {t("All supporter perks")}</li>
                                             </ul>
                                         </div>
-                                        {(!plus_url.is_empty() && plan.is_empty()).then(|| view! {
-                                            <a href=plus_url.clone()
-                                                class="btn-primary !px-5 !py-2" target="_blank" rel="noopener">
-                                                {t("Subscribe")}
-                                            </a>
+                                        {(plan.is_empty()).then(|| {
+                                            // Anonymous/guest gets /login — the
+                                            // subscription needs a logged account
+                                            // to attach to.
+                                            let (href, external) = if plus_url.is_empty() {
+                                                ("/login".to_string(), false)
+                                            } else {
+                                                (plus_url.clone(), true)
+                                            };
+                                            view! {
+                                                <a href=href class="btn-primary !px-5 !py-2"
+                                                    target=external.then_some("_blank")
+                                                    rel=external.then_some("noopener")>
+                                                    {t("Subscribe")}
+                                                </a>
+                                            }
                                         })}
                                     </div>
                                 </div>

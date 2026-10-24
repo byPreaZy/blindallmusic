@@ -326,22 +326,24 @@ pub fn plan_payment_url_for_user(
     if base.is_empty() {
         return String::new();
     }
+    // Anonymous/guest checkout can't carry client_reference_id — the
+    // subscription couldn't be attached. Only members get a link; the UI
+    // falls back to /login.
+    let Some(u) = user.filter(|u| !u.is_guest) else {
+        return String::new();
+    };
     let mut query: Vec<(String, String)> = vec![];
     if let Some(l) = locale {
         if ["fr", "en", "es"].contains(&l) {
             query.push(("locale".into(), l.into()));
         }
     }
-    if let Some(u) = user {
-        if !u.is_guest {
-            query.push((
-                "client_reference_id".into(),
-                format!("{}:{plan}", u.id),
-            ));
-            if let Some(e) = email.filter(|e| e.contains('@')) {
-                query.push(("locked_prefilled_email".into(), e.into()));
-            }
-        }
+    query.push((
+        "client_reference_id".into(),
+        format!("{}:{plan}", u.id),
+    ));
+    if let Some(e) = email.filter(|e| e.contains('@')) {
+        query.push(("locked_prefilled_email".into(), e.into()));
     }
     finish_payment_url(base, query)
 }
@@ -446,6 +448,11 @@ pub async fn progress(State(state): State<AppState>, OptionalUser(user): Optiona
         o.insert("days_remaining".into(), json!(days_remaining));
         o.insert("ads_disabled".into(), json!(user_supporter || plan.is_some()));
         o.insert("plan".into(), json!(plan));
+        o.insert(
+            "plus_offered".into(),
+            json!(!state.donations.stripe_plus_payment_url.is_empty()
+                || !state.donations.stripe_pro_payment_url.is_empty()),
+        );
         o.insert("adsense_client".into(), json!(state.adsense_client));
         o.insert("adsense_slot".into(), json!(state.adsense_slot));
         o.insert(
