@@ -566,6 +566,9 @@ pub async fn joined(
         "users": st["users"],
         "roundId": st["roundId"],
         "playedTracks": played,
+        // Lets clients know a party is running so they can pull its
+        // snapshot; avoids a guaranteed-404 GET /party on every join.
+        "party": state.parties.has_active(id),
     })))
 }
 
@@ -826,10 +829,10 @@ pub async fn qr_code(State(state): State<AppState>, Path(id): Path<i64>) -> Resp
     if state.store.room_config(id).await.is_err() {
         return StatusCode::NOT_FOUND.into_response();
     }
-    // `?pad=1` opens the buzzer layout on the phone: answers only, the
-    // extract is played by the TV — never on the scanning device.
+    // `/pad` opens the dedicated buzzer page on the phone: answers only,
+    // the extract is played by the TV — never on the scanning device.
     let url = format!(
-        "{}/rooms/{}?pad=1",
+        "{}/rooms/{}/pad",
         state.mail.app_url.trim_end_matches('/'),
         id
     );

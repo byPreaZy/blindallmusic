@@ -38,6 +38,7 @@ use crate::pages::teams::{TeamShowPage, TeamsPage};
 use leptos::prelude::*;
 use leptos_router::components::{Route, Router, Routes};
 use leptos_router::hooks::{use_location, use_params_map};
+use leptos_router::location::Location;
 use leptos_router::path;
 
 /// Remounts its children whenever the route params change. Navigating between
@@ -52,6 +53,17 @@ fn ParamRemount(children: ChildrenFn) -> impl IntoView {
     }
 }
 
+// Chromeless surfaces: room TV view (/rooms/{id}/live) and the pad buzzer
+// (?pad=1) render full-screen — no site navbar/footer, they're displays.
+fn chromeless(location: &Location) -> bool {
+    let path = location.pathname.get();
+    if path.starts_with("/rooms/") && (path.ends_with("/live") || path.ends_with("/pad")) {
+        return true;
+    }
+    path.starts_with("/rooms/")
+        && location.query.get().get("pad").map(|v| v == "1").unwrap_or(false)
+}
+
 #[component]
 fn AppFooter() -> impl IntoView {
     let location = use_location();
@@ -60,15 +72,13 @@ fn AppFooter() -> impl IntoView {
         crate::seo::reset();
     });
     let is_room_show = move || {
-        location
-            .pathname
-            .get()
-            .strip_prefix("/rooms/")
+        let p = location.pathname.get();
+        p.strip_prefix("/rooms/")
             .map(|rest| !rest.is_empty() && rest != "create" && !rest.contains('/'))
             .unwrap_or(false)
     };
     view! {
-        <Show when=move || !is_room_show()>
+        <Show when=move || !(is_room_show() || chromeless(&location))>
             <crate::ads::Adsense wrapper_class="mt-8 mb-4"/>
             <Footer/>
         </Show>
@@ -157,9 +167,25 @@ pub fn App() -> impl IntoView {
 
     view! {
         <Router>
+            <Shell/>
+        </Router>
+    }
+}
+
+/// App shell rendered inside the Router (so `use_location` resolves):
+/// hides all site chrome on TV/pad surfaces.
+#[component]
+fn Shell() -> impl IntoView {
+    let app_location = use_location();
+    let app_location2 = app_location.clone();
+    view! {
             <div class="flex min-h-screen flex-col">
-                <Navbar/>
-                <main class="flex-1 pb-20 md:pb-4">
+                <Show when=move || !chromeless(&app_location)>
+                    <Navbar/>
+                </Show>
+                <main class=move || {
+                    if chromeless(&app_location2) { "flex-1" } else { "flex-1 pb-20 md:pb-4" }
+                }>
                     <Routes fallback=|| {
                         view! {
                             <div class="mx-auto max-w-md px-4 py-24 text-center text-white/60">
@@ -182,6 +208,7 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/rooms") view=RoomsIndexPage/>
                         <Route path=path!("/rooms/:id") view=|| view! { <ParamRemount><RoomPage/></ParamRemount> }/>
                         <Route path=path!("/rooms/:id/live") view=|| view! { <ParamRemount><RoomLivePage/></ParamRemount> }/>
+                        <Route path=path!("/rooms/:id/pad") view=|| view! { <ParamRemount><RoomPage/></ParamRemount> }/>
                         <Route path=path!("/rooms/:id/edit") view=|| view! { <ParamRemount><RoomEditPage/></ParamRemount> }/>
                         <Route path=path!("/rankings") view=RankingsPage/>
                         <Route path=path!("/rankings/season") view=RankingsPage/>
@@ -245,6 +272,5 @@ pub fn App() -> impl IntoView {
                 <AppFooter/>
                 <crate::components::install_prompt::InstallPrompt/>
             </div>
-        </Router>
     }
 }

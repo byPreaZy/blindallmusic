@@ -195,18 +195,20 @@ pub fn RoomLivePage() -> impl IntoView {
                         let can_control = v["can_control"].as_bool().unwrap_or(false);
                         let rid = room_id.get();
                         view! {
-                            <div class="mx-auto max-w-5xl">
+                            <div class="mx-auto max-w-6xl">
                                 // header : room name + track counter + members
                                 <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
                                     <div>
-                                        <h1 class="text-3xl font-black text-white sm:text-4xl">
+                                        {(!venue.is_empty()).then(|| view! {
+                                            <p class="mb-1 text-sm font-bold uppercase tracking-[0.25em] text-amber-300">
+                                                "📍 "{venue.clone()}
+                                            </p>
+                                        })}
+                                        <h1 class="text-4xl font-black text-white sm:text-5xl lg:text-6xl">
                                             {v["name"].as_str().unwrap_or("").to_string()}
                                         </h1>
-                                        <p class="mt-1 text-sm text-white/50">
+                                        <p class="mt-1 text-base text-white/50 lg:text-lg">
                                             {t("Live")}" · "{members}" "{t("players")}
-                                            {(!venue.is_empty()).then(|| view! {
-                                                <span>" · 📍 "{venue.clone()}</span>
-                                            })}
                                         </p>
                                     </div>
                                     <div class="flex items-center gap-3">
@@ -324,19 +326,19 @@ pub fn RoomLivePage() -> impl IntoView {
                                             view! { <p class="text-sm text-white/40">{t("No scores yet.")}</p> }.into_any()
                                         } else {
                                             view! {
-                                                <ol class="space-y-2">
+                                                <ol class="space-y-2 lg:space-y-3">
                                                     {standings.iter().take(10).enumerate().map(|(i, s)| {
                                                         let medal = match i { 0 => "🥇", 1 => "🥈", 2 => "🥉", _ => "" };
                                                         view! {
-                                                            <li class=format!("flex items-center gap-3 rounded-xl px-4 py-3 {}",
+                                                            <li class=format!("flex items-center gap-4 rounded-xl px-5 py-3 lg:py-4 {}",
                                                                 if i < 3 { "bg-white/10" } else { "bg-white/[0.03]" })>
-                                                                <span class="w-8 text-center text-lg font-black text-white/70">
+                                                                <span class="w-10 text-center text-xl font-black text-white/70 lg:text-2xl">
                                                                     {if medal.is_empty() { (i + 1).to_string() } else { medal.to_string() }}
                                                                 </span>
-                                                                <span class="flex-1 truncate text-base font-bold text-white sm:text-lg">
+                                                                <span class="flex-1 truncate text-lg font-bold text-white sm:text-xl lg:text-2xl">
                                                                     {s["name"].as_str().unwrap_or("").to_string()}
                                                                 </span>
-                                                                <span class="text-lg font-black text-teal-300">
+                                                                <span class="text-xl font-black text-teal-300 lg:text-3xl">
                                                                     {s["score"].as_f64().map(|x| format!("{x:.0}")).unwrap_or_default()}
                                                                 </span>
                                                             </li>
@@ -347,18 +349,21 @@ pub fn RoomLivePage() -> impl IntoView {
                                         }}
                                     </div>
 
-                                    // join card : QR + link
+                                    // join card : QR + link — bar CTA
                                     <div class="rounded-2xl border border-white/10 bg-neutral-900/80 p-6 text-center">
-                                        <h2 class="mb-4 text-sm font-bold uppercase tracking-widest text-white/50">{t("Join us!")}</h2>
+                                        <h2 class="mb-4 text-sm font-bold uppercase tracking-widest text-white/50">{t("Scan to buzz!")}</h2>
                                         <div class="mx-auto w-fit rounded-xl bg-white p-3">
                                             <img src=format!("/api/v1/rooms/{rid}/qr.svg")
-                                                alt="QR" class="h-44 w-44"/>
+                                                alt="QR" class="h-52 w-52 lg:h-60 lg:w-60"/>
                                         </div>
-                                        <p class="mt-4 break-all text-xs text-white/40">
-                                            {format!("/rooms/{rid}?pad=1")}
+                                        <p class="mt-3 text-xs font-semibold text-white/50">
+                                            {web_sys::window()
+                                                .and_then(|w| w.location().origin().ok())
+                                                .map(|o| o.trim_start_matches("https://").trim_start_matches("http://").to_string())
+                                                .unwrap_or_default()}
                                         </p>
-                                        <A href=format!("/rooms/{rid}?pad=1") attr:class="btn-primary mt-4 inline-block w-full">
-                                            {t("Play")}
+                                        <A href=format!("/rooms/{rid}/pad") attr:class="btn-primary mt-4 inline-block w-full">
+                                            {t("Join the game")}
                                         </A>
                                     </div>
                                 </div>

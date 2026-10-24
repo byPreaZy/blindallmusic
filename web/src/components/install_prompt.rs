@@ -68,8 +68,18 @@ pub fn InstallPrompt() -> impl IntoView {
         }
     }
 
+    // Never on chromeless surfaces (room TV view / pad buzzer).
     let visible = move || {
-        !dismissed.get() && !installed.get() && (deferred.get().is_some() || ios_hint.get())
+        let on_tv = web_sys::window()
+            .and_then(|w| w.location().pathname().ok())
+            .map(|p| p.starts_with("/rooms/") && (p.ends_with("/live") || p.ends_with("/pad")))
+            .unwrap_or(false);
+        let on_pad = web_sys::window()
+            .and_then(|w| w.location().search().ok())
+            .map(|q| q.contains("pad=1"))
+            .unwrap_or(false);
+        !on_tv && !on_pad && !dismissed.get() && !installed.get()
+            && (deferred.get().is_some() || ios_hint.get())
     };
 
     let install = move |_| {

@@ -470,14 +470,18 @@ pub fn RoomPage() -> impl IntoView {
     let found_all_markers = RwSignal::new(Vec::<Value>::new());
 
     // ---- view state (Show.vue layout) --------------------------------------
-    // `?pad=1` = buzzer mode (TV QR code): the phone answers, the TV plays.
-    // No <Player> is mounted so no audio is fetched on the device; the answer
-    // clock is driven by the server's track started_at timestamps instead.
+    // Pad/buzzer mode (TV QR code): the phone answers, the TV plays.
+    // Triggered by /rooms/{id}/pad OR legacy ?pad=1. No <Player> is mounted
+    // so no audio is fetched on the device; the answer clock is driven by
+    // the server's track started_at timestamps instead.
     let pad_mode = use_query_map().with_untracked(|q| {
         q.get("pad")
             .map(|v| v == "1" || v == "true")
             .unwrap_or(false)
-    });
+    }) || web_sys::window()
+        .and_then(|w| w.location().pathname().ok())
+        .map(|p| p.ends_with("/pad"))
+        .unwrap_or(false);
     let pad_clock_base = RwSignal::new(0.0_f64);
     let volume = RwSignal::new(crate::components::player::saved_volume());
     let display_chat = RwSignal::new(true);
@@ -571,8 +575,12 @@ pub fn RoomPage() -> impl IntoView {
                 }
             }
             joined.set(true);
-            if let Ok(p) = api::get::<Value>(&format!("/api/v1/rooms/{room_id}/party")).await {
-                party.set(Some(p));
+            // /party 404s when nothing is running — only fetch when the
+            // server flagged an active party in the /joined payload.
+            if data.party {
+                if let Ok(p) = api::get::<Value>(&format!("/api/v1/rooms/{room_id}/party")).await {
+                    party.set(Some(p));
+                }
             }
             if let (Some(rid), Some(tid)) = (round_id.get(), track.get().map(|t| t.id)) {
                 let _ = api::post_empty::<Value>(&format!(
@@ -2049,7 +2057,7 @@ fn RoomPadView(
     });
 
     view! {
-        <div class="mx-auto flex min-h-[calc(100dvh-3.5rem)] w-full max-w-lg flex-col gap-4 px-4 py-4">
+        <div class="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-4 px-4 py-4">
             <div class="flex items-center justify-between gap-3">
                 <div class="min-w-0">
                     <h1 class="truncate text-lg font-black text-white">

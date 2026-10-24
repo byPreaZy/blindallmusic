@@ -45,6 +45,12 @@ impl PartyStore {
         Some(party_json(room_id, p, viewer_id))
     }
 
+    /// Any party occupying the store for this room — same reachability as
+    /// `snapshot` (a finished party counts until it is reaped).
+    pub fn has_active(&self, room_id: i64) -> bool {
+        self.map.lock().unwrap().contains_key(&room_id)
+    }
+
     fn finish(&self, room_id: i64) {
         let mut map = self.map.lock().unwrap();
         if let Some(p) = map.get_mut(&room_id) {

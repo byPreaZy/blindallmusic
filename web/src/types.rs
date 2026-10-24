@@ -237,6 +237,8 @@ pub struct JoinedPayload {
     pub played_tracks: Vec<Value>,
     #[serde(default)]
     pub room: Option<Value>,
+    #[serde(default)]
+    pub party: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]

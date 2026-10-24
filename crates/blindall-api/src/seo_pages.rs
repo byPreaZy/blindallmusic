@@ -648,7 +648,19 @@ pub async fn spa_page(State(state): State<AppState>, uri: Uri) -> Response {
     let decision = decide(&state, inner, locale).await;
 
     match decision {
-        Decision::Redirect(loc) => redirect(&loc),
+        // Preserve the query on canonical redirects — functional params
+        // like ?pad=1 must survive the numeric→slug 301 (QR buzzer flow).
+        Decision::Redirect(loc) => {
+            let loc = if !loc.contains('?') {
+                match uri.query() {
+                    Some(q) if !q.is_empty() => format!("{loc}?{q}"),
+                    _ => loc,
+                }
+            } else {
+                loc
+            };
+            redirect(&loc)
+        }
         Decision::NotFound => not_found(&state, &shell),
         Decision::Page(status, mut head, landing) => {
             // Locale-prefixed URLs keep a self-referencing canonical (PHP
