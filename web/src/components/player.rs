@@ -149,9 +149,10 @@ pub fn Player(
                         let cb = Closure::<dyn FnMut()>::new(move || {
                             if let Some(a) = audio.borrow().as_ref() {
                                 let t = a.current_time();
-                                current_time.set(t);
-                                percent
-                                    .set((100.0 / track_duration * (t + 0.25)).min(100.0).round());
+                                let _ = current_time.try_set(t);
+                                let _ = percent.try_set(
+                                    (100.0 / track_duration * (t + 0.25)).min(100.0).round(),
+                                );
                             }
                         });
                         let _ = a.add_event_listener_with_callback(
@@ -164,8 +165,8 @@ pub fn Player(
                         let audio = audio.clone();
                         let cb = Closure::<dyn FnMut()>::new(move || {
                             if audio.borrow().is_some() {
-                                is_playing.set(false);
-                                waiting.set(true);
+                                let _ = is_playing.try_set(false);
+                                let _ = waiting.try_set(true);
                             }
                         });
                         let _ = a
@@ -174,7 +175,7 @@ pub fn Player(
                     }
                     {
                         let cb = Closure::<dyn FnMut()>::new(move || {
-                            loading.set(false);
+                            let _ = loading.try_set(false);
                         });
                         let _ = a.add_event_listener_with_callback(
                             "canplaythrough",
@@ -194,9 +195,9 @@ pub fn Player(
                                     return;
                                 }
                             }
-                            error.set(Some("audio_error".to_string()));
-                            loading.set(false);
-                            is_playing.set(false);
+                            let _ = error.try_set(Some("audio_error".to_string()));
+                            let _ = loading.try_set(false);
+                            let _ = is_playing.try_set(false);
                         });
                         let _ = a
                             .add_event_listener_with_callback("error", cb.as_ref().unchecked_ref());

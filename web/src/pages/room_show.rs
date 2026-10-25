@@ -1327,12 +1327,16 @@ pub fn RoomPage() -> impl IntoView {
                     <Show when=move || chat_visible.get()>
                         <div class=move || {
                             if mobile_tab.get() == "chat" {
-                                "chat-panel flex h-[48dvh] max-h-[32rem] min-h-[24rem] w-full shrink-0 flex-col md:h-full md:max-h-none md:min-h-0 md:w-1/5"
+                                // min-h stays small: on short phones a 24rem
+                                // floor would squeeze the game area/clips.
+                                "chat-panel flex h-[48dvh] max-h-[32rem] min-h-[10rem] w-full shrink-0 flex-col md:h-full md:max-h-none md:min-h-0 md:w-1/5"
                             } else {
                                 "chat-panel hidden h-full w-1/5 shrink-0 flex-col md:flex"
                             }
                         }>
-                            <RoomChat room_id=room_id.get_untracked() rt=rt.get_untracked().unwrap() can_delete=can_moderate_chat is_guest=is_guest_sig moderator_ids=moderator_ids/>
+                            <Show when=move || rt.get().is_some()>
+                                <RoomChat room_id=room_id.get_untracked() rt=rt.get_untracked().unwrap() can_delete=can_moderate_chat is_guest=is_guest_sig moderator_ids=moderator_ids/>
+                            </Show>
                         </div>
                     </Show>
                 </div>
@@ -1377,16 +1381,23 @@ fn RoomActions(
     share_open: RwSignal<bool>,
     is_moderator: Memo<bool>,
 ) -> impl IntoView {
+    let ctrl_error = RwSignal::new(Option::<String>::None);
     let start_round = move |_| {
         let rid = room_id.get_untracked();
         leptos::task::spawn_local(async move {
-            let _ = api::post_empty::<Value>(&format!("/api/v1/rooms/{rid}/start")).await;
+            match api::post_empty::<Value>(&format!("/api/v1/rooms/{rid}/start")).await {
+                Ok(_) => ctrl_error.set(None),
+                Err(e) => ctrl_error.set(Some(e.message)),
+            }
         });
     };
     let stop_round = move |_| {
         let rid = room_id.get_untracked();
         leptos::task::spawn_local(async move {
-            let _ = api::post_empty::<Value>(&format!("/api/v1/rooms/{rid}/stop")).await;
+            match api::post_empty::<Value>(&format!("/api/v1/rooms/{rid}/stop")).await {
+                Ok(_) => ctrl_error.set(None),
+                Err(e) => ctrl_error.set(Some(e.message)),
+            }
         });
     };
     let toggle_bookmark = move |_| {
@@ -1412,6 +1423,9 @@ fn RoomActions(
     view! {
         <div class="room-actions-bar">
             <RoomOptionsModal open=options_open room=room room_id=room_id me=me/>
+            <Show when=move || ctrl_error.get().is_some()>
+                <p class="px-3 py-1 text-xs text-rose-400">{move || ctrl_error.get().unwrap_or_default()}</p>
+            </Show>
             <div class="room-actions">
                 <button type="button" class="room-action-btn" aria-label=t("Share this room")
                     on:click=move |_| share_open.set(true)>

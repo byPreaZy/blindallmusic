@@ -1519,6 +1519,25 @@ pub async fn update_user_count(
     if let Some(r) = require_not_guest(&user) {
         return r;
     }
+    // The displayed audience count is a room field — only owner,
+    // moderators or admins may write it (PHP left this open; that was a
+    // spoof hole, not a feature).
+    let room = match load_room(&state, id).await {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    let allowed = user.is_administrator
+        || state.rooms.has_control(&room, user.id, false).await;
+    if !allowed {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "room_control_required"})),
+        )
+            .into_response();
+    }
+    if !(0..=100_000).contains(&body.count) {
+        return validation("count", "The count is invalid.");
+    }
     // PHP throttle:10,1 on update-user-count.
     if let Some(secs) = state
         .presence_rate
@@ -1636,6 +1655,9 @@ pub async fn upvote_track(
     if let Err(e) = load_room(&state, room_id).await {
         return e;
     }
+    if let Err(e) = track_in_room(&state, room_id, track_id).await {
+        return e;
+    }
     if let Err(_) = state.votes.apply_upvote(user.id, track_id).await {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
@@ -1674,6 +1696,9 @@ pub async fn downvote_track(
     }
 
     if let Err(e) = load_room(&state, room_id).await {
+        return e;
+    }
+    if let Err(e) = track_in_room(&state, room_id, track_id).await {
         return e;
     }
     let reason = body.reason.as_deref();
@@ -1725,6 +1750,18 @@ pub async fn alert(
     let message = body.message.unwrap_or_default();
     if message.chars().count() > 255 {
         return validation("message", "The message must not exceed 255 characters.");
+    }
+    // Each alert fans out a notification to every public moderator —
+    // throttle per user so the feeds cannot be flooded.
+    if let Some(secs) = state
+        .suggestion_rate
+        .retry_after(&format!("alert|{}", user.id), 10, 3600)
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({"error": "rate_limited", "retry_after": secs})),
+        )
+            .into_response();
     }
     let moderators = state.auth.public_moderator_ids().await.unwrap_or_default();
     let text = if message.is_empty() {

@@ -75,6 +75,11 @@ pub fn MatchPage() -> impl IntoView {
         feedback.set(None);
         let channel = format!("match.{id}");
         if let Some(realtime) = rt.get_value() {
+            // Leaving the previous match channel drops its listeners —
+            // rematch must not keep handlers for a dead match id.
+            if let Some(prev) = joined_channel.get_untracked() {
+                realtime.leave(&prev);
+            }
             realtime.join(&channel);
             macro_rules! on {
                 ($event:literal, $body:expr) => {{
@@ -114,6 +119,11 @@ pub fn MatchPage() -> impl IntoView {
             let alive = enter_alive.clone();
             realtime.on_reconnect(Rc::new(move || {
                 if !alive.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
+                }
+                // Hooks persist on the shared socket across rematches —
+                // only the hook bound to the *current* match may hydrate.
+                if match_id.get_untracked() != Some(id) {
                     return;
                 }
                 leptos::task::spawn_local(async move {

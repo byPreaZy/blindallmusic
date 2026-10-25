@@ -41,9 +41,9 @@ fn SearchRooms() -> impl IntoView {
                     }
                 },
             );
-            let _ = web_sys::window()
-                .unwrap()
-                .add_event_listener_with_callback("keydown", cb.as_ref().unchecked_ref());
+            let Some(w) = web_sys::window() else { return };
+            let _ =
+                w.add_event_listener_with_callback("keydown", cb.as_ref().unchecked_ref());
             cb.forget();
         });
     }
@@ -387,8 +387,8 @@ pub fn Navbar() -> impl IntoView {
             </div>
         </Show>
         <nav class="surface-nav sticky top-0 z-40 border-b border-white/10">
-            <div class="relative hidden items-center justify-between px-4 py-2 sm:px-6 md:flex md:px-12">
-                <div class="relative z-10 w-full lg:w-1/4">
+            <div class="relative hidden items-center justify-between px-4 py-2 sm:px-6 md:flex md:px-4 lg:px-12">
+                <div class="relative z-10 lg:w-1/4">
                     <A href="/" attr:title="Blind'All Music" attr:class="group inline-block transition-all duration-200 hover:scale-[102%]">
                         <span class="retro-title retro-title--accent text-2xl tracking-wider">"Blind'All Music"</span>
                         <p class="mt-1 hidden text-sm tracking-widest text-white/60 transition-colors duration-200 group-hover:text-white lg:block">
@@ -396,9 +396,9 @@ pub fn Navbar() -> impl IntoView {
                         </p>
                     </A>
                 </div>
-                <div class="relative z-10 flex w-full items-center justify-between pl-2 pr-8 lg:w-3/4">
+                <div class="relative z-10 flex flex-1 items-center justify-between pl-2 pr-4 lg:flex-none lg:w-3/4 lg:pr-8">
                     <div class="mt-1 flex items-center gap-3">
-                        <div class="w-56 lg:w-72">
+                        <div class="w-40 lg:w-72">
                             <SearchRooms/>
                         </div>
                         <HelpDropdown/>
@@ -427,7 +427,7 @@ pub fn Navbar() -> impl IntoView {
                                                 on:click=move |_| auth.guest_to("/login")>
                                                 {t("Login")}
                                             </button>
-                                            <button title=t("Register") class="retro-nav-btn--primary hidden lg:block"
+                                            <button title=t("Register") class="retro-nav-btn--primary hidden md:block"
                                                 on:click=move |_| auth.guest_to("/register")>
                                                 {t("Register")}
                                             </button>
@@ -439,7 +439,7 @@ pub fn Navbar() -> impl IntoView {
                                             <A href="/login" attr:title=t("Login") attr:class="retro-nav-btn">
                                                 {t("Login")}
                                             </A>
-                                            <A href="/register" attr:title=t("Register") attr:class="retro-nav-btn--primary hidden lg:block">
+                                            <A href="/register" attr:title=t("Register") attr:class="retro-nav-btn--primary hidden md:block">
                                                 {t("Register")}
                                             </A>
                                         </div>

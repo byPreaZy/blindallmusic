@@ -40,7 +40,7 @@ pub struct PartyStore {
 
 impl PartyStore {
     fn snapshot(&self, room_id: i64, viewer_id: i64) -> Option<Value> {
-        let map = self.map.lock().unwrap();
+        let map = self.map.lock().unwrap_or_else(|e| e.into_inner());
         let p = map.get(&room_id)?;
         Some(party_json(room_id, p, viewer_id))
     }
@@ -48,18 +48,18 @@ impl PartyStore {
     /// Any party occupying the store for this room — same reachability as
     /// `snapshot` (a finished party counts until it is reaped).
     pub fn has_active(&self, room_id: i64) -> bool {
-        self.map.lock().unwrap().contains_key(&room_id)
+        self.map.lock().unwrap_or_else(|e| e.into_inner()).contains_key(&room_id)
     }
 
     fn finish(&self, room_id: i64) {
-        let mut map = self.map.lock().unwrap();
+        let mut map = self.map.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(p) = map.get_mut(&room_id) {
             p.phase = "finished";
         }
     }
 
     fn remove(&self, room_id: i64) -> Option<Party> {
-        self.map.lock().unwrap().remove(&room_id)
+        self.map.lock().unwrap_or_else(|e| e.into_inner()).remove(&room_id)
     }
 }
 
@@ -154,7 +154,7 @@ fn spawn_driver(state: AppState, room_id: i64) -> tokio::task::JoinHandle<()> {
         for i in 0..total {
             // question phase
             let payload = {
-                let mut map = state.parties.map.lock().unwrap();
+                let mut map = state.parties.map.lock().unwrap_or_else(|e| e.into_inner());
                 let Some(p) = map.get_mut(&room_id) else {
                     return;
                 };
@@ -170,7 +170,7 @@ fn spawn_driver(state: AppState, room_id: i64) -> tokio::task::JoinHandle<()> {
             tokio::time::sleep(Duration::from_secs(QUESTION_SECS)).await;
             // reveal phase
             let payload = {
-                let mut map = state.parties.map.lock().unwrap();
+                let mut map = state.parties.map.lock().unwrap_or_else(|e| e.into_inner());
                 let Some(p) = map.get_mut(&room_id) else {
                     return;
                 };
@@ -186,7 +186,7 @@ fn spawn_driver(state: AppState, room_id: i64) -> tokio::task::JoinHandle<()> {
         }
         state.parties.finish(room_id);
         let payload = {
-            let map = state.parties.map.lock().unwrap();
+            let map = state.parties.map.lock().unwrap_or_else(|e| e.into_inner());
             map.get(&room_id).map(|p| party_json(room_id, p, 0))
         };
         if let Some(payload) = payload {
@@ -227,7 +227,7 @@ pub async fn start(
         return err(StatusCode::UNPROCESSABLE_ENTITY, "Invalid game type.");
     }
     {
-        if state.parties.map.lock().unwrap().contains_key(&room_id) {
+        if state.parties.map.lock().unwrap_or_else(|e| e.into_inner()).contains_key(&room_id) {
             return err(
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "A party is already running.",
@@ -243,7 +243,7 @@ pub async fn start(
         );
     }
     {
-        let mut map = state.parties.map.lock().unwrap();
+        let mut map = state.parties.map.lock().unwrap_or_else(|e| e.into_inner());
         if map.contains_key(&room_id) {
             return err(
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -337,7 +337,7 @@ pub async fn answer(
         return err(StatusCode::FORBIDDEN, "Join the room first.");
     }
     let (game_type, correct) = {
-        let mut map = state.parties.map.lock().unwrap();
+        let mut map = state.parties.map.lock().unwrap_or_else(|e| e.into_inner());
         let Some(p) = map.get_mut(&room_id) else {
             return err(StatusCode::NOT_FOUND, "No party running.");
         };
@@ -376,7 +376,7 @@ pub async fn answer(
                 "PartyScore",
                 json!({"room_id": room_id, "user_id": user.id,
                        "name": user.name, "idx": body.idx,
-                       "score": state.parties.map.lock().unwrap()
+                       "score": state.parties.map.lock().unwrap_or_else(|e| e.into_inner())
                            .get(&room_id)
                            .and_then(|p| p.scores.get(&user.id).copied())
                            .unwrap_or(0)}),

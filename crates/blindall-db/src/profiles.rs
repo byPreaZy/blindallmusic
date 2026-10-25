@@ -18,15 +18,10 @@ impl ProfileRepo {
     }
 
     pub async fn header(&self, user_id: i64) -> Result<Option<serde_json::Value>, sqlx::Error> {
-        let Some(user) = sqlx::query(
+        let sql = format!(
             "SELECT u.id, u.name, u.photo_path, u.elo, u.is_guest, u.team_id, \
              u.created_at, u.show_donation_history_on_profile, \
-             u.is_administrator, \
-             CASE WHEN EXISTS(SELECT 1 FROM donations dn WHERE dn.user_id = u.id AND dn.month_key = $2) \
-                OR EXISTS(SELECT 1 FROM user_subscriptions s WHERE s.user_id = u.id \
-                  AND s.status IN ('active','trialing','past_due') \
-                  AND (s.current_period_end IS NULL OR s.current_period_end > now())) \
-             THEN u.custom_tag ELSE '' END AS custom_tag, \
+             u.is_administrator, {CASE}, \
              EXISTS(SELECT 1 FROM moderables m \
               JOIN rooms rm ON rm.id = m.moderable_id \
               WHERE m.user_id = u.id AND m.moderable_type = 'App\\Models\\Room' \
@@ -34,7 +29,9 @@ impl ProfileRepo {
              t.name AS team_name, t.photo_path AS team_photo \
              FROM users u LEFT JOIN teams t ON t.id = u.team_id \
              WHERE u.id = $1 AND u.deleted_at IS NULL",
-        )
+            CASE = crate::CUSTOM_TAG_CASE
+        );
+        let Some(user) = sqlx::query(&sql)
         .bind(user_id)
         .bind(crate::donations::current_month_key())
         .fetch_optional(&self.pool)

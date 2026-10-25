@@ -25,6 +25,9 @@ struct Inner {
     ever_connected: Cell<bool>,
     attempts: Cell<u32>,
     stopped: Cell<bool>,
+    // Pending reconnect timer — dropping the handle cancels it, so
+    // scheduling again replaces instead of stacking attempts.
+    reconnect_timer: RefCell<Option<gloo_timers::callback::Timeout>>,
 }
 
 fn ws_url(ticket: &str) -> String {
@@ -54,6 +57,7 @@ impl Realtime {
             ever_connected: Cell::new(false),
             attempts: Cell::new(0),
             stopped: Cell::new(false),
+            reconnect_timer: RefCell::new(None),
         }));
         rt.open();
         rt
@@ -201,12 +205,16 @@ impl Realtime {
         let jitter = (js_sys::Math::random() * 500.0) as u64;
         let delay = base.min(30_000) + jitter;
         let rt = self.clone();
-        gloo_timers::callback::Timeout::new(delay as u32, move || {
-            if rt.0.conn_state.get_untracked() != "connected" {
-                rt.open();
-            }
-        })
-        .forget();
+        // Drop any previously scheduled attempt before installing the new
+        // one — multiple close/error bursts must not stack timers.
+        self.0.reconnect_timer.borrow_mut().take();
+        self.0.reconnect_timer.replace(Some(
+            gloo_timers::callback::Timeout::new(delay as u32, move || {
+                if !rt.0.stopped.get() && rt.0.conn_state.get_untracked() != "connected" {
+                    rt.open();
+                }
+            }),
+        ));
     }
 
     fn send_raw(ws: &WebSocket, msg: &Value) {

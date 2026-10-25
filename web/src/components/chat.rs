@@ -307,9 +307,7 @@ fn ChatMessage(
     viewer: Signal<Option<crate::types::User>>,
 ) -> impl IntoView {
     let rt = use_context::<crate::app::SharedRealtime>()
-        .expect("SharedRealtime")
-        .get_untracked()
-        .expect("ws ready");
+        .and_then(|s| s.get_untracked());
     let msg_id = message["id"].as_i64().unwrap_or_default();
     let uid = message["user"]["id"].as_i64().unwrap_or_default();
     let author_is_guest = message["user"]["is_guest"].as_bool().unwrap_or(false);
@@ -352,7 +350,7 @@ fn ChatMessage(
         });
     }
 
-    {
+    if let Some(rt) = rt {
         let rt = rt.clone();
         let ch = format!("chat.message.{msg_id}");
         rt.subscribe(&ch);
@@ -450,7 +448,7 @@ fn ChatMessage(
 
     view! {
         <div class="chat-message group">
-            <div class="absolute right-2 top-2 z-20 hidden flex-row gap-1 group-hover:flex">
+            <div class="absolute right-2 top-2 z-20 flex flex-row gap-1 md:hidden md:group-hover:flex">
                 <button type="button" class="chat-icon-btn text-base" title="Réagir"
                     on:click=move |_| show_picker.update(|v| *v = !*v)>"😊"</button>
                 {(!author_is_public_mod).then(|| view! {

@@ -68,7 +68,7 @@ impl MatchStore {
 
     /// Queue position (1-based) for the user, whichever type they queued for.
     fn queue_status(&self, user_id: i64) -> Option<(String, usize)> {
-        let queues = self.queues.lock().unwrap();
+        let queues = self.queues.lock().unwrap_or_else(|e| e.into_inner());
         for (ty, list) in queues.iter() {
             if let Some(pos) = list.iter().position(|q| q.user_id == user_id) {
                 return Some((ty.clone(), pos + 1));
@@ -92,13 +92,13 @@ impl MatchStore {
     }
 
     fn snapshot(&self, match_id: i64, viewer_id: i64) -> Option<Value> {
-        let map = self.matches.lock().unwrap();
+        let map = self.matches.lock().unwrap_or_else(|e| e.into_inner());
         let m = map.get(&match_id)?;
         Some(match_json(match_id, m, viewer_id))
     }
 
     fn remove(&self, match_id: i64) {
-        self.matches.lock().unwrap().remove(&match_id);
+        self.matches.lock().unwrap_or_else(|e| e.into_inner()).remove(&match_id);
     }
 }
 
@@ -163,7 +163,7 @@ fn now() -> i64 {
 /// never send a leave).
 fn prune_queues(store: &MatchStore) {
     let cutoff = now() - QUEUE_STALE_SECS;
-    let mut queues = store.queues.lock().unwrap();
+    let mut queues = store.queues.lock().unwrap_or_else(|e| e.into_inner());
     for list in queues.values_mut() {
         list.retain(|q| q.joined_at >= cutoff);
     }
@@ -175,7 +175,7 @@ fn prune_queues(store: &MatchStore) {
 /// player's user channel (the app already subscribes to it).
 async fn try_form(state: &AppState, game_type: &str) {
     let players: Vec<Queued> = {
-        let mut queues = state.matchmaking.queues.lock().unwrap();
+        let mut queues = state.matchmaking.queues.lock().unwrap_or_else(|e| e.into_inner());
         let Some(list) = queues.get_mut(game_type) else {
             return;
         };
@@ -198,7 +198,7 @@ async fn try_form(state: &AppState, game_type: &str) {
         .filter(|p| state.matchmaking.active_match(p.user_id).is_none())
         .collect();
     if players.len() < MIN_PLAYERS {
-        let mut queues = state.matchmaking.queues.lock().unwrap();
+        let mut queues = state.matchmaking.queues.lock().unwrap_or_else(|e| e.into_inner());
         let list = queues.entry(game_type.to_string()).or_default();
         let mut front = players;
         front.append(list);
@@ -213,7 +213,7 @@ async fn try_form(state: &AppState, game_type: &str) {
     if questions.len() < 3 {
         // Can't build a set right now — requeue everyone at the front so
         // a later join retries the formation.
-        let mut queues = state.matchmaking.queues.lock().unwrap();
+        let mut queues = state.matchmaking.queues.lock().unwrap_or_else(|e| e.into_inner());
         let list = queues.entry(game_type.to_string()).or_default();
         let mut front = players;
         front.append(list);
@@ -223,7 +223,7 @@ async fn try_form(state: &AppState, game_type: &str) {
 
     let match_id = state.matchmaking.next_id.fetch_add(1, Ordering::Relaxed) + 1;
     {
-        state.matchmaking.matches.lock().unwrap().insert(
+        state.matchmaking.matches.lock().unwrap_or_else(|e| e.into_inner()).insert(
             match_id,
             Match {
                 game_type: game_type.to_string(),
@@ -270,7 +270,7 @@ async fn run_match(state: AppState, match_id: i64) {
     };
     for i in 0..total {
         let payload = {
-            let mut map = state.matchmaking.matches.lock().unwrap();
+            let mut map = state.matchmaking.matches.lock().unwrap_or_else(|e| e.into_inner());
             let Some(m) = map.get_mut(&match_id) else {
                 return;
             };
@@ -286,7 +286,7 @@ async fn run_match(state: AppState, match_id: i64) {
         tokio::time::sleep(Duration::from_secs(QUESTION_SECS)).await;
 
         let payload = {
-            let mut map = state.matchmaking.matches.lock().unwrap();
+            let mut map = state.matchmaking.matches.lock().unwrap_or_else(|e| e.into_inner());
             let Some(m) = map.get_mut(&match_id) else {
                 return;
             };
@@ -302,7 +302,7 @@ async fn run_match(state: AppState, match_id: i64) {
     }
 
     let payload = {
-        let mut map = state.matchmaking.matches.lock().unwrap();
+        let mut map = state.matchmaking.matches.lock().unwrap_or_else(|e| e.into_inner());
         let Some(m) = map.get_mut(&match_id) else {
             return;
         };
@@ -355,7 +355,7 @@ pub async fn join(
 
     // One queue slot per user: a new join switches queues.
     {
-        let mut queues = state.matchmaking.queues.lock().unwrap();
+        let mut queues = state.matchmaking.queues.lock().unwrap_or_else(|e| e.into_inner());
         for list in queues.values_mut() {
             list.retain(|q| q.user_id != user.id);
         }
@@ -381,7 +381,7 @@ pub async fn join(
 }
 
 pub async fn leave(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
-    let mut queues = state.matchmaking.queues.lock().unwrap();
+    let mut queues = state.matchmaking.queues.lock().unwrap_or_else(|e| e.into_inner());
     for list in queues.values_mut() {
         list.retain(|q| q.user_id != user.id);
     }
@@ -432,7 +432,7 @@ pub async fn answer(
     Json(body): Json<AnswerBody>,
 ) -> Response {
     let (game_type, correct) = {
-        let mut map = state.matchmaking.matches.lock().unwrap();
+        let mut map = state.matchmaking.matches.lock().unwrap_or_else(|e| e.into_inner());
         let Some(m) = map.get_mut(&match_id) else {
             return err(StatusCode::NOT_FOUND, "Match not found.");
         };

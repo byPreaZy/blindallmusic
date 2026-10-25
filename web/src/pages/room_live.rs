@@ -158,7 +158,7 @@ pub fn RoomLivePage() -> impl IntoView {
     };
 
     view! {
-        <div class="min-h-[calc(100vh-4rem)] bg-neutral-950 px-4 py-6 sm:px-8">
+        <div class="min-h-dvh bg-neutral-950 px-4 py-6 sm:px-8">
             {move || {
                 if not_found.get() {
                     return view! {

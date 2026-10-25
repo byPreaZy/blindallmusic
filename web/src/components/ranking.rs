@@ -397,7 +397,7 @@ pub fn RankingPanel(
                                                                     <div class="flex items-center justify-between text-sm">
                                                                         <span class="flex min-w-0 items-center gap-2">
                                                                             <span class=format!("inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-xs font-bold {square}")>{rank}</span>
-                                                                            <A href=format!("/users/{uid}")
+                                                                            <A href=format!("/profile/{uid}")
                                                                                 attr:class="truncate text-white/85 hover:text-brand-secondary">
                                                                                 {name}
                                                                             </A>

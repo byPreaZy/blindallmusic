@@ -776,14 +776,9 @@ impl RoomRepo {
         }
         let ids: Vec<i64> = totals.iter().map(|t| t.0).collect();
 
-        let users: std::collections::HashMap<i64, serde_json::Value> = sqlx::query(
+        let sql = format!(
             "SELECT u.id, u.name, u.photo_path, u.elo, u.is_guest, \
-             u.is_administrator, \
-             CASE WHEN EXISTS(SELECT 1 FROM donations dn WHERE dn.user_id = u.id AND dn.month_key = $2) \
-                OR EXISTS(SELECT 1 FROM user_subscriptions s WHERE s.user_id = u.id \
-                  AND s.status IN ('active','trialing','past_due') \
-                  AND (s.current_period_end IS NULL OR s.current_period_end > now())) \
-             THEN u.custom_tag ELSE '' END AS custom_tag, \
+             u.is_administrator, {CASE}, \
              EXISTS(SELECT 1 FROM moderables m \
               JOIN rooms rm ON rm.id = m.moderable_id \
               WHERE m.user_id = u.id AND m.moderable_type = 'App\\Models\\Room' \
@@ -791,7 +786,9 @@ impl RoomRepo {
              l.level, l.total_xp, l.current_xp, l.xp_for_next_level \
              FROM users u LEFT JOIN user_levels l ON l.user_id = u.id \
              WHERE u.id = ANY($1)",
-        )
+            CASE = crate::CUSTOM_TAG_CASE
+        );
+        let users: std::collections::HashMap<i64, serde_json::Value> = sqlx::query(&sql)
         .bind(&ids)
         .bind(crate::donations::current_month_key())
         .fetch_all(&self.pool)

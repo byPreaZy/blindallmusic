@@ -44,12 +44,17 @@ pub fn Notifications() -> impl IntoView {
         busy.set(true);
         leptos::task::spawn_local(async move {
             let body = json!({"notification_id": notif_id});
-            let _ = api::post::<Value, _>(
+            // Only dismiss the notification once the action actually went
+            // through — a failed accept/decline must stay visible.
+            if api::post::<Value, _>(
                 &format!("/api/v1/teams/requests/{request_id}/{action}"),
                 &body,
             )
-            .await;
-            items.update(|l| l.retain(|n| n["id"].as_str() != Some(notif_id.as_str())));
+            .await
+            .is_ok()
+            {
+                items.update(|l| l.retain(|n| n["id"].as_str() != Some(notif_id.as_str())));
+            }
             busy.set(false);
         });
     };

@@ -225,8 +225,15 @@ pub fn DuelsPage() -> impl IntoView {
 
     let accept = move |id: i64| {
         leptos::task::spawn_local(async move {
-            let _ = api::post_empty::<Value>(&format!("/api/v1/duels/{id}/accept")).await;
-            leptos_router::hooks::use_navigate()(&format!("/duels/{id}"), Default::default());
+            match api::post_empty::<Value>(&format!("/api/v1/duels/{id}/accept")).await {
+                Ok(_) => {
+                    leptos_router::hooks::use_navigate()(
+                        &format!("/duels/{id}"),
+                        Default::default(),
+                    );
+                }
+                Err(e) => error.set(Some(e.message)),
+            }
         });
     };
 

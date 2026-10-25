@@ -89,7 +89,7 @@ impl ChatModeration {
             return Err("Chat message empty");
         }
         {
-            let mut flood = self.flood.lock().unwrap();
+            let mut flood = self.flood.lock().unwrap_or_else(|e| e.into_inner());
             let key = (user_id, room_id);
             let v = flood.entry(key).or_default();
             v.retain(|t| t.elapsed() < Duration::from_secs(60));
@@ -98,7 +98,7 @@ impl ChatModeration {
             }
         }
         {
-            let dups = self.duplicates.lock().unwrap();
+            let dups = self.duplicates.lock().unwrap_or_else(|e| e.into_inner());
             let key = (user_id, room_id, body_hash(&normalized));
             if let Some(t) = dups.get(&key) {
                 if t.elapsed() < DUPLICATE_WINDOW {
@@ -134,7 +134,7 @@ impl ChatModeration {
         if normalized.chars().count() < MIN_CROSS_ROOM_BODY_LEN {
             return 0;
         }
-        let mut cross = self.cross_room.lock().unwrap();
+        let mut cross = self.cross_room.lock().unwrap_or_else(|e| e.into_inner());
         let key = (user_id, body_hash(normalized));
         let entries = cross.entry(key).or_default();
         entries.retain(|e| e.at.elapsed() < CROSS_ROOM_WINDOW);
@@ -350,7 +350,43 @@ pub async fn config(State(state): State<AppState>) -> Response {
     .into_response()
 }
 
-pub async fn history(State(state): State<AppState>, Path(room_id): Path<i64>) -> Response {
+pub async fn history(
+    State(state): State<AppState>,
+    Path(room_id): Path<i64>,
+    crate::auth::OptionalUser(user): crate::auth::OptionalUser,
+) -> Response {
+    // Password-protected and private rooms: chat history is only readable
+    // by participants (granted after the password/join gate), room
+    // moderators, or admins — never by anonymous passers-by.
+    let restricted = match state.rooms.find(room_id).await {
+        Ok(Some(r)) => {
+            !r.is_public
+                || state
+                    .rooms
+                    .password_of(room_id)
+                    .await
+                    .ok()
+                    .flatten()
+                    .is_some()
+        }
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+    if restricted {
+        let Some(u) = &user else {
+            return StatusCode::FORBIDDEN.into_response();
+        };
+        let allowed = u.is_administrator
+            || state
+                .presence
+                .has_participation(room_id, u.id)
+                .await
+                .unwrap_or(false)
+            || state.rooms.is_moderator(room_id, u.id).await;
+        if !allowed {
+            return StatusCode::FORBIDDEN.into_response();
+        }
+    }
     match state.chat.room_messages(room_id, 30).await {
         Ok(mut msgs) => {
             crate::donations::enrich_messages(&state, &mut msgs).await;
