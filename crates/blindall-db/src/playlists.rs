@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::Row;
 use sqlx::postgres::PgPool;
+use std::collections::BTreeMap;
 
 #[derive(Clone)]
 pub struct PlaylistRepo {
@@ -56,6 +57,35 @@ pub struct PlaylistTrack {
     pub answers: Vec<AnswerRow>,
     pub up_votes: i64,
     pub down_votes: i64,
+    /// PHP `downvote_breakdown`: downvote count grouped by reason for
+    /// this track (`{"sound_quality": 2, …}`), empty object when none.
+    #[serde(default)]
+    pub downvote_breakdown: BTreeMap<String, i64>,
+}
+
+/// Laravel `Track::scopeFilter` inputs for the playlist tracks manager.
+/// `None` mirrors PHP `when()` skipping absent/empty params.
+#[derive(Debug, Clone, Default)]
+pub struct TrackFilters {
+    /// Matches `track_answers.value LIKE '%s%'` (case-insensitive — the
+    /// column is CITEXT, same as MySQL's ci collation).
+    pub search: Option<String>,
+    /// Exact match on `dificulty` (sic — the Laravel column typo).
+    pub difficulty: Option<i64>,
+    /// Exact match on `provider`.
+    pub provider: Option<String>,
+    /// `total_upvotes >= n` — sum of positive votes (each row is +1).
+    pub min_upvotes: Option<i64>,
+    /// `ABS(total_downvotes) >= n` — absolute sum of negative votes.
+    pub min_downvotes: Option<i64>,
+    /// Track has at least one downvote carrying this reason.
+    pub downvote_reason: Option<String>,
+    /// Laravel `sortable[field]`: `votes` | `dificulty` | `created_at`.
+    /// Unwhitelisted values fall back to the default ordering — the
+    /// ORDER BY clause is never built from raw input.
+    pub sort_field: Option<String>,
+    /// Laravel `sortable[direction]`: `asc` | `desc`.
+    pub sort_direction: Option<String>,
 }
 
 impl PlaylistRepo {
@@ -277,6 +307,7 @@ impl PlaylistRepo {
                 answers: self.track_answers(id).await.unwrap_or_default(),
                 up_votes: r.get("up_votes"),
                 down_votes: r.get("down_votes"),
+                downvote_breakdown: BTreeMap::new(),
             });
         }
         Ok(tracks)
@@ -386,19 +417,77 @@ impl PlaylistRepo {
         .await
     }
 
+    /// Paginated playlist tracks for the edit page's tracks manager.
+    /// Filters mirror Laravel's `Track::scopeFilter`: `search` looks in
+    /// answer values, `difficulty`/`provider` are exact matches,
+    /// `min_upvotes`/`min_downvotes` compare against the summed vote
+    /// counts, `downvote_reason` keeps tracks having at least one
+    /// downvote with that reason. `total` is the *filtered* count, like
+    /// Laravel's `paginate()` total.
     pub async fn tracks_page(
         &self,
         playlist_id: i64,
         page: i64,
         per_page: i64,
+        filters: &TrackFilters,
     ) -> Result<(Vec<PlaylistTrack>, i64), sqlx::Error> {
-        let total =
-            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM tracks WHERE playlist_id = $1")
-                .bind(playlist_id)
-                .fetch_one(&self.pool)
-                .await?;
+        let like = filters.search.as_deref().map(|s| format!("%{s}%"));
 
-        let rows = sqlx::query(
+        // $1 playlist_id, $2 search %like%, $3 difficulty, $4 provider,
+        // $5 min_upvotes, $6 min_downvotes, $7 downvote_reason.
+        const WHERE_SQL: &str = "t.playlist_id = $1 \
+             AND ($2 IS NULL OR EXISTS (SELECT 1 FROM track_answers ta \
+                 WHERE ta.track_id = t.id AND ta.value LIKE $2)) \
+             AND ($3 IS NULL OR t.dificulty = $3) \
+             AND ($4 IS NULL OR t.provider = $4) \
+             AND ($5 IS NULL OR COALESCE((SELECT SUM(vu.votes) FROM votes vu \
+                 WHERE vu.votable_id = t.id \
+                 AND vu.votable_type = 'App\\Models\\Track' \
+                 AND vu.votes > 0), 0) >= $5) \
+             AND ($6 IS NULL OR ABS(COALESCE((SELECT SUM(vd.votes) FROM votes vd \
+                 WHERE vd.votable_id = t.id \
+                 AND vd.votable_type = 'App\\Models\\Track' \
+                 AND vd.votes < 0), 0)) >= $6) \
+             AND ($7 IS NULL OR EXISTS (SELECT 1 FROM votes vr \
+                 WHERE vr.votable_id = t.id \
+                 AND vr.votable_type = 'App\\Models\\Track' \
+                 AND vr.votes < 0 AND vr.downvote_reason = $7))";
+
+        // ORDER BY comes from a whitelist — never interpolate raw input.
+        // PHP: field `votes` + `asc` → orderByDesc(total_upvotes) i.e. most
+        // upvoted first; `votes` + any other direction →
+        // orderBy(total_downvotes) on the negative sum, so most downvoted
+        // first. No sortable → PHP default `created_at DESC`.
+        // NULLS placement matches MySQL (ASC → NULLs first, DESC → last).
+        let order_sql = match filters.sort_field.as_deref() {
+            Some("votes") => match filters.sort_direction.as_deref() {
+                Some("asc") => "up_votes DESC, t.id",
+                _ => "down_votes DESC, t.id",
+            },
+            Some("dificulty") => match filters.sort_direction.as_deref() {
+                Some("desc") => "t.dificulty DESC NULLS LAST, t.id",
+                _ => "t.dificulty ASC NULLS FIRST, t.id",
+            },
+            Some("created_at") => match filters.sort_direction.as_deref() {
+                Some("asc") => "t.created_at ASC NULLS FIRST, t.id",
+                _ => "t.created_at DESC NULLS LAST, t.id",
+            },
+            _ => "t.created_at DESC NULLS LAST, t.id",
+        };
+
+        let count_sql = format!("SELECT COUNT(*) FROM tracks t WHERE {WHERE_SQL}");
+        let total = sqlx::query_scalar::<_, i64>(&count_sql)
+            .bind(playlist_id)
+            .bind(&like)
+            .bind(filters.difficulty)
+            .bind(&filters.provider)
+            .bind(filters.min_upvotes)
+            .bind(filters.min_downvotes)
+            .bind(&filters.downvote_reason)
+            .fetch_one(&self.pool)
+            .await?;
+
+        let list_sql = format!(
             "SELECT t.id, t.provider, t.provider_id, t.provider_url, t.preview_url, \
              t.artwork_url, t.dificulty, t.hint, t.created_at, \
              COALESCE((SELECT CAST(SUM(v.votes) AS bigint) FROM votes v \
@@ -407,14 +496,21 @@ impl PlaylistRepo {
              COALESCE(ABS((SELECT CAST(SUM(v.votes) AS bigint) FROM votes v \
                WHERE v.votable_id = t.id AND v.votable_type = 'App\\Models\\Track' \
                AND v.votes < 0)), 0) AS down_votes \
-             FROM tracks t WHERE t.playlist_id = $1 \
-             ORDER BY t.created_at DESC LIMIT $2 OFFSET $3",
-        )
-        .bind(playlist_id)
-        .bind(per_page)
-        .bind((page.max(1) - 1) * per_page)
-        .fetch_all(&self.pool)
-        .await?;
+             FROM tracks t WHERE {WHERE_SQL} \
+             ORDER BY {order_sql} LIMIT $8 OFFSET $9"
+        );
+        let rows = sqlx::query(&list_sql)
+            .bind(playlist_id)
+            .bind(&like)
+            .bind(filters.difficulty)
+            .bind(&filters.provider)
+            .bind(filters.min_upvotes)
+            .bind(filters.min_downvotes)
+            .bind(&filters.downvote_reason)
+            .bind(per_page)
+            .bind((page.max(1) - 1) * per_page)
+            .fetch_all(&self.pool)
+            .await?;
 
         let mut tracks = Vec::with_capacity(rows.len());
         for r in rows {
@@ -432,7 +528,37 @@ impl PlaylistRepo {
                 answers: self.track_answers(id).await.unwrap_or_default(),
                 up_votes: r.get("up_votes"),
                 down_votes: r.get("down_votes"),
+                downvote_breakdown: BTreeMap::new(),
             });
+        }
+
+        // PHP TrackDownvoteBreakdownService::forTracks — one grouped query
+        // for the page's tracks, reason => count per track.
+        let ids: Vec<i64> = tracks.iter().map(|t| t.id).collect();
+        if !ids.is_empty() {
+            let breakdown_rows = sqlx::query(
+                "SELECT votable_id, downvote_reason, COUNT(*) AS total \
+                 FROM votes \
+                 WHERE votable_type = 'App\\Models\\Track' AND votable_id = ANY($1) \
+                 AND votes < 0 AND downvote_reason IS NOT NULL \
+                 GROUP BY votable_id, downvote_reason",
+            )
+            .bind(&ids)
+            .fetch_all(&self.pool)
+            .await?;
+            let mut by_track: std::collections::HashMap<i64, BTreeMap<String, i64>> =
+                std::collections::HashMap::new();
+            for r in &breakdown_rows {
+                by_track
+                    .entry(r.get("votable_id"))
+                    .or_default()
+                    .insert(r.get("downvote_reason"), r.get("total"));
+            }
+            for t in &mut tracks {
+                if let Some(breakdown) = by_track.remove(&t.id) {
+                    t.downvote_breakdown = breakdown;
+                }
+            }
         }
         Ok((tracks, total))
     }

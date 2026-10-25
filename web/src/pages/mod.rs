@@ -1,4 +1,5 @@
 pub mod admin;
+pub mod bars;
 pub mod docs;
 pub mod donations;
 pub mod duels;

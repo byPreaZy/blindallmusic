@@ -7,6 +7,21 @@ use leptos_router::hooks::{use_navigate, use_params_map};
 use serde_json::{json, Value};
 use wasm_bindgen::JsCast;
 
+/// Tracks-manager filters mirroring Laravel's `sortable`/`filter` params.
+/// Empty string = unfiltered (PHP `when()` skips empty values).
+#[derive(Clone, Default)]
+struct TrackFilterState {
+    search: String,
+    difficulty: String,
+    provider: String,
+    min_upvotes: String,
+    min_downvotes: String,
+    downvote_reason: String,
+    /// "field:direction" sent as `sortable[field]`/`sortable[direction]`;
+    /// "" = Laravel default (created_at DESC).
+    sort: String,
+}
+
 #[component]
 pub fn PlaylistEditPage() -> impl IntoView {
     crate::auth::require_registered(crate::auth::use_auth());
@@ -24,7 +39,8 @@ pub fn PlaylistEditPage() -> impl IntoView {
     let tracks = RwSignal::new(Vec::<PlaylistTrack>::new());
     let total = RwSignal::new(0i64);
     let page = RwSignal::new(1i64);
-    let per_page = 20i64;
+    let per_page = RwSignal::new(20i64);
+    let filters = RwSignal::new(TrackFilterState::default());
     let answer_types = RwSignal::new(Vec::<IdName>::new());
     let loading = RwSignal::new(true);
     let flash = RwSignal::new(Option::<String>::None);
@@ -57,11 +73,37 @@ pub fn PlaylistEditPage() -> impl IntoView {
 
     let load_tracks = move |id: i64, page: i64| {
         leptos::task::spawn_local(async move {
-            match api::get::<Value>(&format!(
-                "/api/v1/playlists/{id}/tracks?page={page}&per_page={per_page}"
-            ))
-            .await
-            {
+            // Laravel TracksManager sends the filter set as query params;
+            // empty filters are simply omitted.
+            let f = filters.get_untracked();
+            let mut qs = format!("page={page}&per_page={}", per_page.get_untracked());
+            if !f.search.trim().is_empty() {
+                qs.push_str(&format!(
+                    "&search={}",
+                    js_sys::encode_uri_component(f.search.trim())
+                ));
+            }
+            if !f.difficulty.is_empty() {
+                qs.push_str(&format!("&difficulty={}", f.difficulty));
+            }
+            if !f.provider.is_empty() {
+                qs.push_str(&format!("&provider={}", f.provider));
+            }
+            if !f.min_upvotes.is_empty() {
+                qs.push_str(&format!("&minUpvotes={}", f.min_upvotes));
+            }
+            if !f.min_downvotes.is_empty() {
+                qs.push_str(&format!("&minDownvotes={}", f.min_downvotes));
+            }
+            if !f.downvote_reason.is_empty() {
+                qs.push_str(&format!("&downvoteReason={}", f.downvote_reason));
+            }
+            if let Some((field, dir)) = f.sort.split_once(':') {
+                qs.push_str(&format!(
+                    "&sortable%5Bfield%5D={field}&sortable%5Bdirection%5D={dir}"
+                ));
+            }
+            match api::get::<Value>(&format!("/api/v1/playlists/{id}/tracks?{qs}")).await {
                 Ok(v) => {
                     total.set(v["total"].as_i64().unwrap_or(0));
                     let rows: Vec<PlaylistTrack> = v["data"]
@@ -158,6 +200,7 @@ pub fn PlaylistEditPage() -> impl IntoView {
                         <TrackList
                             tracks=tracks total=total page=page per_page=per_page
                             playlist_id=id answer_types=answer_types
+                            filters=filters total_tracks=total_tracks
                             on_page=move |p| { page.set(p); load_tracks(id, p); }
                             on_changed=move |_| { load_tracks(id, page.get()); }
                             on_err=move |m| err.set(Some(m))/>
@@ -257,20 +300,81 @@ fn MetaForm(
     }
 }
 
+/// Laravel `downvote_breakdown` reason → translated label.
+fn downvote_reason_label(reason: &str) -> String {
+    match reason {
+        "sound_quality" => t("Poor sound quality"),
+        "difficulty" => t("Too difficult"),
+        "passage_choice" => t("Bad passage choice"),
+        "personal_taste" => t("Not my taste"),
+        "controversial_artist" => t("Controversial artist"),
+        "other" => t("Other reason"),
+        _ => reason,
+    }
+    .to_string()
+}
+
 #[component]
 fn TrackList(
     tracks: RwSignal<Vec<PlaylistTrack>>,
     total: RwSignal<i64>,
     page: RwSignal<i64>,
-    per_page: i64,
+    per_page: RwSignal<i64>,
     playlist_id: i64,
     answer_types: RwSignal<Vec<IdName>>,
+    filters: RwSignal<TrackFilterState>,
+    total_tracks: i64,
     on_page: impl Fn(i64) + 'static + Copy + Send + Sync,
     on_changed: impl Fn(()) + 'static + Copy + Send + Sync,
     on_err: impl Fn(String) + 'static + Copy + Send + Sync,
 ) -> impl IntoView {
-    let page_count = move || (total.get() + per_page - 1).max(1) / per_page;
+    let page_count = move || (total.get() + per_page.get() - 1).max(1) / per_page.get();
     let expanded = RwSignal::new(Option::<i64>::None);
+
+    // Any filter change goes back to page 1 and refetches.
+    let apply_filters = move || on_page(1);
+
+    // Search input is debounced 300ms — same stale-check idiom as
+    // UserSearchPicker.
+    let search_gen = RwSignal::new(0u64);
+    let on_search_input = move |v: String| {
+        filters.update(|f| f.search = v);
+        search_gen.update(|g| *g += 1);
+        let gen = search_gen.get_untracked();
+        leptos::task::spawn_local(async move {
+            gloo_timers::future::TimeoutFuture::new(300).await;
+            if search_gen.get_untracked() == gen {
+                apply_filters();
+            }
+        });
+    };
+
+    let clear_filters = move |_| {
+        // PHP clearFilters() resets the five filter selects but keeps the
+        // search term and the sort.
+        filters.update(|f| {
+            f.difficulty = String::new();
+            f.provider = String::new();
+            f.min_upvotes = String::new();
+            f.min_downvotes = String::new();
+            f.downvote_reason = String::new();
+        });
+        apply_filters();
+    };
+
+    let has_active_filter = move || {
+        let f = filters.get();
+        !f.difficulty.is_empty()
+            || !f.provider.is_empty()
+            || !f.min_upvotes.is_empty()
+            || !f.min_downvotes.is_empty()
+            || !f.downvote_reason.is_empty()
+    };
+    let any_filter_or_search = move || {
+        has_active_filter()
+            || !filters.get().search.trim().is_empty()
+            || !filters.get().sort.is_empty()
+    };
 
     let save_meta = move |track_id: i64, dificulty: Option<i64>, hint: Option<String>| {
         leptos::task::spawn_local(async move {
@@ -325,6 +429,9 @@ fn TrackList(
         });
     };
 
+    let select_class =
+        "rounded border border-white/10 bg-surface-base px-2 py-1 text-xs text-white";
+
     view! {
         <div class="rounded-xl border border-white/10 bg-surface-raised/60">
             <div class="flex items-center justify-between border-b border-white/10 px-5 py-3">
@@ -338,6 +445,139 @@ fn TrackList(
                     </button>
                 </Show>
             </div>
+
+            // Search + filters — mirrors Laravel's TracksManager filter row.
+            <div class="space-y-3 border-b border-white/10 px-5 py-3">
+                <div class="flex flex-wrap items-center gap-3">
+                    <input type="text"
+                        placeholder={format!("{}...", t("Rechercher dans la playlist"))}
+                        class="min-w-0 flex-1 rounded-lg border border-white/10 bg-surface-base px-3 py-1.5 text-sm text-white outline-none focus:border-brand-accent/50"
+                        prop:value=move || filters.get().search
+                        on:input=move |ev| on_search_input(event_target_value(&ev))/>
+                    <span class="whitespace-nowrap text-xs text-white/40">
+                        {move || if any_filter_or_search() {
+                            format!("{} {} / {} {}", total.get(), t("results"), total_tracks, t("titres au total"))
+                        } else {
+                            format!("{} {}", total.get(), t("Tracks"))
+                        }}
+                    </span>
+                    <select class=select_class
+                        on:change=move |ev| {
+                            per_page.set(event_target_value(&ev).parse().unwrap_or(20));
+                            apply_filters();
+                        }>
+                        {[5i64, 10, 15, 20, 25, 50].map(|n| {
+                            view! { <option value=n selected=move || per_page.get() == n>{n}</option> }
+                        }).collect_view()}
+                    </select>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs font-medium text-white/50">{t("Filtrer par")} :</span>
+                    <select class=select_class title=t("Difficulty")
+                        on:change=move |ev| {
+                            filters.update(|f| f.difficulty = event_target_value(&ev));
+                            apply_filters();
+                        }>
+                        <option value="" selected=move || filters.get().difficulty.is_empty()>
+                            {t("Toutes les difficultés")}
+                        </option>
+                        {(0i64..=5).map(|d| {
+                            let label: String = match d {
+                                0 => t("Facile").to_string(),
+                                1 => t("Moyen").to_string(),
+                                2 => t("Difficile").to_string(),
+                                3 => t("Expert").to_string(),
+                                _ => d.to_string(),
+                            };
+                            view! {
+                                <option value=d selected=move || filters.get().difficulty == d.to_string()>
+                                    {label}
+                                </option>
+                            }
+                        }).collect_view()}
+                    </select>
+                    <select class=select_class title=t("Provider")
+                        on:change=move |ev| {
+                            filters.update(|f| f.provider = event_target_value(&ev));
+                            apply_filters();
+                        }>
+                        <option value="" selected=move || filters.get().provider.is_empty()>
+                            {t("Tous les providers")}
+                        </option>
+                        <option value="youtube" selected=move || filters.get().provider == "youtube">"YouTube"</option>
+                        <option value="itunes" selected=move || filters.get().provider == "itunes">"Apple Music"</option>
+                        <option value="deezer" selected=move || filters.get().provider == "deezer">"Deezer"</option>
+                        <option value="local" selected=move || filters.get().provider == "local">"Blind'All"</option>
+                    </select>
+                    <select class=select_class title=t("Votes positifs minimum")
+                        on:change=move |ev| {
+                            filters.update(|f| f.min_upvotes = event_target_value(&ev));
+                            apply_filters();
+                        }>
+                        <option value="" selected=move || filters.get().min_upvotes.is_empty()>
+                            {t("Tous les votes positifs")}
+                        </option>
+                        {[10i64, 20, 30, 50, 100].map(|n| {
+                            view! {
+                                <option value=n selected=move || filters.get().min_upvotes == n.to_string()>
+                                    {format!("{} {} {}", t("Plus de"), n, t("votes positifs"))}
+                                </option>
+                            }
+                        }).collect_view()}
+                    </select>
+                    <select class=select_class title=t("Votes négatifs minimum")
+                        on:change=move |ev| {
+                            filters.update(|f| f.min_downvotes = event_target_value(&ev));
+                            apply_filters();
+                        }>
+                        <option value="" selected=move || filters.get().min_downvotes.is_empty()>
+                            {t("Tous les votes négatifs")}
+                        </option>
+                        {[10i64, 20, 30, 50, 100].map(|n| {
+                            view! {
+                                <option value=n selected=move || filters.get().min_downvotes == n.to_string()>
+                                    {format!("{} {} {}", t("Plus de"), n, t("votes négatifs"))}
+                                </option>
+                            }
+                        }).collect_view()}
+                    </select>
+                    <select class=select_class title=t("Raison du vote négatif")
+                        on:change=move |ev| {
+                            filters.update(|f| f.downvote_reason = event_target_value(&ev));
+                            apply_filters();
+                        }>
+                        <option value="" selected=move || filters.get().downvote_reason.is_empty()>
+                            {t("Toutes les raisons de downvote")}
+                        </option>
+                        {["sound_quality", "difficulty", "passage_choice", "personal_taste", "controversial_artist", "other"].map(|r| {
+                            view! {
+                                <option value=r selected=move || filters.get().downvote_reason == r>
+                                    {downvote_reason_label(r)}
+                                </option>
+                            }
+                        }).collect_view()}
+                    </select>
+                    <select class=select_class title=t("Trier par")
+                        on:change=move |ev| {
+                            filters.update(|f| f.sort = event_target_value(&ev));
+                            apply_filters();
+                        }>
+                        <option value="" selected=move || filters.get().sort.is_empty()>{t("Les plus récents")}</option>
+                        <option value="created_at:asc" selected=move || filters.get().sort == "created_at:asc">{t("Les plus anciens")}</option>
+                        <option value="dificulty:asc" selected=move || filters.get().sort == "dificulty:asc">{t("Les plus faciles")}</option>
+                        <option value="dificulty:desc" selected=move || filters.get().sort == "dificulty:desc">{t("Les plus difficiles")}</option>
+                        <option value="votes:asc" selected=move || filters.get().sort == "votes:asc">{t("Les plus upvotés")}</option>
+                        <option value="votes:desc" selected=move || filters.get().sort == "votes:desc">{t("Les plus downvotés")}</option>
+                    </select>
+                    <Show when=has_active_filter>
+                        <button type="button" class="ml-auto px-2 py-1 text-xs text-white/50 transition-colors hover:text-white"
+                            on:click=clear_filters>
+                            {t("Effacer les filtres")}
+                        </button>
+                    </Show>
+                </div>
+            </div>
+
             <div class="divide-y divide-white/5">
                 <For
                     each=move || tracks.get()
@@ -366,6 +606,19 @@ fn TrackList(
                                         <span class="text-green-400">{"▲"}{track.up_votes}</span>
                                         <span class="text-red-400">{"▼"}{track.down_votes}</span>
                                     </div>
+                                    {(!track.downvote_breakdown.is_empty()).then(|| {
+                                        view! {
+                                            <div class="hidden max-w-40 flex-wrap gap-1 xl:flex">
+                                                {track.downvote_breakdown.iter().map(|(reason, count)| {
+                                                    view! {
+                                                        <span class="rounded bg-red-400/10 px-1.5 py-0.5 text-[10px] font-medium text-red-300">
+                                                            {downvote_reason_label(reason)} " (" {*count} ")"
+                                                        </span>
+                                                    }
+                                                }).collect_view()}
+                                            </div>
+                                        }.into_any()
+                                    })}
                                     <button type="button"
                                         class="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-white/70 hover:bg-white/5"
                                         on:click=move |_| expanded.set(if is_open() { None } else { Some(tid) })>
@@ -387,7 +640,11 @@ fn TrackList(
                 />
                 <Show when=move || tracks.get().is_empty()>
                     <div class="px-5 py-8 text-center text-sm text-white/40">
-                        {t("No tracks : use the search or an import above")}
+                        {move || if any_filter_or_search() {
+                            t("Aucun titre ne correspond aux filtres")
+                        } else {
+                            t("No tracks : use the search or an import above")
+                        }}
                     </div>
                 </Show>
             </div>

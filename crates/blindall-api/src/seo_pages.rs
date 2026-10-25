@@ -795,6 +795,14 @@ async fn decide(state: &AppState, path: &str, _locale: &str) -> Decision {
             "Soutenir Blind'All Music",
             "<p>Blind'All Music est gratuit et indépendant : les dons couvrent l'hébergement, la bande passante audio et le développement. Merci pour ton soutien !</p>",
         ),
+        ("bars", 1) => simple_decision(
+            state,
+            path,
+            "Blind test pour bars & pubs | Blind'All Music Pro",
+            "Animez vos soirées : votre TV affiche le blind test et le QR code, vos clients buzzent depuis leur téléphone. Sans matériel, 29 €/mois.",
+            "Blind test pour bars & pubs",
+            "<p>Transformez votre TV en blind test géant : vos clients répondent depuis leur téléphone, le score s'affiche en direct. Aucune application à installer, aucun matériel à acheter.</p>",
+        ),
         ("pages", 2) => static_page_decision(state, segs[1]).await,
         ("duels", 2) => {
             // /duels/:id — member-gated play page.

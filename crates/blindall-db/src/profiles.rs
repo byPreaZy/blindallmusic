@@ -110,6 +110,8 @@ impl ProfileRepo {
                 "has_team": has_team,
             })),
             "created_at": user.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
+            // Laravel ProfilePageService: $user->created_at->diffForHumans()
+            "created_at_from_now": humanize_since(user.get::<chrono::DateTime<chrono::Utc>, _>("created_at")),
             "elo": user.get::<i64, _>("elo"),
             "role": if user.get::<bool, _>("is_administrator") { "admin" }
                 else if user.get::<bool, _>("is_moderator") { "moderator" } else { "" },
@@ -409,5 +411,27 @@ impl ProfileRepo {
                 "tracks_liked_count": lvl("tracks_liked_count"),
             },
         }))
+    }
+}
+
+/// Carbon `diffForHumans` equivalent for the French UI: largest meaningful
+/// unit ("2 jours", "3 mois", "1 an"). Matches Laravel's fr locale output
+/// used on the profile/account headers.
+fn humanize_since(since: chrono::DateTime<chrono::Utc>) -> String {
+    let d = chrono::Utc::now() - since;
+    let days = d.num_days();
+    if days < 1 {
+        "moins d'un jour".to_string()
+    } else if days < 7 {
+        format!("{days} jour{}", if days > 1 { "s" } else { "" })
+    } else if days < 30 {
+        let w = days / 7;
+        format!("{w} semaine{}", if w > 1 { "s" } else { "" })
+    } else if days < 365 {
+        let m = (days as f64 / 30.44).round() as i64;
+        format!("{m} mois")
+    } else {
+        let y = (days as f64 / 365.25).floor() as i64;
+        format!("{y} an{}", if y > 1 { "s" } else { "" })
     }
 }

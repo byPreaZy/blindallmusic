@@ -249,7 +249,20 @@ fn ProfileHeader(
                 return view! { <div/> }.into_any();
             }
             let level = p["level"].as_i64().unwrap_or(1);
-            let created = p["created_at"].as_str().unwrap_or("").chars().take(10).collect::<String>();
+            // Laravel parity: humanized "Member since" (diffForHumans),
+            // falling back to the raw date for older payloads.
+            let created = p["created_at_from_now"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| {
+                    p["created_at"]
+                        .as_str()
+                        .unwrap_or("")
+                        .chars()
+                        .take(10)
+                        .collect::<String>()
+                });
             let photo = p["photo"].as_str().unwrap_or("").to_string();
             let name = p["name"].as_str().unwrap_or("").to_string();
             let initial = name.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_default();

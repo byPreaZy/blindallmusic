@@ -5,6 +5,7 @@ use crate::pages::admin::{
     AdminAnswerTypes, AdminCategories, AdminDashboard, AdminDataQuality, AdminFaqs, AdminPages,
     AdminPlaylists, AdminRooms, AdminTeams, AdminUsers,
 };
+use crate::pages::bars::BarsPage;
 use crate::pages::docs::{
     BannedPage, CategoryLandingPage, ContactPage, DocsCreateContentPage, DocsEloPage,
     DocsGlossaryPage, DocsHowtoPage, DocsIndexPage, DocsLevelPage, DocsSupportPage, FaqRedirect,
@@ -238,6 +239,7 @@ fn Shell() -> impl IntoView {
                         <Route path=path!("/games") view=GamesIndexPage/>
                         <Route path=path!("/games/:type") view=|| view! { <ParamRemount><GamePlayPage/></ParamRemount> }/>
                         <Route path=path!("/donations") view=DonationsPage/>
+                        <Route path=path!("/bars") view=BarsPage/>
                         <Route path=path!("/faq") view=FaqRedirect/>
                         <Route path=path!("/user/banned") view=BannedPage/>
                         <Route path=path!("/settings") view=SettingsPage/>

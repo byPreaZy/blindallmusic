@@ -53,6 +53,20 @@ pub struct User {
     pub custom_tag: String,
     #[serde(default)]
     pub portal_url: String,
+    #[serde(default)]
+    pub can: UserCan,
+}
+
+/// Mirrors the Laravel `Gate::abilities()` map exposed by /auth/me so the
+/// client can hide actions the server would reject.
+#[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
+pub struct UserCan {
+    #[serde(default, rename = "sendSuggestion")]
+    pub send_suggestion: bool,
+    #[serde(default, rename = "changeRoomPicture")]
+    pub change_room_picture: bool,
+    #[serde(default, rename = "changeTeamPicture")]
+    pub change_team_picture: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -396,6 +410,9 @@ pub struct PlaylistTrack {
     pub up_votes: i64,
     #[serde(default)]
     pub down_votes: i64,
+    /// Reason => downvote count for this track (Laravel downvote_breakdown).
+    #[serde(default)]
+    pub downvote_breakdown: std::collections::BTreeMap<String, i64>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]

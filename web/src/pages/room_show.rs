@@ -1181,19 +1181,20 @@ pub fn RoomPage() -> impl IntoView {
                         </div>
 
                         <div class="room-mobile-shell mb-4 md:hidden">
-                            <div class="mb-3 flex gap-2">
-                                {["playlist", "ranking", "chat"].iter().map(|tab| {
+                            <div class="mb-3 flex gap-2 overflow-x-auto">
+                                {["playlist", "ranking", "chat", "info"].iter().map(|tab| {
                                     let tab = *tab;
                                     let active = move || mobile_tab.get() == tab;
                                     let label = match tab {
                                         "playlist" => t("Playlist"),
                                         "ranking" => t("Ranking"),
-                                        _ => t("Chat"),
+                                        "chat" => t("Chat"),
+                                        _ => t("Infos"),
                                     };
                                     view! {
                                         <button type="button"
                                             class=move || format!(
-                                                "flex-1 rounded-lg border px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-colors {}",
+                                                "flex-1 whitespace-nowrap rounded-lg border px-2 py-2 text-xs font-semibold uppercase tracking-wider transition-colors {}",
                                                 if active() {
                                                     "border-brand-accent/50 bg-brand-accent/15 text-brand-accent"
                                                 } else {
@@ -1212,6 +1213,9 @@ pub fn RoomPage() -> impl IntoView {
                             <Show when=move || mobile_tab.get() == "ranking">
                                 <RankingPanel users=users scores=scores answers_by_user=answers_by_user track=track room_id=room_id.get_untracked() me_id=me_sig podium_open=podium_open/>
                             </Show>
+                            <Show when=move || mobile_tab.get() == "info">
+                                <RoomInfoCard room=room users=users suggestion_open=suggestion_open/>
+                            </Show>
                         </div>
 
                         <div class="hidden gap-8 md:grid md:grid-cols-2">
@@ -1219,69 +1223,7 @@ pub fn RoomPage() -> impl IntoView {
                             <RankingPanel users=users scores=scores answers_by_user=answers_by_user track=track room_id=room_id.get_untracked() me_id=me_sig podium_open=podium_open/>
                         </div>
 
-                        <section class="retro-card mt-8 hidden md:block">
-                            <Show when=move || room.get().description.is_some()>
-                                <header class="retro-card__header">
-                                    <h3 class="text-sm">{move || room.get().description.unwrap_or_default()}</h3>
-                                </header>
-                            </Show>
-                            <main class="retro-card__body">
-                                <div class="flex flex-col gap-6 text-sm lg:flex-row lg:justify-between">
-                                    <div class="w-full">
-                                        <div class="flex flex-wrap items-center gap-4">
-                                            <span class="text-sm font-medium uppercase tracking-wider text-brand-secondary">{t("Moderators")}</span>
-                                            <div class="flex flex-wrap gap-3">
-                                                <For
-                                                    each=move || room.get().moderators
-                                                    key=|m| m["id"].as_i64().unwrap_or_default()
-                                                    children=move |m: Value| {
-                                                        let mid = m["id"].as_i64().unwrap_or_default();
-                                                        let name = m["name"].as_str().unwrap_or("?").to_string();
-                                                        let photo = m["photo"].as_str().map(str::to_string);
-                                                        let online = move || users.get().iter().any(|u| u.id == mid);
-                                                        view! {
-                                                            <span class=move || format!(
-                                                                "flex items-center space-x-2 border border-white/10 bg-brand-midnight px-3 py-1.5 {}",
-                                                                if online() { "ring-2 ring-brand-accent" } else { "" }
-                                                            )>
-                                                                {photo.map(|p| view! {
-                                                                    <img src=p alt=name.clone() title=name.clone() class="h-6 w-6 rounded-full ring-1 ring-white/20"/>
-                                                                })}
-                                                                <span class=move || format!(
-                                                                    "font-medium {}",
-                                                                    if online() { "text-brand-accent" } else { "text-white/80" }
-                                                                )>{name}</span>
-                                                            </span>
-                                                        }
-                                                    }
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="flex flex-wrap items-center gap-2 sm:gap-3 md:flex-nowrap lg:gap-4">
-                                        <button type="button" class="btn-secondary btn-sm shrink-0 whitespace-nowrap">
-                                            <span class="font-medium">
-                                                {move || room.get().tracks_count.map(|n| n.to_string()).unwrap_or_else(|| "-".into())}
-                                            </span>
-                                            " "{t("Tracks")}
-                                        </button>
-                                        <Show when=move || room.get().rounds_count.unwrap_or(0).gt(&0)>
-                                            <button type="button" class="btn-secondary btn-sm shrink-0 whitespace-nowrap">
-                                                <span class="font-medium">{move || room.get().rounds_count.unwrap_or(0)}</span>
-                                                " "{t("Rounds played")}
-                                            </button>
-                                        </Show>
-                                        <button type="button" class="btn-secondary btn-sm shrink-0 whitespace-nowrap"
-                                            on:click=move |_| suggestion_open.set(true)>
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-5 w-5">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
-                                            </svg>
-                                            <span>{t("Send a suggestion")}</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </main>
-                        </section>
+                        <RoomInfoCard room=room users=users suggestion_open=suggestion_open wrapper_class="mt-8 hidden md:block"/>
 
                         <Show when=move || !public_rooms.get().is_empty()>
                             <section class="retro-card mt-8 hidden md:block">
@@ -1365,6 +1307,91 @@ pub fn RoomPage() -> impl IntoView {
                 <SuggestionModal open=suggestion_open room_id=room_id track=track/>
             </Show>
         </div>
+    }
+}
+
+// ---- RoomInfoCard --------------------------------------------------------------
+
+/// Room description, moderator list, track/round stats and the "send a
+/// suggestion" entry point. Desktop renders it as a card below the game
+/// panels (`hidden md:block`); on mobile it fills the "Infos" tab of
+/// `room-mobile-shell`.
+#[component]
+fn RoomInfoCard(
+    room: RwSignal<RoomConfig>,
+    users: RwSignal<Vec<RoomUser>>,
+    suggestion_open: RwSignal<bool>,
+    #[prop(optional, default = "")] wrapper_class: &'static str,
+) -> impl IntoView {
+    let auth = use_auth();
+    view! {
+        <section class=format!("retro-card {wrapper_class}")>
+            <Show when=move || room.get().description.is_some()>
+                <header class="retro-card__header">
+                    <h3 class="text-sm">{move || room.get().description.unwrap_or_default()}</h3>
+                </header>
+            </Show>
+            <main class="retro-card__body">
+                <div class="flex flex-col gap-6 text-sm lg:flex-row lg:justify-between">
+                    <div class="w-full">
+                        <div class="flex flex-wrap items-center gap-4">
+                            <span class="text-sm font-medium uppercase tracking-wider text-brand-secondary">{t("Moderators")}</span>
+                            <div class="flex flex-wrap gap-3">
+                                <For
+                                    each=move || room.get().moderators
+                                    key=|m| m["id"].as_i64().unwrap_or_default()
+                                    children=move |m: Value| {
+                                        let mid = m["id"].as_i64().unwrap_or_default();
+                                        let name = m["name"].as_str().unwrap_or("?").to_string();
+                                        let photo = m["photo"].as_str().map(str::to_string);
+                                        let online = move || users.get().iter().any(|u| u.id == mid);
+                                        view! {
+                                            <span class=move || format!(
+                                                "flex items-center space-x-2 border border-white/10 bg-brand-midnight px-3 py-1.5 {}",
+                                                if online() { "ring-2 ring-brand-accent" } else { "" }
+                                            )>
+                                                {photo.map(|p| view! {
+                                                    <img src=p alt=name.clone() title=name.clone() class="h-6 w-6 rounded-full ring-1 ring-white/20"/>
+                                                })}
+                                                <span class=move || format!(
+                                                    "font-medium {}",
+                                                    if online() { "text-brand-accent" } else { "text-white/80" }
+                                                )>{name}</span>
+                                            </span>
+                                        }
+                                    }
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 sm:gap-3 md:flex-nowrap lg:gap-4">
+                        <button type="button" class="btn-secondary btn-sm shrink-0 whitespace-nowrap">
+                            <span class="font-medium">
+                                {move || room.get().tracks_count.map(|n| n.to_string()).unwrap_or_else(|| "-".into())}
+                            </span>
+                            " "{t("Tracks")}
+                        </button>
+                        <Show when=move || room.get().rounds_count.unwrap_or(0).gt(&0)>
+                            <button type="button" class="btn-secondary btn-sm shrink-0 whitespace-nowrap">
+                                <span class="font-medium">{move || room.get().rounds_count.unwrap_or(0)}</span>
+                                " "{t("Rounds played")}
+                            </button>
+                        </Show>
+                        // Mirrors the server gate — hides the
+                        // button for accounts that would 429.
+                        <Show when=move || auth.user.get().map(|u| u.can.send_suggestion).unwrap_or(false)>
+                            <button type="button" class="btn-secondary btn-sm shrink-0 whitespace-nowrap"
+                                on:click=move |_| suggestion_open.set(true)>
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-5 w-5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
+                                </svg>
+                                <span>{t("Send a suggestion")}</span>
+                            </button>
+                        </Show>
+                    </div>
+                </div>
+            </main>
+        </section>
     }
 }
 

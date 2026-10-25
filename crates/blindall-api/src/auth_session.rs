@@ -198,6 +198,38 @@ pub(crate) async fn enriched_user_json(
     if !(is_supporter || plan.is_some()) {
         base["custom_tag"] = json!("");
     }
+    // Laravel HandleInertiaRequests `can` map (Gate abilities): lets the
+    // client hide gated actions instead of letting them 403/429. Mirrors
+    // the server-side gates: suggestions in rooms.rs (60d + score > 500,
+    // moderator/admin exempt) and picture uploads in
+    // auth::can_change_picture (3 months + score > 2000, admin exempt).
+    base["can"] = if u.is_guest {
+        json!({"sendSuggestion": false, "changeRoomPicture": false, "changeTeamPicture": false})
+    } else {
+        let (created, total) = state
+            .auth
+            .created_at_and_total_score(u.id)
+            .await
+            .ok()
+            .flatten()
+            .map(|(c, t)| (c.unwrap_or(chrono::Utc::now()), t))
+            .unwrap_or((chrono::Utc::now(), 0.0));
+        let now = chrono::Utc::now();
+        let veteran = u.is_administrator
+            || is_public_moderator
+            || (created < now - chrono::Duration::days(60) && total > 500.0);
+        let senior = u.is_administrator
+            || created
+                .checked_add_months(chrono::Months::new(3))
+                .map(|threshold| threshold < now)
+                .unwrap_or(false)
+                && total > 2000.0;
+        json!({
+            "sendSuggestion": veteran,
+            "changeRoomPicture": senior,
+            "changeTeamPicture": senior,
+        })
+    };
     base
 }
 

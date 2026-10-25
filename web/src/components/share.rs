@@ -47,6 +47,17 @@ pub fn ShareModal(
                                 {move || if copied.get() { t("Copied!") } else { t("Copy") }}
                             </button>
                         </div>
+                        // Laravel ShareModal parity: social share links.
+                        <div class="mt-4 flex flex-col gap-2 sm:flex-row">
+                            <a class="btn-secondary flex-1 text-center" target="_blank" rel="noopener"
+                                href=move || format!("https://www.facebook.com/sharer/sharer.php?u={}", share_url())>
+                                {t("Share on Facebook")}
+                            </a>
+                            <a class="btn-secondary flex-1 text-center" target="_blank" rel="noopener"
+                                href=move || format!("https://twitter.com/intent/tweet?&url={}", share_url())>
+                                {t("Share on X")}
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -20,7 +20,7 @@ fn bullet_list(items: &[&'static str]) -> impl IntoView {
             view! {
                 <li class="flex items-start gap-2">
                     <span class="mt-1 text-blue-400">"•"</span>
-                    <span>{*i}</span>
+                    <span>{t(*i)}</span>
                 </li>
             }
         })
@@ -68,8 +68,8 @@ fn link_card(
                 }}
             </div>
             <div class="flex-1">
-                <h3 class=format!("font-semibold text-white transition-colors group-hover:text-{color}-400")>{title}</h3>
-                <p class="mt-1 text-xs text-neutral-400">{sub}</p>
+                <h3 class=format!("font-semibold text-white transition-colors group-hover:text-{color}-400")>{t(title)}</h3>
+                <p class="mt-1 text-xs text-neutral-400">{t(sub)}</p>
             </div>
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 text-neutral-400 transition-colors group-hover:text-blue-400">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
@@ -87,31 +87,31 @@ pub fn DocsIndexPage() -> impl IntoView {
     view! {
         <div class="mx-auto max-w-5xl space-y-8 px-4 py-8">
             <div class="space-y-4 text-center">
-                <h1 class="text-4xl font-bold">"Les systèmes de progression"</h1>
-                <p class="text-lg text-neutral-400">"Vue d'ensemble des systèmes de progression : Scores, Levels et ELO"</p>
-                <p class="text-sm text-neutral-500">"Cette page présente une synthèse des trois systèmes de progression sur Blind'All Music. Pour des guides détaillés, consultez les sections spécifiques ci-dessous."</p>
+                <h1 class="text-4xl font-bold">{t("Les systèmes de progression")}</h1>
+                <p class="text-lg text-neutral-400">{t("Vue d'ensemble des systèmes de progression : Scores, Levels et ELO")}</p>
+                <p class="text-sm text-neutral-500">{t("Cette page présente une synthèse des trois systèmes de progression sur Blind'All Music. Pour des guides détaillés, consultez les sections spécifiques ci-dessous.")}</p>
             </div>
 
             {section(view! {
-                <h2 class=H2>"Pourquoi 3 systèmes ?"</h2>
-                <p class=format!("mb-4 {TXT}")>"On a créé trois systèmes différents pour récompenser différents aspects de ton expérience sur Blind'All Music :"</p>
+                <h2 class=H2>{t("Pourquoi 3 systèmes ?")}</h2>
+                <p class=format!("mb-4 {TXT}")>{t("On a créé trois systèmes différents pour récompenser différents aspects de ton expérience sur Blind'All Music :")}</p>
                 <ul class=format!("ml-4 list-inside list-disc space-y-2 {TXT}")>
-                    <li><strong>"Les Scores"</strong>" : Pour mesurer ton activité et ta participation"</li>
-                    <li><strong>"Les Levels"</strong>" : Pour récompenser ton engagement global sur la plateforme"</li>
-                    <li><strong>"L'ELO"</strong>" : Pour évaluer ta compétence réelle dans les parties compétitives"</li>
+                    <li><strong>{t("Les Scores")}</strong>{t(" : Pour mesurer ton activité et ta participation")}</li>
+                    <li><strong>{t("Les Levels")}</strong>{t(" : Pour récompenser ton engagement global sur la plateforme")}</li>
+                    <li><strong>{t("L'ELO")}</strong>{t(" : Pour évaluer ta compétence réelle dans les parties compétitives")}</li>
                 </ul>
-                <p class=format!("mt-4 {TXT}")>"Chaque système a son rôle et ils se complètent bien. Ensemble, ça donne une progression plus riche et équilibrée."</p>
+                <p class=format!("mt-4 {TXT}")>{t("Chaque système a son rôle et ils se complètent bien. Ensemble, ça donne une progression plus riche et équilibrée.")}</p>
             })}
 
             <div class=format!("overflow-x-auto {CARD}")>
-                <h2 class="mb-6 text-2xl font-bold">"Comparaison des systèmes"</h2>
+                <h2 class="mb-6 text-2xl font-bold">{t("Comparaison des systèmes")}</h2>
                 <table class="w-full border-collapse text-sm">
                     <thead>
                         <tr class="border-b border-slate-700">
-                            <th class="bg-slate-800/50 px-4 py-3 text-left font-semibold">"Caractéristique"</th>
-                            <th class="bg-slate-800/50 px-4 py-3 text-left font-semibold">"Scores"</th>
-                            <th class="bg-slate-800/50 px-4 py-3 text-left font-semibold">"Levels"</th>
-                            <th class="bg-slate-800/50 px-4 py-3 text-left font-semibold">"ELO"</th>
+                            <th class="bg-slate-800/50 px-4 py-3 text-left font-semibold">{t("Caractéristique")}</th>
+                            <th class="bg-slate-800/50 px-4 py-3 text-left font-semibold">{t("Scores")}</th>
+                            <th class="bg-slate-800/50 px-4 py-3 text-left font-semibold">{t("Levels")}</th>
+                            <th class="bg-slate-800/50 px-4 py-3 text-left font-semibold">{t("ELO")}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -124,10 +124,10 @@ pub fn DocsIndexPage() -> impl IntoView {
                             ("Valeur initiale", "0", "Level 1", "1500"),
                         ].into_iter().map(|(a, b, c, d)| view! {
                             <tr class="border-b border-slate-700/50 hover:bg-slate-800/30">
-                                <td class="px-4 py-3 font-semibold">{a}</td>
-                                <td class="px-4 py-3">{b}</td>
-                                <td class="px-4 py-3">{c}</td>
-                                <td class="px-4 py-3">{d}</td>
+                                <td class="px-4 py-3 font-semibold">{t(a)}</td>
+                                <td class="px-4 py-3">{t(b)}</td>
+                                <td class="px-4 py-3">{t(c)}</td>
+                                <td class="px-4 py-3">{t(d)}</td>
                             </tr>
                         }).collect::<Vec<_>>()}
                     </tbody>
@@ -135,68 +135,68 @@ pub fn DocsIndexPage() -> impl IntoView {
             </div>
 
             <div class="rounded-2xl border border-yellow-700/50 bg-gradient-to-br from-yellow-900/20 to-yellow-800/20 p-6">
-                <h2 class="mb-2 text-2xl font-bold text-yellow-400">"Scores"</h2>
-                <p class=format!("mb-4 {TXT}")>"Les scores, c'est simple : chaque bonne réponse te rapporte des points. Plus tu joues, plus tu accumules de points."</p>
+                <h2 class="mb-2 text-2xl font-bold text-yellow-400">{t("Scores")}</h2>
+                <p class=format!("mb-4 {TXT}")>{t("Les scores, c'est simple : chaque bonne réponse te rapporte des points. Plus tu joues, plus tu accumules de points.")}</p>
                 <ul class=format!("ml-4 list-inside list-disc space-y-1 text-sm {TXT}")>
-                    <li>"Ça compte dans "<strong>"toutes les rooms"</strong>" (publiques et privées)"</li>
-                    <li>"Ça ne peut "<strong>"jamais baisser"</strong>" - ça s'accumule"</li>
-                    <li>"Ça mesure ton "<strong>"activité totale"</strong>" sur Blind'All Music"</li>
-                    <li>"C'est affiché pendant les parties pour voir qui mène"</li>
+                    <li>{t("Ça compte dans ")}<strong>{t("toutes les rooms")}</strong>{t(" (publiques et privées)")}</li>
+                    <li>{t("Ça ne peut ")}<strong>{t("jamais baisser")}</strong>{t(" - ça s'accumule")}</li>
+                    <li>{t("Ça mesure ton ")}<strong>{t("activité totale")}</strong>{t(" sur Blind'All Music")}</li>
+                    <li>{t("C'est affiché pendant les parties pour voir qui mène")}</li>
                 </ul>
             </div>
 
             <div class="rounded-2xl border border-blue-700/50 bg-gradient-to-br from-blue-900/20 to-blue-800/20 p-6">
-                <h2 class="mb-2 text-2xl font-bold text-blue-400">"Levels"</h2>
-                <p class=format!("mb-4 {TXT}")>"Les levels récompensent ton engagement global sur Blind'All Music. Tu gagnes de l'XP (Experience Points) en participant activement à la communauté."</p>
+                <h2 class="mb-2 text-2xl font-bold text-blue-400">{t("Levels")}</h2>
+                <p class=format!("mb-4 {TXT}")>{t("Les levels récompensent ton engagement global sur Blind'All Music. Tu gagnes de l'XP (Experience Points) en participant activement à la communauté.")}</p>
                 <ul class=format!("ml-4 list-inside list-disc space-y-1 text-sm {TXT}")>
-                    <li>"Ça compte uniquement dans les "<strong>"rooms publiques"</strong></li>
-                    <li>"C'est basé sur plusieurs trucs : scores, ancienneté, rooms créées, playlists, etc."</li>
-                    <li>"Ça ne peut "<strong>"jamais baisser"</strong>" - progression continue"</li>
-                    <li>"C'est affiché dans les "<strong>"profils"</strong>" pour montrer ton expérience"</li>
-                    <li>"Chaque level demande plus d'XP que le précédent"</li>
+                    <li>{t("Ça compte uniquement dans les ")}<strong>{t("rooms publiques")}</strong></li>
+                    <li>{t("C'est basé sur plusieurs trucs : scores, ancienneté, rooms créées, playlists, etc.")}</li>
+                    <li>{t("Ça ne peut ")}<strong>{t("jamais baisser")}</strong>{t(" - progression continue")}</li>
+                    <li>{t("C'est affiché dans les ")}<strong>{t("profils")}</strong>{t(" pour montrer ton expérience")}</li>
+                    <li>{t("Chaque level demande plus d'XP que le précédent")}</li>
                 </ul>
                 <div class="mt-4">
-                    <A href="/docs/level" attr:class="inline-flex items-center gap-2 text-sm font-semibold text-blue-400 transition-colors hover:text-blue-300">"Tout savoir sur les Levels →"</A>
+                    <A href="/docs/level" attr:class="inline-flex items-center gap-2 text-sm font-semibold text-blue-400 transition-colors hover:text-blue-300">{t("Tout savoir sur les Levels →")}</A>
                 </div>
             </div>
 
             <div class="rounded-2xl border border-purple-700/50 bg-gradient-to-br from-purple-900/20 to-purple-800/20 p-6">
-                <h2 class="mb-2 text-2xl font-bold text-purple-400">"ELO"</h2>
-                <p class=format!("mb-4 {TXT}")>"L'ELO, c'est un système de classement compétitif qui évalue ton niveau réel. Contrairement aux scores et levels, l'ELO peut monter ou descendre selon tes performances."</p>
+                <h2 class="mb-2 text-2xl font-bold text-purple-400">{t("ELO")}</h2>
+                <p class=format!("mb-4 {TXT}")>{t("L'ELO, c'est un système de classement compétitif qui évalue ton niveau réel. Contrairement aux scores et levels, l'ELO peut monter ou descendre selon tes performances.")}</p>
                 <ul class=format!("ml-4 list-inside list-disc space-y-1 text-sm {TXT}")>
-                    <li>"Ça compte uniquement dans les "<strong>"rooms publiques avec 3+ joueurs"</strong></li>
-                    <li>"Ça peut "<strong>"monter ou descendre"</strong>" selon tes performances"</li>
-                    <li>"Ça prend en compte le "<strong>"niveau de tes adversaires"</strong></li>
-                    <li>"C'est affiché "<strong>"pendant les parties"</strong>" pour évaluer la compétence"</li>
-                    <li>"Système de "<strong>"placement"</strong>" pour les nouveaux joueurs (10 premiers rounds)"</li>
-                    <li>"K-factor variable selon ton niveau d'expérience"</li>
-                    <li><strong>"Calcul proportionnel"</strong>" : Si tu arrives en milieu de partie, ton ELO évolue proportionnellement aux tracks jouées (minimum 80%)"</li>
+                    <li>{t("Ça compte uniquement dans les ")}<strong>{t("rooms publiques avec 3+ joueurs")}</strong></li>
+                    <li>{t("Ça peut ")}<strong>{t("monter ou descendre")}</strong>{t(" selon tes performances")}</li>
+                    <li>{t("Ça prend en compte le ")}<strong>{t("niveau de tes adversaires")}</strong></li>
+                    <li>{t("C'est affiché ")}<strong>{t("pendant les parties")}</strong>{t(" pour évaluer la compétence")}</li>
+                    <li>{t("Système de ")}<strong>{t("placement")}</strong>{t(" pour les nouveaux joueurs (10 premiers rounds)")}</li>
+                    <li>{t("K-factor variable selon ton niveau d'expérience")}</li>
+                    <li><strong>{t("Calcul proportionnel")}</strong>{t(" : Si tu arrives en milieu de partie, ton ELO évolue proportionnellement aux tracks jouées (minimum 80%)")}</li>
                 </ul>
                 <div class="mt-4">
-                    <A href="/docs/elo" attr:class="inline-flex items-center gap-2 text-sm font-semibold text-purple-400 transition-colors hover:text-purple-300">"Tout savoir sur l'ELO →"</A>
+                    <A href="/docs/elo" attr:class="inline-flex items-center gap-2 text-sm font-semibold text-purple-400 transition-colors hover:text-purple-300">{t("Tout savoir sur l'ELO →")}</A>
                 </div>
             </div>
 
             <div class="rounded-2xl border border-green-700/50 bg-gradient-to-br from-green-900/20 to-green-800/20 p-6">
-                <h2 class="mb-4 text-2xl font-bold text-green-400">"Où les voir ?"</h2>
+                <h2 class="mb-4 text-2xl font-bold text-green-400">{t("Où les voir ?")}</h2>
                 <div class="space-y-4">
                     <div class="rounded-lg bg-slate-800/50 p-4">
-                        <h3 class="mb-2 font-semibold text-white">"Pendant une partie"</h3>
-                        <p class="text-sm text-neutral-300">"Tu verras les "<strong>"scores"</strong>" (pour voir qui mène) et l'"<strong>"ELO"</strong>" (pour évaluer la compétence des joueurs). Le level n'est pas affiché pendant les parties car il représente l'expérience globale, pas la compétence dans cette partie spécifique."</p>
+                        <h3 class="mb-2 font-semibold text-white">{t("Pendant une partie")}</h3>
+                        <p class="text-sm text-neutral-300">{t("Tu verras ")}<strong>{t("les scores")}</strong>{t(" (pour voir qui mène) et l'")}<strong>{t("ELO")}</strong>{t(" (pour évaluer la compétence des joueurs). Le level n'est pas affiché pendant les parties car il représente l'expérience globale, pas la compétence dans cette partie spécifique.")}</p>
                     </div>
                     <div class="rounded-lg bg-slate-800/50 p-4">
-                        <h3 class="mb-2 font-semibold text-white">"Dans un profil"</h3>
-                        <p class="text-sm text-neutral-300">"Tu verras les "<strong>"scores totaux"</strong>", le "<strong>"level"</strong>" (expérience) et l'"<strong>"ELO"</strong>" (compétence). Ça donne une vue complète de l'activité et du niveau du joueur."</p>
+                        <h3 class="mb-2 font-semibold text-white">{t("Dans un profil")}</h3>
+                        <p class="text-sm text-neutral-300">{t("Tu verras les ")}<strong>{t("scores totaux")}</strong>{t(", le ")}<strong>{t("level")}</strong>{t(" (expérience) et l'")}<strong>{t("ELO")}</strong>{t(" (compétence). Ça donne une vue complète de l'activité et du niveau du joueur.")}</p>
                     </div>
                     <div class="rounded-lg bg-slate-800/50 p-4">
-                        <h3 class="mb-2 font-semibold text-white">"Dans les classements"</h3>
-                        <p class="text-sm text-neutral-300">"Les classements peuvent être triés par "<strong>"score"</strong>" (activité), "<strong>"level"</strong>" (expérience) ou "<strong>"ELO"</strong>" (compétence). Chaque classement montre un aspect différent de la progression."</p>
+                        <h3 class="mb-2 font-semibold text-white">{t("Dans les classements")}</h3>
+                        <p class="text-sm text-neutral-300">{t("Les classements peuvent être triés par ")}<strong>{t("score")}</strong>{t(" (activité), ")}<strong>{t("level")}</strong>{t(" (expérience) ou ")}<strong>{t("ELO")}</strong>{t(" (compétence). Chaque classement montre un aspect différent de la progression.")}</p>
                     </div>
                 </div>
             </div>
 
             {section(view! {
-                <h2 class=H2>"Pour aller plus loin"</h2>
+                <h2 class=H2>{t("Pour aller plus loin")}</h2>
                 <div class="grid gap-4 md:grid-cols-2">
                     {link_card("/docs/level", "Système de Levels", "Comment gagner de l'XP et progresser", "blue")}
                     {link_card("/docs/elo", "Système ELO", "Tout savoir sur le classement compétitif", "purple")}
@@ -209,17 +209,17 @@ pub fn DocsIndexPage() -> impl IntoView {
             })}
 
             <div class="rounded-2xl border border-indigo-700/50 bg-gradient-to-br from-indigo-900/20 to-indigo-800/20 p-6">
-                <h2 class="mb-4 text-2xl font-bold text-indigo-400">"En bref"</h2>
+                <h2 class="mb-4 text-2xl font-bold text-indigo-400">{t("En bref")}</h2>
                 <div class=format!("space-y-3 {TXT}")>
-                    <p><strong>"Scores"</strong>" = Ton activité totale, toujours croissante, visible partout"</p>
-                    <p><strong>"Levels"</strong>" = Ton expérience et engagement, toujours croissant, visible dans les profils"</p>
-                    <p><strong>"ELO"</strong>" = Ta compétence réelle, peut varier, visible pendant les parties compétitives"</p>
-                    <p class="mt-4 font-semibold text-white">"Ces trois systèmes se complètent pour offrir une progression plus riche et équilibrée, qui récompense à la fois l'activité, l'engagement et la compétence."</p>
+                    <p><strong>{t("Scores")}</strong>{t(" = Ton activité totale, toujours croissante, visible partout")}</p>
+                    <p><strong>{t("Levels")}</strong>{t(" = Ton expérience et engagement, toujours croissant, visible dans les profils")}</p>
+                    <p><strong>{t("ELO")}</strong>{t(" = Ta compétence réelle, peut varier, visible pendant les parties compétitives")}</p>
+                    <p class="mt-4 font-semibold text-white">{t("Ces trois systèmes se complètent pour offrir une progression plus riche et équilibrée, qui récompense à la fois l'activité, l'engagement et la compétence.")}</p>
                 </div>
             </div>
 
             <div class="pt-4 text-center">
-                <A href="/" attr:class="text-blue-400 transition-colors hover:text-blue-300">" ← Retour à l'accueil "</A>
+                <A href="/" attr:class="text-blue-400 transition-colors hover:text-blue-300">" ← "{t("Retour à l'accueil")}" "</A>
             </div>
         </div>
     }
@@ -355,7 +355,7 @@ fn elo_section(
 ) -> impl IntoView {
     view! {
         <section id=id class=CARD>
-            <h2 class=H2>{title}</h2>
+            <h2 class=H2>{t(title)}</h2>
             {children}
         </section>
     }
@@ -368,12 +368,12 @@ pub fn DocsEloPage() -> impl IntoView {
     view! {
         <div class="mx-auto max-w-4xl space-y-8 px-4 py-8">
             <div class="space-y-4 text-center">
-                <h1 class="text-4xl font-bold">"Système ELO - Documentation Complète"</h1>
-                <p class="text-lg text-neutral-400">"Comprenez comment fonctionne le système ELO et comment votre classement évolue."</p>
+                <h1 class="text-4xl font-bold">{t("Système ELO - Documentation Complète")}</h1>
+                <p class="text-lg text-neutral-400">{t("Comprenez comment fonctionne le système ELO et comment votre classement évolue.")}</p>
             </div>
 
             <div class="rounded-2xl border border-blue-700/50 bg-gradient-to-br from-blue-900/20 to-blue-800/20 p-6">
-                <h2 class="mb-4 text-2xl font-bold text-blue-400">"Table des matières"</h2>
+                <h2 class="mb-4 text-2xl font-bold text-blue-400">{t("Table des matières")}</h2>
                 <ul class="space-y-2 text-neutral-300">
                     {[
                         ("introduction", "1. Introduction"),
@@ -389,113 +389,113 @@ pub fn DocsEloPage() -> impl IntoView {
                         ("protection", "11. Protection contre l'inflation/déflation"),
                         ("faq", "12. FAQ"),
                     ].into_iter().map(|(id, label)| view! {
-                        <li><a href=format!("#{id}") class="text-blue-400 hover:text-blue-300">{label}</a></li>
+                        <li><a href=format!("#{id}") class="text-blue-400 hover:text-blue-300">{t(label)}</a></li>
                     }).collect::<Vec<_>>()}
                 </ul>
             </div>
 
             {elo_section("introduction", "1. Introduction", view! {
-                <p class=format!("mb-4 {TXT}")>"Le système ELO est un système de classement qui évalue votre niveau de compétence en fonction de vos performances dans les parties. Plus votre ELO est élevé, plus vous êtes considéré comme un joueur expérimenté."</p>
+                <p class=format!("mb-4 {TXT}")>{t("Le système ELO est un système de classement qui évalue votre niveau de compétence en fonction de vos performances dans les parties. Plus votre ELO est élevé, plus vous êtes considéré comme un joueur expérimenté.")}</p>
                 <div class="rounded border-l-4 border-blue-500 bg-blue-900/20 p-4">
-                    <p class="font-semibold text-white"><strong>"Votre ELO initial :"</strong>" Tous les nouveaux joueurs commencent avec un ELO de "<strong>"1500 points"</strong>"."</p>
+                    <p class="font-semibold text-white"><strong>{t("Votre ELO initial :")}</strong>{t(" Tous les nouveaux joueurs commencent avec un ELO de ")}<strong>{t("1500 points")}</strong>"."</p>
                 </div>
             })}
 
             {elo_section("quest-ce-que-lelo", "2. Qu'est-ce que l'ELO ?", view! {
-                <p class=format!("mb-4 {TXT}")>"L'ELO est un nombre qui représente votre niveau de compétence. Il évolue après chaque partie selon :"</p>
+                <p class=format!("mb-4 {TXT}")>{t("L'ELO est un nombre qui représente votre niveau de compétence. Il évolue après chaque partie selon :")}</p>
                 <ul class=format!("mb-4 ml-4 list-inside list-disc space-y-2 {TXT}")>
-                    <li>"Votre position finale dans le round"</li>
-                    <li>"Le niveau ELO de vos adversaires"</li>
-                    <li>"Votre propre niveau ELO actuel"</li>
+                    <li>{t("Votre position finale dans le round")}</li>
+                    <li>{t("Le niveau ELO de vos adversaires")}</li>
+                    <li>{t("Votre propre niveau ELO actuel")}</li>
                 </ul>
-                <p class="font-semibold text-white"><strong>"Plus votre ELO est élevé, plus vous êtes considéré comme un bon joueur."</strong></p>
+                <p class="font-semibold text-white"><strong>{t("Plus votre ELO est élevé, plus vous êtes considéré comme un bon joueur.")}</strong></p>
             })}
 
             {elo_section("comment-fonctionne", "3. Comment fonctionne le système ELO ?", view! {
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Principe de base"</h3>
-                <p class=format!("mb-4 {TXT}")>"À la fin de chaque round, votre ELO peut augmenter ou diminuer selon votre performance. Le système compare :"</p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Principe de base")}</h3>
+                <p class=format!("mb-4 {TXT}")>{t("À la fin de chaque round, votre ELO peut augmenter ou diminuer selon votre performance. Le système compare :")}</p>
                 <ul class=format!("mb-4 ml-4 list-inside list-disc space-y-2 {TXT}")>
-                    <li><strong>"Votre score réel"</strong>" : basé sur votre position finale (1er, 2ème, 3ème, etc.)"</li>
-                    <li><strong>"Votre score attendu"</strong>" : basé sur votre ELO et celui de vos adversaires"</li>
+                    <li><strong>{t("Votre score réel")}</strong>{t(" : basé sur votre position finale (1er, 2ème, 3ème, etc.)")}</li>
+                    <li><strong>{t("Votre score attendu")}</strong>{t(" : basé sur votre ELO et celui de vos adversaires")}</li>
                 </ul>
                 <div class="mb-4 rounded border-l-4 border-green-500 bg-green-900/20 p-4">
-                    <p class="mb-2 font-semibold text-white"><strong>"Si vous faites mieux que prévu"</strong>" → Votre ELO augmente"</p>
-                    <p class="font-semibold text-white"><strong>"Si vous faites moins bien que prévu"</strong>" → Votre ELO diminue"</p>
+                    <p class="mb-2 font-semibold text-white"><strong>{t("Si vous faites mieux que prévu")}</strong>{t(" → Votre ELO augmente")}</p>
+                    <p class="font-semibold text-white"><strong>{t("Si vous faites moins bien que prévu")}</strong>{t(" → Votre ELO diminue")}</p>
                 </div>
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Exemple concret"</h3>
-                <p class=format!("mb-2 {TXT}")>"Imaginez que vous avez un ELO de 1500 et que vous jouez contre 3 adversaires avec des ELO de 1600, 1500 et 1400."</p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Exemple concret")}</h3>
+                <p class=format!("mb-2 {TXT}")>{t("Imaginez que vous avez un ELO de 1500 et que vous jouez contre 3 adversaires avec des ELO de 1600, 1500 et 1400.")}</p>
                 <ul class=format!("ml-4 list-inside list-disc space-y-2 {TXT}")>
-                    <li><strong>"Score attendu"</strong>" : Le système s'attend à ce que vous finissiez environ 2ème ou 3ème"</li>
-                    <li><strong>"Si vous finissez 1er"</strong>" : Vous avez fait mieux que prévu → Votre ELO augmente"</li>
-                    <li><strong>"Si vous finissez 4ème"</strong>" : Vous avez fait moins bien que prévu → Votre ELO diminue"</li>
+                    <li><strong>{t("Score attendu")}</strong>{t(" : Le système s'attend à ce que vous finissiez environ 2ème ou 3ème")}</li>
+                    <li><strong>{t("Si vous finissez 1er")}</strong>{t(" : Vous avez fait mieux que prévu → Votre ELO augmente")}</li>
+                    <li><strong>{t("Si vous finissez 4ème")}</strong>{t(" : Vous avez fait moins bien que prévu → Votre ELO diminue")}</li>
                 </ul>
             })}
 
             {elo_section("rounds-placement", "4. Rounds de placement", view! {
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Qu'est-ce que le placement ?"</h3>
-                <p class=format!("mb-4 {TXT}")>"Les "<strong>"10 premiers rounds"</strong>" où votre ELO est compté sont appelés \"rounds de placement\". Pendant cette période :"</p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Qu'est-ce que le placement ?")}</h3>
+                <p class=format!("mb-4 {TXT}")>{t("Les ")}<strong>{t("10 premiers rounds")}</strong>{t(" où votre ELO est compté sont appelés \"rounds de placement\". Pendant cette période :")}</p>
                 <ul class=format!("mb-4 ml-4 list-inside list-disc space-y-2 {TXT}")>
-                    <li>"Votre ELO change "<strong>"plus rapidement"</strong>" pour s'ajuster à votre niveau réel"</li>
-                    <li>"Le système utilise un "<strong>"K-factor plus élevé"</strong>" (de 50 à 32) pour vous placer rapidement"</li>
+                    <li>{t("Votre ELO change ")}<strong>{t("plus rapidement")}</strong>{t(" pour s'ajuster à votre niveau réel")}</li>
+                    <li>{t("Le système utilise un ")}<strong>{t("K-factor plus élevé")}</strong>{t(" (de 50 à 32) pour vous placer rapidement")}</li>
                 </ul>
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Pourquoi un placement ?"</h3>
-                <p class=format!("mb-4 {TXT}")>"Le placement permet au système de déterminer rapidement votre niveau réel. Après 10 rounds, votre ELO devrait être proche de votre niveau réel."</p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Pourquoi un placement ?")}</h3>
+                <p class=format!("mb-4 {TXT}")>{t("Le placement permet au système de déterminer rapidement votre niveau réel. Après 10 rounds, votre ELO devrait être proche de votre niveau réel.")}</p>
                 <div class="rounded border-l-4 border-amber-500 bg-amber-900/20 p-4">
-                    <p class="font-semibold text-white"><strong>"Important :"</strong>" Seuls les rounds dans des "<strong>"rooms publiques avec au moins 3 joueurs"</strong>" comptent pour le placement et l'ELO."</p>
+                    <p class="font-semibold text-white"><strong>{t("Important :")}</strong>{t(" Seuls les rounds dans des ")}<strong>{t("rooms publiques avec au moins 3 joueurs")}</strong>{t(" comptent pour le placement et l'ELO.")}</p>
                 </div>
             })}
 
             {elo_section("calcul-changements", "5. Calcul des changements d'ELO", view! {
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Formule utilisée"</h3>
-                <p class=format!("mb-4 {TXT}")>"Le changement d'ELO se calcule ainsi :"</p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Formule utilisée")}</h3>
+                <p class=format!("mb-4 {TXT}")>{t("Le changement d'ELO se calcule ainsi :")}</p>
                 <div class="mb-4 rounded border border-purple-500/30 bg-purple-900/20 p-4 text-center">
-                    <p class="font-mono text-lg font-semibold text-white"><strong>"Changement ELO = K × (Score réel - Score attendu)"</strong></p>
+                    <p class="font-mono text-lg font-semibold text-white"><strong>{t("Changement ELO = K × (Score réel - Score attendu)")}</strong></p>
                 </div>
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Score réel"</h3>
-                <p class=format!("mb-4 {TXT}")>"Votre score réel dépend de votre position finale :"</p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Score réel")}</h3>
+                <p class=format!("mb-4 {TXT}")>{t("Votre score réel dépend de votre position finale :")}</p>
                 <div class="mb-4 overflow-x-auto">
                     <table class="w-full border-collapse text-sm">
                         <thead>
                             <tr class="border-b border-slate-700">
-                                <th class="bg-slate-800/50 px-4 py-3 text-left font-semibold">"Position"</th>
-                                <th class="bg-slate-800/50 px-4 py-3 text-left font-semibold">"Score réel (exemple avec 4 joueurs)"</th>
+                                <th class="bg-slate-800/50 px-4 py-3 text-left font-semibold">{t("Position")}</th>
+                                <th class="bg-slate-800/50 px-4 py-3 text-left font-semibold">{t("Score réel (exemple avec 4 joueurs)")}</th>
                             </tr>
                         </thead>
                         <tbody>
                             {[("1er", "1.0 (100%)"), ("2ème", "0.75 (75%)"), ("3ème", "0.5 (50%)"), ("4ème", "0.25 (25%)")]
                                 .into_iter().map(|(p, s)| view! {
                                     <tr class="border-b border-slate-700/50 hover:bg-slate-800/30">
-                                        <td class="px-4 py-3">{p}</td><td class="px-4 py-3">{s}</td>
+                                        <td class="px-4 py-3">{t(p)}</td><td class="px-4 py-3">{s}</td>
                                     </tr>
                                 }).collect::<Vec<_>>()}
                         </tbody>
                     </table>
                 </div>
-                <p class=format!("mb-4 {TXT}")><strong>"Formule :"</strong>" "<code class="rounded bg-purple-900/20 px-2 py-1">"(Nombre de joueurs - Position + 1) / Nombre de joueurs"</code></p>
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Score attendu"</h3>
-                <p class=TXT>"Le score attendu est calculé en comparant votre ELO "<strong>"individuellement avec chaque adversaire"</strong>", puis en faisant la moyenne. Plus vos adversaires ont un ELO élevé, plus votre score attendu est bas."</p>
-                <p class=format!("mt-2 {TXT}")><strong>"Exemple :"</strong>" Si vous avez 1500 ELO et que tous vos adversaires ont 1600 ELO, votre score attendu sera d'environ 0.36 (36%), ce qui signifie que le système s'attend à ce que vous finissiez plutôt en bas du classement."</p>
+                <p class=format!("mb-4 {TXT}")><strong>{t("Formule :")}</strong>" "<code class="rounded bg-purple-900/20 px-2 py-1">{t("(Nombre de joueurs - Position + 1) / Nombre de joueurs")}</code></p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Score attendu")}</h3>
+                <p class=TXT>{t("Le score attendu est calculé en comparant votre ELO ")}<strong>{t("individuellement avec chaque adversaire")}</strong>{t(", puis en faisant la moyenne. Plus vos adversaires ont un ELO élevé, plus votre score attendu est bas.")}</p>
+                <p class=format!("mt-2 {TXT}")><strong>{t("Exemple :")}</strong>{t(" Si vous avez 1500 ELO et que tous vos adversaires ont 1600 ELO, votre score attendu sera d'environ 0.36 (36%), ce qui signifie que le système s'attend à ce que vous finissiez plutôt en bas du classement.")}</p>
             })}
 
             {elo_section("k-factor", "6. K-factor variable", view! {
-                <p class=format!("mb-4 {TXT}")>"Le K-factor détermine "<strong>"l'ampleur des changements"</strong>" d'ELO. Plus le K-factor est élevé, plus votre ELO peut changer rapidement."</p>
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Pendant le placement (10 premiers rounds)"</h3>
+                <p class=format!("mb-4 {TXT}")>{t("Le K-factor détermine ")}<strong>{t("l'ampleur des changements")}</strong>{t(" d'ELO. Plus le K-factor est élevé, plus votre ELO peut changer rapidement.")}</p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Pendant le placement (10 premiers rounds)")}</h3>
                 <ul class=format!("mb-4 ml-4 list-inside list-disc space-y-2 {TXT}")>
-                    <li><strong>"1er round"</strong>" : K = 50"</li>
-                    <li><strong>"2ème round"</strong>" : K = 48"</li>
-                    <li><strong>"3ème round"</strong>" : K = 45"</li>
+                    <li><strong>{t("1er round")}</strong>" : K = 50"</li>
+                    <li><strong>{t("2ème round")}</strong>" : K = 48"</li>
+                    <li><strong>{t("3ème round")}</strong>" : K = 45"</li>
                     <li>"..."</li>
-                    <li><strong>"10ème round"</strong>" : K = 32"</li>
+                    <li><strong>{t("10ème round")}</strong>" : K = 32"</li>
                 </ul>
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Après le placement"</h3>
-                <p class=format!("mb-4 {TXT}")>"Le K-factor dépend de votre ELO actuel :"</p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Après le placement")}</h3>
+                <p class=format!("mb-4 {TXT}")>{t("Le K-factor dépend de votre ELO actuel :")}</p>
                 <div class="mb-4 overflow-x-auto">
                     <table class="w-full border-collapse text-sm">
                         <thead>
                             <tr class="border-b border-slate-700">
-                                <th class="bg-slate-800/50 px-4 py-3 text-left font-semibold">"Votre ELO"</th>
+                                <th class="bg-slate-800/50 px-4 py-3 text-left font-semibold">{t("Votre ELO")}</th>
                                 <th class="bg-slate-800/50 px-4 py-3 text-left font-semibold">"K-factor"</th>
-                                <th class="bg-slate-800/50 px-4 py-3 text-left font-semibold">"Explication"</th>
+                                <th class="bg-slate-800/50 px-4 py-3 text-left font-semibold">{t("Explication")}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -506,17 +506,17 @@ pub fn DocsEloPage() -> impl IntoView {
                                 ("> 2000", "16", "Experts : changements très petits pour maintenir la précision"),
                             ].into_iter().map(|(e, k, x)| view! {
                                 <tr class="border-b border-slate-700/50 hover:bg-slate-800/30">
-                                    <td class="px-4 py-3">{e}</td><td class="px-4 py-3">{k}</td><td class="px-4 py-3">{x}</td>
+                                    <td class="px-4 py-3">{e}</td><td class="px-4 py-3">{k}</td><td class="px-4 py-3">{t(x)}</td>
                                 </tr>
                             }).collect::<Vec<_>>()}
                         </tbody>
                     </table>
                 </div>
-                <p class=TXT><strong>"Pourquoi cette différence ?"</strong>" Les joueurs expérimentés ont un niveau plus stable, donc leur ELO doit changer moins rapidement pour rester précis."</p>
+                <p class=TXT><strong>{t("Pourquoi cette différence ?")}</strong>{t(" Les joueurs expérimentés ont un niveau plus stable, donc leur ELO doit changer moins rapidement pour rester précis.")}</p>
             })}
 
             {elo_section("conditions", "7. Conditions pour compter l'ELO", view! {
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Votre ELO est mis à jour uniquement si :"</h3>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Votre ELO est mis à jour uniquement si :")}</h3>
                 <ul class=format!("mb-4 space-y-2 {TXT}")>
                     {[
                         "La room est publique (les rooms privées ne comptent pas)",
@@ -524,39 +524,39 @@ pub fn DocsEloPage() -> impl IntoView {
                         "Le round est terminé (vous avez participé jusqu'à la fin)",
                         "Vous avez joué au moins 80% des tracks du round",
                     ].into_iter().map(|i| view! {
-                        <li class="flex items-start gap-2"><span class="mt-1 text-green-400">"✅"</span><span><strong>{i}</strong></span></li>
+                        <li class="flex items-start gap-2"><span class="mt-1 text-green-400">"✅"</span><span><strong>{t(i)}</strong></span></li>
                     }).collect::<Vec<_>>()}
                 </ul>
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Votre ELO n'est PAS mis à jour si :"</h3>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Votre ELO n'est PAS mis à jour si :")}</h3>
                 <ul class=format!("mb-4 space-y-2 {TXT}")>
                     {["La room est privée", "Il y a moins de 3 joueurs", "Vous avez joué moins de 80% des tracks du round"]
                         .into_iter().map(|i| view! {
-                            <li class="flex items-start gap-2"><span class="mt-1 text-red-400">"❌"</span><span>{i}</span></li>
+                            <li class="flex items-start gap-2"><span class="mt-1 text-red-400">"❌"</span><span>{t(i)}</span></li>
                         }).collect::<Vec<_>>()}
                 </ul>
                 <div class="rounded border-l-4 border-blue-500 bg-blue-900/20 p-4">
-                    <p class="font-semibold text-white"><strong>"Important :"</strong>" Même si votre ELO n'est pas mis à jour, vos statistiques (score total, métriques de performance) sont toujours enregistrées pour l'affichage."</p>
+                    <p class="font-semibold text-white"><strong>{t("Important :")}</strong>{t(" Même si votre ELO n'est pas mis à jour, vos statistiques (score total, métriques de performance) sont toujours enregistrées pour l'affichage.")}</p>
                 </div>
             })}
 
             {elo_section("tracks-jouees", "8. Tracks jouées et calcul proportionnel", view! {
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Comment ça fonctionne ?"</h3>
-                <p class=format!("mb-4 {TXT}")>"Le système enregistre toutes les tracks que vous avez jouées dans un round, même si vous êtes arrivé en milieu de partie. Cela permet un calcul d'ELO plus juste et équitable."</p>
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Seuil minimum : 80% des tracks"</h3>
-                <p class=format!("mb-4 {TXT}")>"Pour que votre ELO soit compté, vous devez avoir joué "<strong>"au moins 80% des tracks"</strong>" du round. Par exemple :"</p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Comment ça fonctionne ?")}</h3>
+                <p class=format!("mb-4 {TXT}")>{t("Le système enregistre toutes les tracks que vous avez jouées dans un round, même si vous êtes arrivé en milieu de partie. Cela permet un calcul d'ELO plus juste et équitable.")}</p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Seuil minimum : 80% des tracks")}</h3>
+                <p class=format!("mb-4 {TXT}")>{t("Pour que votre ELO soit compté, vous devez avoir joué ")}<strong>{t("au moins 80% des tracks")}</strong>{t(" du round. Par exemple :")}</p>
                 <ul class=format!("mb-4 ml-4 list-inside list-disc space-y-2 {TXT}")>
-                    <li><strong>"Round de 10 tracks"</strong>" : Vous devez avoir joué au moins 8 tracks"</li>
-                    <li><strong>"Round de 5 tracks"</strong>" : Vous devez avoir joué au moins 4 tracks"</li>
+                    <li><strong>{t("Round de 10 tracks")}</strong>{t(" : Vous devez avoir joué au moins 8 tracks")}</li>
+                    <li><strong>{t("Round de 5 tracks")}</strong>{t(" : Vous devez avoir joué au moins 4 tracks")}</li>
                 </ul>
                 <div class="mb-4 rounded border-l-4 border-amber-500 bg-amber-900/20 p-4">
-                    <p class="font-semibold text-white"><strong>"Pourquoi 80% ?"</strong>" Ce seuil garantit que vous avez participé à une partie significative du round, ce qui rend le calcul d'ELO plus fiable."</p>
+                    <p class="font-semibold text-white"><strong>{t("Pourquoi 80% ?")}</strong>{t(" Ce seuil garantit que vous avez participé à une partie significative du round, ce qui rend le calcul d'ELO plus fiable.")}</p>
                 </div>
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Calcul proportionnel du changement d'ELO"</h3>
-                <p class=format!("mb-4 {TXT}")>"Si vous avez joué au moins 80% des tracks, votre changement d'ELO est "<strong>"proportionnel au nombre de tracks jouées"</strong>" :"</p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Calcul proportionnel du changement d'ELO")}</h3>
+                <p class=format!("mb-4 {TXT}")>{t("Si vous avez joué au moins 80% des tracks, votre changement d'ELO est ")}<strong>{t("proportionnel au nombre de tracks jouées")}</strong>" :"</p>
                 <div class="mb-4 rounded border border-purple-500/30 bg-purple-900/20 p-4">
-                    <p class="text-center font-mono text-lg font-semibold text-white"><strong>"Changement ELO final = Changement ELO calculé × (Tracks jouées / Tracks totales)"</strong></p>
+                    <p class="text-center font-mono text-lg font-semibold text-white"><strong>{t("Changement ELO final = Changement ELO calculé × (Tracks jouées / Tracks totales)")}</strong></p>
                 </div>
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Exemples concrets"</h3>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Exemples concrets")}</h3>
                 <div class="mb-4 space-y-4">
                     {[
                         ("Exemple 1 : Round complet (10/10 tracks)", "Vous avez joué toutes les 10 tracks d'un round. Le système calcule un changement d'ELO de +20 points.", "+20 points"),
@@ -565,70 +565,70 @@ pub fn DocsEloPage() -> impl IntoView {
                         ("Exemple 4 : Pas assez de tracks (7/10 tracks)", "Vous avez joué seulement 7 tracks sur 10 (70% < 80%).", "Votre ELO n'est pas compté pour ce round"),
                     ].into_iter().map(|(t_, d, r)| view! {
                         <div class="rounded-lg bg-slate-800/50 p-4">
-                            <p class="mb-2 font-semibold text-white">{t_}</p>
-                            <p class="text-sm text-neutral-300">{d}<br/><strong>"Résultat :"</strong>" "<strong>{r}</strong></p>
+                            <p class="mb-2 font-semibold text-white">{t(t_)}</p>
+                            <p class="text-sm text-neutral-300">{t(d)}<br/><strong>{t("Résultat :")}</strong>" "<strong>{t(r)}</strong></p>
                         </div>
                     }).collect::<Vec<_>>()}
                 </div>
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Avantages de ce système"</h3>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Avantages de ce système")}</h3>
                 <ul class=format!("mb-4 ml-4 list-inside list-disc space-y-2 {TXT}")>
-                    <li><strong>"Équité"</strong>" : Les joueurs arrivés en milieu de partie peuvent quand même faire évoluer leur ELO"</li>
-                    <li><strong>"Proportionnalité"</strong>" : Plus vous jouez de tracks, plus votre ELO peut évoluer"</li>
-                    <li><strong>"Fiabilité"</strong>" : Le seuil de 80% garantit que seuls les joueurs ayant participé significativement comptent"</li>
-                    <li><strong>"Flexibilité"</strong>" : Vous n'êtes pas pénalisé si vous rejoignez une partie en cours"</li>
+                    <li><strong>{t("Équité")}</strong>{t(" : Les joueurs arrivés en milieu de partie peuvent quand même faire évoluer leur ELO")}</li>
+                    <li><strong>{t("Proportionnalité")}</strong>{t(" : Plus vous jouez de tracks, plus votre ELO peut évoluer")}</li>
+                    <li><strong>{t("Fiabilité")}</strong>{t(" : Le seuil de 80% garantit que seuls les joueurs ayant participé significativement comptent")}</li>
+                    <li><strong>{t("Flexibilité")}</strong>{t(" : Vous n'êtes pas pénalisé si vous rejoignez une partie en cours")}</li>
                 </ul>
                 <div class="rounded border-l-4 border-green-500 bg-green-900/20 p-4">
-                    <p class="font-semibold text-white"><strong>"En résumé :"</strong>" Si vous rejoignez une partie en cours et jouez au moins 80% des tracks restantes, votre ELO évoluera proportionnellement au nombre de tracks que vous avez réellement jouées."</p>
+                    <p class="font-semibold text-white"><strong>{t("En résumé :")}</strong>{t(" Si vous rejoignez une partie en cours et jouez au moins 80% des tracks restantes, votre ELO évoluera proportionnellement au nombre de tracks que vous avez réellement jouées.")}</p>
                 </div>
             })}
 
             {elo_section("metriques", "9. Métriques de performance", view! {
-                <p class=format!("mb-4 {TXT}")>"En plus de l'ELO, le système enregistre plusieurs métriques pour chaque round :"</p>
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Temps moyen de réponse"</h3>
-                <p class=format!("mb-4 {TXT}")>"Le temps moyen (en secondes) que vous avez mis pour répondre correctement aux questions."</p>
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Nombre de réponses rapides"</h3>
-                <p class=format!("mb-4 {TXT}")>"Le nombre de réponses que vous avez données rapidement (dans les 18% de la durée de la piste). Ces réponses rapides vous donnent un bonus de score."</p>
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Nombre total de réponses"</h3>
-                <p class=format!("mb-4 {TXT}")>"Le nombre total de bonnes réponses que vous avez données dans le round."</p>
+                <p class=format!("mb-4 {TXT}")>{t("En plus de l'ELO, le système enregistre plusieurs métriques pour chaque round :")}</p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Temps moyen de réponse")}</h3>
+                <p class=format!("mb-4 {TXT}")>{t("Le temps moyen (en secondes) que vous avez mis pour répondre correctement aux questions.")}</p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Nombre de réponses rapides")}</h3>
+                <p class=format!("mb-4 {TXT}")>{t("Le nombre de réponses que vous avez données rapidement (dans les 18% de la durée de la piste). Ces réponses rapides vous donnent un bonus de score.")}</p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Nombre total de réponses")}</h3>
+                <p class=format!("mb-4 {TXT}")>{t("Le nombre total de bonnes réponses que vous avez données dans le round.")}</p>
                 <div class="rounded border-l-4 border-blue-500 bg-blue-900/20 p-4">
-                    <p class="font-semibold text-white"><strong>"Ces métriques sont toujours enregistrées"</strong>", même si l'ELO n'est pas compté (rooms privées, moins de 3 joueurs)."</p>
+                    <p class="font-semibold text-white"><strong>{t("Ces métriques sont toujours enregistrées")}</strong>{t(", même si l'ELO n'est pas compté (rooms privées, moins de 3 joueurs).")}</p>
                 </div>
             })}
 
             {elo_section("win-streak", "10. Win Streak", view! {
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Qu'est-ce que le Win Streak ?"</h3>
-                <p class=format!("mb-4 {TXT}")>"Le Win Streak (série de victoires) compte le nombre de "<strong>"victoires consécutives"</strong>" (finir 1er) dans une même room."</p>
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Comment ça fonctionne ?"</h3>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Qu'est-ce que le Win Streak ?")}</h3>
+                <p class=format!("mb-4 {TXT}")>{t("Le Win Streak (série de victoires) compte le nombre de ")}<strong>{t("victoires consécutives")}</strong>{t(" (finir 1er) dans une même room.")}</p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Comment ça fonctionne ?")}</h3>
                 <ul class=format!("mb-4 ml-4 list-inside list-disc space-y-2 {TXT}")>
-                    <li>"Si vous finissez "<strong>"1er"</strong>" dans un round, votre Win Streak est calculé"</li>
-                    <li>"Le système vérifie vos résultats dans les rounds précédents de la même room"</li>
-                    <li>"Il compte combien de fois vous avez fini 1er consécutivement"</li>
-                    <li>"Dès que vous ne finissez pas 1er, le streak est réinitialisé à 0"</li>
+                    <li>{t("Si vous finissez ")}<strong>{t("1er")}</strong>{t(" dans un round, votre Win Streak est calculé")}</li>
+                    <li>{t("Le système vérifie vos résultats dans les rounds précédents de la même room")}</li>
+                    <li>{t("Il compte combien de fois vous avez fini 1er consécutivement")}</li>
+                    <li>{t("Dès que vous ne finissez pas 1er, le streak est réinitialisé à 0")}</li>
                 </ul>
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Exemple"</h3>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Exemple")}</h3>
                 <ul class=format!("mb-4 ml-4 list-inside list-disc space-y-2 {TXT}")>
-                    <li><strong>"Round 1"</strong>" : Vous finissez 1er → Win Streak = 1"</li>
-                    <li><strong>"Round 2"</strong>" : Vous finissez 1er → Win Streak = 2"</li>
-                    <li><strong>"Round 3"</strong>" : Vous finissez 2ème → Win Streak = 0 (réinitialisé)"</li>
-                    <li><strong>"Round 4"</strong>" : Vous finissez 1er → Win Streak = 1 (nouveau streak)"</li>
+                    <li><strong>{t("Round 1")}</strong>{t(" : Vous finissez 1er → Win Streak = 1")}</li>
+                    <li><strong>{t("Round 2")}</strong>{t(" : Vous finissez 1er → Win Streak = 2")}</li>
+                    <li><strong>{t("Round 3")}</strong>{t(" : Vous finissez 2ème → Win Streak = 0 (réinitialisé)")}</li>
+                    <li><strong>{t("Round 4")}</strong>{t(" : Vous finissez 1er → Win Streak = 1 (nouveau streak)")}</li>
                 </ul>
                 <div class="rounded border-l-4 border-amber-500 bg-amber-900/20 p-4">
-                    <p class="font-semibold text-white"><strong>"Note :"</strong>" Le Win Streak est calculé "<strong>"par room"</strong>". Si vous changez de room, le streak recommence."</p>
+                    <p class="font-semibold text-white"><strong>{t("Note :")}</strong>{t(" Le Win Streak est calculé ")}<strong>{t("par room")}</strong>{t(". Si vous changez de room, le streak recommence.")}</p>
                 </div>
             })}
 
             {elo_section("protection", "11. Protection contre l'inflation/déflation", view! {
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Pourquoi cette protection ?"</h3>
-                <p class=format!("mb-4 {TXT}")>"Sans protection, l'ELO moyen de tous les joueurs pourrait augmenter (inflation) ou diminuer (déflation) au fil du temps, ce qui rendrait le système moins précis."</p>
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Protection locale"</h3>
-                <p class=format!("mb-2 {TXT}")>"Le système applique automatiquement des ajustements :"</p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Pourquoi cette protection ?")}</h3>
+                <p class=format!("mb-4 {TXT}")>{t("Sans protection, l'ELO moyen de tous les joueurs pourrait augmenter (inflation) ou diminuer (déflation) au fil du temps, ce qui rendrait le système moins précis.")}</p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Protection locale")}</h3>
+                <p class=format!("mb-2 {TXT}")>{t("Le système applique automatiquement des ajustements :")}</p>
                 <ul class=format!("mb-4 ml-4 list-inside list-disc space-y-2 {TXT}")>
-                    <li><strong>"Si votre ELO > 2000"</strong>" et que vous gagnez des points : le gain est réduit de 10%"</li>
-                    <li><strong>"Si votre ELO < 1000"</strong>" et que vous perdez des points : la perte est réduite de 10%"</li>
+                    <li><strong>{t("Si votre ELO > 2000")}</strong>{t(" et que vous gagnez des points : le gain est réduit de 10%")}</li>
+                    <li><strong>{t("Si votre ELO < 1000")}</strong>{t(" et que vous perdez des points : la perte est réduite de 10%")}</li>
                 </ul>
-                <p class=format!("mb-4 {TXT}")>"Cela empêche les ELO extrêmes de devenir trop volatils."</p>
-                <h3 class="mb-3 mt-6 text-xl font-semibold">"Protection globale"</h3>
-                <p class=TXT>"L'équipe peut exécuter périodiquement une commande pour ajuster tous les ELO et maintenir une moyenne stable autour de 1500. Ces ajustements sont rares et appliqués équitablement à tous les joueurs."</p>
+                <p class=format!("mb-4 {TXT}")>{t("Cela empêche les ELO extrêmes de devenir trop volatils.")}</p>
+                <h3 class="mb-3 mt-6 text-xl font-semibold">{t("Protection globale")}</h3>
+                <p class=TXT>{t("L'équipe peut exécuter périodiquement une commande pour ajuster tous les ELO et maintenir une moyenne stable autour de 1500. Ces ajustements sont rares et appliqués équitablement à tous les joueurs.")}</p>
             })}
 
             {elo_section("faq", "12. FAQ - Questions Fréquentes", view! {
@@ -654,15 +654,15 @@ pub fn DocsEloPage() -> impl IntoView {
                          "Vérifiez que le round était en room publique avec 3+ joueurs, votre position finale et l'ELO des adversaires, puis contactez l'équipe de modération avec les détails du round."),
                     ].into_iter().map(|(q, a)| view! {
                         <div class="rounded-lg bg-slate-800/50 p-5">
-                            <h3 class="mb-3 text-lg font-semibold text-blue-400">{q}</h3>
-                            <p class=TXT>{a}</p>
+                            <h3 class="mb-3 text-lg font-semibold text-blue-400">{t(q)}</h3>
+                            <p class=TXT>{t(a)}</p>
                         </div>
                     }).collect::<Vec<_>>()}
                 </div>
             })}
 
             <div class="rounded-2xl border border-green-700/50 bg-gradient-to-br from-green-900/20 to-green-800/20 p-6">
-                <h2 class="mb-4 text-2xl font-bold text-green-400">"Résumé des points clés"</h2>
+                <h2 class="mb-4 text-2xl font-bold text-green-400">{t("Résumé des points clés")}</h2>
                 <ul class="space-y-2 text-neutral-300">
                     {[
                         "ELO initial : 1500 points pour tous les nouveaux joueurs",
@@ -674,13 +674,13 @@ pub fn DocsEloPage() -> impl IntoView {
                         "Protection : Système anti-inflation/déflation pour maintenir la précision",
                         "Transparence : Tous vos résultats sont enregistrés et consultables",
                     ].into_iter().map(|i| view! {
-                        <li class="flex items-start gap-2"><span class="mt-1 text-green-400">"✅"</span><span><strong>{i}</strong></span></li>
+                        <li class="flex items-start gap-2"><span class="mt-1 text-green-400">"✅"</span><span><strong>{t(i)}</strong></span></li>
                     }).collect::<Vec<_>>()}
                 </ul>
             </div>
 
             <div class="pt-4 text-center">
-                <A href="/docs" attr:class="text-blue-400 transition-colors hover:text-blue-300">" ← Retour à la documentation "</A>
+                <A href="/docs" attr:class="text-blue-400 transition-colors hover:text-blue-300">" ← "{t("Retour à la documentation")}" "</A>
             </div>
         </div>
     }
@@ -712,28 +712,28 @@ pub fn DocsGlossaryPage() -> impl IntoView {
     view! {
         <div class="mx-auto max-w-5xl space-y-8 px-4 py-8">
             <div class="space-y-4 text-center">
-                <h1 class="text-4xl font-bold text-white">"Glossaire Blind'All Music"</h1>
-                <p class="text-lg text-neutral-400">"Définitions claires et précises des termes utilisés sur la plateforme"</p>
+                <h1 class="text-4xl font-bold text-white">{t("Glossaire Blind'All Music")}</h1>
+                <p class="text-lg text-neutral-400">{t("Définitions claires et précises des termes utilisés sur la plateforme")}</p>
             </div>
 
             {section(view! {
-                <h2 class="mb-4 text-2xl font-bold text-white">"À propos de ce glossaire"</h2>
-                <p class=format!("mb-4 {TXT}")>"Ce glossaire définit de manière claire et assertive tous les termes techniques et concepts utilisés sur Blind'All Music. Chaque définition est structurée pour être facilement compréhensible et extractible par les moteurs de recherche génératifs."</p>
-                <p class=TXT><strong>"Blind'All Music est une plateforme de quiz musicaux multijoueurs en ligne"</strong>" où les joueurs s'affrontent dans des blind tests organisés en rooms (salles de jeu). La plateforme utilise trois systèmes de progression distincts : les scores (activité), les levels (engagement) et l'ELO (compétence)."</p>
+                <h2 class="mb-4 text-2xl font-bold text-white">{t("À propos de ce glossaire")}</h2>
+                <p class=format!("mb-4 {TXT}")>{t("Ce glossaire définit de manière claire et assertive tous les termes techniques et concepts utilisés sur Blind'All Music. Chaque définition est structurée pour être facilement compréhensible et extractible par les moteurs de recherche génératifs.")}</p>
+                <p class=TXT><strong>{t("Blind'All Music est une plateforme de quiz musicaux multijoueurs en ligne")}</strong>{t(" où les joueurs s'affrontent dans des blind tests organisés en rooms (salles de jeu). La plateforme utilise trois systèmes de progression distincts : les scores (activité), les levels (engagement) et l'ELO (compétence).")}</p>
             })}
 
             <div class="space-y-6">
                 {definitions.iter().map(|(term, def, ctx, related)| view! {
                     <div class=CARD>
-                        <h2 class="mb-3 text-2xl font-bold text-white">{*term}</h2>
-                        <p class="mb-3 text-lg text-neutral-300">{*def}</p>
+                        <h2 class="mb-3 text-2xl font-bold text-white">{t(*term)}</h2>
+                        <p class="mb-3 text-lg text-neutral-300">{t(*def)}</p>
                         <div class="mb-3 rounded-lg bg-slate-800/50 p-4">
-                            <p class="text-sm text-neutral-300"><strong class="text-white">"Contexte Blind'All Music :"</strong>" "{*ctx}</p>
+                            <p class="text-sm text-neutral-300"><strong class="text-white">{t("Contexte Blind'All Music :")}</strong>" "{t(*ctx)}</p>
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
-                            <span class="text-xs text-neutral-400">"Voir aussi :"</span>
+                            <span class="text-xs text-neutral-400">{t("Voir aussi :")}</span>
                             {related.iter().map(|r| view! {
-                                <span class="rounded bg-slate-700/50 px-2 py-1 text-xs text-neutral-300">{*r}</span>
+                                <span class="rounded bg-slate-700/50 px-2 py-1 text-xs text-neutral-300">{t(*r)}</span>
                             }).collect::<Vec<_>>()}
                         </div>
                     </div>
@@ -741,18 +741,18 @@ pub fn DocsGlossaryPage() -> impl IntoView {
             </div>
 
             <div class="rounded-2xl border border-indigo-700/50 bg-gradient-to-br from-indigo-900/20 to-indigo-800/20 p-6">
-                <h2 class="mb-4 text-2xl font-bold text-indigo-400">"Facts clés sur Blind'All Music"</h2>
+                <h2 class="mb-4 text-2xl font-bold text-indigo-400">{t("Facts clés sur Blind'All Music")}</h2>
                 <ul class="space-y-3 text-neutral-300">
-                    <li><strong>"Blind'All Music se joue en ligne"</strong>" : Tous les quiz musicaux sont accessibles directement dans le navigateur, sans rien installer."</li>
-                    <li><strong>"Multijoueur en temps réel"</strong>" : Les parties se déroulent en direct avec plusieurs joueurs simultanés."</li>
-                    <li><strong>"Trois systèmes de progression"</strong>" : Score (activité), Level (engagement), ELO (compétence)."</li>
-                    <li><strong>"Rooms publiques et privées"</strong>" : Les rooms publiques sont officielles et gérées par Blind'All Music. Les rooms privées sont créées par les joueurs et peuvent être protégées par un mot de passe ou non."</li>
-                    <li><strong>"Plusieurs fournisseurs musicaux"</strong>" : Deezer, YouTube, Apple Music, Audius et plus encore."</li>
+                    <li><strong>{t("Blind'All Music se joue en ligne")}</strong>{t(" : Tous les quiz musicaux sont accessibles directement dans le navigateur, sans rien installer.")}</li>
+                    <li><strong>{t("Multijoueur en temps réel")}</strong>{t(" : Les parties se déroulent en direct avec plusieurs joueurs simultanés.")}</li>
+                    <li><strong>{t("Trois systèmes de progression")}</strong>{t(" : Score (activité), Level (engagement), ELO (compétence).")}</li>
+                    <li><strong>{t("Rooms publiques et privées")}</strong>{t(" : Les rooms publiques sont officielles et gérées par Blind'All Music. Les rooms privées sont créées par les joueurs et peuvent être protégées par un mot de passe ou non.")}</li>
+                    <li><strong>{t("Plusieurs fournisseurs musicaux")}</strong>{t(" : Deezer, YouTube, Apple Music, Audius et plus encore.")}</li>
                 </ul>
             </div>
 
             <div class="pt-4 text-center">
-                <A href="/docs" attr:class="text-blue-400 transition-colors hover:text-blue-300">" ← Retour à la documentation "</A>
+                <A href="/docs" attr:class="text-blue-400 transition-colors hover:text-blue-300">" ← "{t("Retour à la documentation")}" "</A>
             </div>
         </div>
     }
@@ -784,18 +784,18 @@ pub fn DocsHowtoPage() -> impl IntoView {
     view! {
         <div class="mx-auto max-w-5xl space-y-8 px-4 py-8">
             <div class="space-y-4 text-center">
-                <h1 class="text-4xl font-bold text-white">"Comment jouer à un blind test sur Blind'All Music"</h1>
-                <p class="text-lg text-neutral-400">"Guide étape par étape pour débuter sur la plateforme de quiz musicaux multijoueurs"</p>
+                <h1 class="text-4xl font-bold text-white">{t("Comment jouer à un blind test sur Blind'All Music")}</h1>
+                <p class="text-lg text-neutral-400">{t("Guide étape par étape pour débuter sur la plateforme de quiz musicaux multijoueurs")}</p>
             </div>
 
             {section(view! {
-                <h2 class="mb-4 text-2xl font-bold text-white">"À propos de ce guide"</h2>
-                <p class=format!("mb-4 {TXT}")>"Ce guide explique comment jouer à un blind test sur Blind'All Music, étape par étape. "<strong>"Blind'All Music est une plateforme de quiz musicaux multijoueurs en ligne"</strong>" où vous pouvez tester vos connaissances musicales en temps réel avec d'autres joueurs."</p>
+                <h2 class="mb-4 text-2xl font-bold text-white">{t("À propos de ce guide")}</h2>
+                <p class=format!("mb-4 {TXT}")>{t("Ce guide explique comment jouer à un blind test sur Blind'All Music, étape par étape. ")}<strong>{t("Blind'All Music est une plateforme de quiz musicaux multijoueurs en ligne")}</strong>{t(" où vous pouvez tester vos connaissances musicales en temps réel avec d'autres joueurs.")}</p>
                 <div class="rounded-lg bg-slate-800/50 p-4">
                     <p class="text-sm text-neutral-300">
-                        <strong class="text-white">"Temps estimé :"</strong>" 5 minutes pour compléter votre première partie"<br/>
-                        <strong class="text-white">"Plateforme :"</strong>" Navigateur web, ordinateur ou mobile"<br/>
-                        <strong class="text-white">"Prérequis :"</strong>" Compte Blind'All Music, connexion Internet, haut-parleurs ou casque audio"
+                        <strong class="text-white">{t("Temps estimé :")}</strong>{t(" 5 minutes pour compléter votre première partie")}<br/>
+                        <strong class="text-white">{t("Plateforme :")}</strong>{t(" Navigateur web, ordinateur ou mobile")}<br/>
+                        <strong class="text-white">{t("Prérequis :")}</strong>{t(" Compte Blind'All Music, connexion Internet, haut-parleurs ou casque audio")}
                     </p>
                 </div>
             })}
@@ -808,12 +808,12 @@ pub fn DocsHowtoPage() -> impl IntoView {
                                 <span class="text-xl font-bold text-blue-400">{i + 1}</span>
                             </div>
                             <div class="flex-1">
-                                <h2 class="mb-3 text-2xl font-bold text-white">{*title}</h2>
-                                <p class="mb-4 text-lg text-neutral-300">{*desc}</p>
+                                <h2 class="mb-3 text-2xl font-bold text-white">{t(*title)}</h2>
+                                <p class="mb-4 text-lg text-neutral-300">{t(*desc)}</p>
                                 <ul class="space-y-2">
                                     {details.iter().map(|d| view! {
                                         <li class="flex items-start gap-2 text-sm text-neutral-300">
-                                            <span class="mt-1 text-blue-400">"•"</span><span>{*d}</span>
+                                            <span class="mt-1 text-blue-400">"•"</span><span>{t(*d)}</span>
                                         </li>
                                     }).collect::<Vec<_>>()}
                                 </ul>
@@ -824,17 +824,17 @@ pub fn DocsHowtoPage() -> impl IntoView {
             </div>
 
             <div class="rounded-2xl border border-green-700/50 bg-gradient-to-br from-green-900/20 to-green-800/20 p-6">
-                <h2 class="mb-4 text-2xl font-bold text-green-400">"Conseils pour améliorer votre score"</h2>
+                <h2 class="mb-4 text-2xl font-bold text-green-400">{t("Conseils pour améliorer votre score")}</h2>
                 <ul class="space-y-3 text-neutral-300">
-                    <li><strong>"Répondez rapidement"</strong>" : Plus vous répondez vite, plus vous gagnez de points. La vitesse est un facteur clé dans le calcul du score."</li>
-                    <li><strong>"Soyez précis"</strong>" : Indiquez à la fois le titre et l'artiste pour maximiser vos points. Les réponses partielles rapportent moins de points."</li>
-                    <li><strong>"Jouez régulièrement"</strong>" : Plus vous jouez, plus vous progressez dans les levels et l'ELO. Les rooms publiques comptent pour votre progression."</li>
-                    <li><strong>"Créez vos propres rooms"</strong>" : Créer des rooms et des playlists vous rapporte de l'XP et améliore votre level."</li>
+                    <li><strong>{t("Répondez rapidement")}</strong>{t(" : Plus vous répondez vite, plus vous gagnez de points. La vitesse est un facteur clé dans le calcul du score.")}</li>
+                    <li><strong>{t("Soyez précis")}</strong>{t(" : Indiquez à la fois le titre et l'artiste pour maximiser vos points. Les réponses partielles rapportent moins de points.")}</li>
+                    <li><strong>{t("Jouez régulièrement")}</strong>{t(" : Plus vous jouez, plus vous progressez dans les levels et l'ELO. Les rooms publiques comptent pour votre progression.")}</li>
+                    <li><strong>{t("Créez vos propres rooms")}</strong>{t(" : Créer des rooms et des playlists vous rapporte de l'XP et améliore votre level.")}</li>
                 </ul>
             </div>
 
             {section(view! {
-                <h2 class=H2>"Pour aller plus loin"</h2>
+                <h2 class=H2>{t("Pour aller plus loin")}</h2>
                 <div class="grid gap-4 md:grid-cols-2">
                     {link_card("/docs", "Documentation complète", "Tout savoir sur les systèmes de progression", "blue")}
                     {link_card("/docs/glossary", "Glossaire", "Définitions des termes techniques", "green")}
@@ -842,7 +842,7 @@ pub fn DocsHowtoPage() -> impl IntoView {
             })}
 
             <div class="pt-4 text-center">
-                <A href="/docs" attr:class="text-blue-400 transition-colors hover:text-blue-300">" ← Retour à la documentation "</A>
+                <A href="/docs" attr:class="text-blue-400 transition-colors hover:text-blue-300">" ← "{t("Retour à la documentation")}" "</A>
             </div>
         </div>
     }
@@ -858,27 +858,27 @@ pub fn DocsCreateContentPage() -> impl IntoView {
     view! {
         <div class="mx-auto max-w-5xl space-y-8 px-4 py-8">
             <div class="space-y-4 text-center">
-                <h1 class="text-4xl font-bold text-white">"Créer des rooms et playlists"</h1>
-                <p class="text-lg text-neutral-400">"Guide complet pour créer et configurer vos contenus sur Blind'All Music"</p>
+                <h1 class="text-4xl font-bold text-white">{t("Créer des rooms et playlists")}</h1>
+                <p class="text-lg text-neutral-400">{t("Guide complet pour créer et configurer vos contenus sur Blind'All Music")}</p>
             </div>
 
             {section(view! {
-                <h2 class="mb-4 text-2xl font-bold text-white">"Comprendre la différence entre rooms et playlists"</h2>
+                <h2 class="mb-4 text-2xl font-bold text-white">{t("Comprendre la différence entre rooms et playlists")}</h2>
                 <div class=format!("space-y-4 {TXT}")>
-                    <p><strong>"Une playlist est une collection de tracks (morceaux de musique)"</strong>" organisés par thème, genre ou catégorie. Les playlists sont réutilisables et peuvent être attachées à plusieurs rooms."</p>
-                    <p><strong>"Une room est un espace de jeu"</strong>" qui utilise une ou plusieurs playlists pour organiser des parties de blind test. La room définit les règles de jeu (durée des tracks, nombre de tracks par round, etc.)."</p>
+                    <p><strong>{t("Une playlist est une collection de tracks (morceaux de musique)")}</strong>{t(" organisés par thème, genre ou catégorie. Les playlists sont réutilisables et peuvent être attachées à plusieurs rooms.")}</p>
+                    <p><strong>{t("Une room est un espace de jeu")}</strong>{t(" qui utilise une ou plusieurs playlists pour organiser des parties de blind test. La room définit les règles de jeu (durée des tracks, nombre de tracks par round, etc.).")}</p>
                     <div class="mt-4 rounded-lg bg-slate-800/50 p-4">
-                        <p class="text-sm text-neutral-300"><strong class="text-white">"Relation :"</strong>" Une room peut utiliser plusieurs playlists, et une playlist peut être utilisée par plusieurs rooms. Les tracks appartiennent à une playlist unique, mais cette playlist peut être partagée entre plusieurs rooms."</p>
+                        <p class="text-sm text-neutral-300"><strong class="text-white">{t("Relation :")}</strong>{t(" Une room peut utiliser plusieurs playlists, et une playlist peut être utilisée par plusieurs rooms. Les tracks appartiennent à une playlist unique, mais cette playlist peut être partagée entre plusieurs rooms.")}</p>
                     </div>
                 </div>
             })}
 
             <div class="rounded-2xl border border-blue-700/50 bg-gradient-to-br from-blue-900/20 to-blue-800/20 p-6">
-                <h2 class="mb-6 text-3xl font-bold text-blue-400">"Créer une playlist"</h2>
+                <h2 class="mb-6 text-3xl font-bold text-blue-400">{t("Créer une playlist")}</h2>
                 <div class="space-y-6">
                     <div class="rounded-lg bg-slate-800/50 p-5">
-                        <h3 class="mb-3 text-xl font-bold text-white">"Étape 1 : Créer la playlist"</h3>
-                        <p class=format!("mb-4 {TXT}")>"Pour créer une playlist, vous devez fournir :"</p>
+                        <h3 class="mb-3 text-xl font-bold text-white">{t("Étape 1 : Créer la playlist")}</h3>
+                        <p class=format!("mb-4 {TXT}")>{t("Pour créer une playlist, vous devez fournir :")}</p>
                         <ul class=format!("space-y-2 {TXT}")>
                             {bullet_list(&[
                                 "Nom : Maximum 50 caractères, doit être unique sur la plateforme",
@@ -886,55 +886,55 @@ pub fn DocsCreateContentPage() -> impl IntoView {
                                 "Visibilité : Vous pouvez rendre la playlist publique (accessible à tous) ou privée (uniquement pour vous)",
                             ])}
                         </ul>
-                        <p class="mt-4 text-sm text-neutral-300"><strong>"Note :"</strong>" Vous êtes automatiquement ajouté comme modérateur de votre playlist. Vous pouvez ajouter d'autres modérateurs pour gérer la playlist ensemble."</p>
+                        <p class="mt-4 text-sm text-neutral-300"><strong>{t("Note :")}</strong>{t(" Vous êtes automatiquement ajouté comme modérateur de votre playlist. Vous pouvez ajouter d'autres modérateurs pour gérer la playlist ensemble.")}</p>
                     </div>
                     <div class="rounded-lg bg-slate-800/50 p-5">
-                        <h3 class="mb-3 text-xl font-bold text-white">"Étape 2 : Ajouter des tracks à la playlist"</h3>
-                        <p class=format!("mb-4 {TXT}")>"Une fois la playlist créée, vous pouvez y ajouter des morceaux de musique. Pour cela :"</p>
+                        <h3 class="mb-3 text-xl font-bold text-white">{t("Étape 2 : Ajouter des tracks à la playlist")}</h3>
+                        <p class=format!("mb-4 {TXT}")>{t("Une fois la playlist créée, vous pouvez y ajouter des morceaux de musique. Pour cela :")}</p>
                         <ol class=format!("mb-4 ml-4 list-inside list-decimal space-y-3 {TXT}")>
-                            <li><strong>"Utilisez la barre de recherche"</strong>" dans la section \"Rechercher des morceaux\" de votre playlist. Tapez le nom d'une chanson ou d'un artiste pour rechercher sur YouTube, Apple Music, Deezer et Blind'All Music."</li>
-                            <li><strong>"Parcourez les résultats"</strong>" qui affichent le nom de l'artiste, le titre de la chanson, l'album et la pochette. Vous pouvez écouter un extrait avant d'ajouter le morceau."</li>
-                            <li><strong>"Cliquez sur \"Ajouter\""</strong>" pour inclure le morceau dans votre playlist."</li>
-                            <li><strong>"Importez depuis une autre plateforme"</strong>" : Vous pouvez également importer une playlist complète depuis Deezer si vous avez le lien."</li>
-                            <li><strong>"Uploadez vos propres fichiers"</strong>" : Pour les morceaux non disponibles sur les plateformes, vous pouvez uploader vos propres fichiers audio."</li>
+                            <li><strong>{t("Utilisez la barre de recherche")}</strong>{t(" dans la section \"Rechercher des morceaux\" de votre playlist. Tapez le nom d'une chanson ou d'un artiste pour rechercher sur YouTube, Apple Music, Deezer et Blind'All Music.")}</li>
+                            <li><strong>{t("Parcourez les résultats")}</strong>{t(" qui affichent le nom de l'artiste, le titre de la chanson, l'album et la pochette. Vous pouvez écouter un extrait avant d'ajouter le morceau.")}</li>
+                            <li><strong>{t("Cliquez sur \"Ajouter\"")}</strong>{t(" pour inclure le morceau dans votre playlist.")}</li>
+                            <li><strong>{t("Importez depuis une autre plateforme")}</strong>{t(" : Vous pouvez également importer une playlist complète depuis Deezer si vous avez le lien.")}</li>
+                            <li><strong>{t("Uploadez vos propres fichiers")}</strong>{t(" : Pour les morceaux non disponibles sur les plateformes, vous pouvez uploader vos propres fichiers audio.")}</li>
                         </ol>
                         <div class="mt-4 rounded-lg bg-blue-900/30 p-4">
-                            <p class="text-sm text-neutral-300"><strong class="text-blue-400">"Astuce :"</strong>" Vous pouvez filtrer les résultats par fournisseur musical (YouTube, Apple Music, Deezer, Blind'All Music) pour trouver plus facilement ce que vous cherchez."</p>
+                            <p class="text-sm text-neutral-300"><strong class="text-blue-400">{t("Astuce :")}</strong>{t(" Vous pouvez filtrer les résultats par fournisseur musical (YouTube, Apple Music, Deezer, Blind'All Music) pour trouver plus facilement ce que vous cherchez.")}</p>
                         </div>
                     </div>
                     <div class="rounded-lg bg-slate-800/50 p-5">
-                        <h3 class="mb-3 text-xl font-bold text-white">"Étape 3 : Configurer les réponses et les points"</h3>
-                        <p class=format!("mb-4 {TXT}")>"Après avoir ajouté un morceau à votre playlist, vous devez configurer les réponses que les joueurs devront trouver. Chaque morceau doit avoir au minimum deux réponses :"</p>
+                        <h3 class="mb-3 text-xl font-bold text-white">{t("Étape 3 : Configurer les réponses et les points")}</h3>
+                        <p class=format!("mb-4 {TXT}")>{t("Après avoir ajouté un morceau à votre playlist, vous devez configurer les réponses que les joueurs devront trouver. Chaque morceau doit avoir au minimum deux réponses :")}</p>
                         <ul class=format!("mb-4 space-y-3 {TXT}")>
                             <li class="flex items-start gap-2"><span class="mt-1 text-blue-400">"•"</span>
-                                <div><span><strong>"Réponse Artiste"</strong>" : Le nom de l'artiste ou du groupe"</span>
-                                    <p class="mt-1 text-sm text-neutral-400">"Cette réponse est obligatoire pour tous les morceaux."</p></div></li>
+                                <div><span><strong>{t("Réponse Artiste")}</strong>{t(" : Le nom de l'artiste ou du groupe")}</span>
+                                    <p class="mt-1 text-sm text-neutral-400">{t("Cette réponse est obligatoire pour tous les morceaux.")}</p></div></li>
                             <li class="flex items-start gap-2"><span class="mt-1 text-blue-400">"•"</span>
-                                <div><span><strong>"Réponse Titre"</strong>" : Le titre de la chanson"</span>
-                                    <p class="mt-1 text-sm text-neutral-400">"Cette réponse est obligatoire pour tous les morceaux."</p></div></li>
+                                <div><span><strong>{t("Réponse Titre")}</strong>{t(" : Le titre de la chanson")}</span>
+                                    <p class="mt-1 text-sm text-neutral-400">{t("Cette réponse est obligatoire pour tous les morceaux.")}</p></div></li>
                         </ul>
-                        <p class=format!("mb-4 {TXT}")><strong>"Pour ajouter une réponse :"</strong></p>
+                        <p class=format!("mb-4 {TXT}")><strong>{t("Pour ajouter une réponse :")}</strong></p>
                         <ol class=format!("mb-4 ml-4 list-inside list-decimal space-y-2 {TXT}")>
-                            <li>"Cliquez sur le bouton "<strong>"\"Ajouter une réponse\""</strong>" sous le morceau dans votre playlist"</li>
-                            <li>"Sélectionnez le "<strong>"type de réponse"</strong>" (Artiste, Titre, ou autre type disponible)"</li>
-                            <li>"Entrez la "<strong>"réponse exacte"</strong>" que les joueurs devront trouver"</li>
-                            <li>"Définissez le "<strong>"nombre de points"</strong>" attribués pour cette réponse (entre 0 et 99)"</li>
-                            <li>"Cliquez sur "<strong>"\"Enregistrer\""</strong>" pour valider"</li>
+                            <li>{t("Cliquez sur le bouton ")}<strong>{t("\"Ajouter une réponse\"")}</strong>{t(" sous le morceau dans votre playlist")}</li>
+                            <li>{t("Sélectionnez le ")}<strong>{t("type de réponse")}</strong>{t(" (Artiste, Titre, ou autre type disponible)")}</li>
+                            <li>{t("Entrez la ")}<strong>{t("réponse exacte")}</strong>{t(" que les joueurs devront trouver")}</li>
+                            <li>{t("Définissez le ")}<strong>{t("nombre de points")}</strong>{t(" attribués pour cette réponse (entre 0 et 99)")}</li>
+                            <li>{t("Cliquez sur ")}<strong>{t("\"Enregistrer\"")}</strong>{t(" pour valider")}</li>
                         </ol>
-                        <p class=format!("mb-4 {TXT}")><strong>"Gestion des réponses :"</strong>" Vous pouvez modifier ou supprimer une réponse existante en cliquant dessus. Les réponses s'affichent sous chaque morceau avec leur type et leur nombre de points."</p>
+                        <p class=format!("mb-4 {TXT}")><strong>{t("Gestion des réponses :")}</strong>{t(" Vous pouvez modifier ou supprimer une réponse existante en cliquant dessus. Les réponses s'affichent sous chaque morceau avec leur type et leur nombre de points.")}</p>
                         <div class="mt-4 rounded-lg bg-blue-900/30 p-4">
-                            <p class="text-sm text-neutral-300"><strong class="text-blue-400">"Système de points :"</strong>" Le score final d'un joueur pour une réponse = score de base de la réponse + bonus ordre (0.5 points si dans le top 3) + bonus vitesse (0.5 points si réponse donnée dans les 18% de la durée du morceau)."</p>
+                            <p class="text-sm text-neutral-300"><strong class="text-blue-400">{t("Système de points :")}</strong>{t(" Le score final d'un joueur pour une réponse = score de base de la réponse + bonus ordre (0.5 points si dans le top 3) + bonus vitesse (0.5 points si réponse donnée dans les 18% de la durée du morceau).")}</p>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div class="rounded-2xl border border-purple-700/50 bg-gradient-to-br from-purple-900/20 to-purple-800/20 p-6">
-                <h2 class="mb-6 text-3xl font-bold text-purple-400">"Créer une room"</h2>
+                <h2 class="mb-6 text-3xl font-bold text-purple-400">{t("Créer une room")}</h2>
                 <div class="space-y-6">
                     <div class="rounded-lg bg-slate-800/50 p-5">
-                        <h3 class="mb-3 text-xl font-bold text-white">"Étape 1 : Créer la room"</h3>
-                        <p class=format!("mb-4 {TXT}")>"Pour créer une room, vous devez fournir :"</p>
+                        <h3 class="mb-3 text-xl font-bold text-white">{t("Étape 1 : Créer la room")}</h3>
+                        <p class=format!("mb-4 {TXT}")>{t("Pour créer une room, vous devez fournir :")}</p>
                         <ul class=format!("space-y-2 {TXT}")>
                             {bullet_list(&[
                                 "Nom : Maximum 25 caractères, doit être unique sur la plateforme",
@@ -942,11 +942,11 @@ pub fn DocsCreateContentPage() -> impl IntoView {
                                 "Description : Optionnelle, permet de décrire le thème ou les règles spéciales de la room",
                             ])}
                         </ul>
-                        <p class="mt-4 text-sm text-neutral-300"><strong>"Note :"</strong>" Vous êtes automatiquement ajouté comme modérateur de votre room. Vous pouvez ajouter d'autres modérateurs pour gérer la room ensemble."</p>
+                        <p class="mt-4 text-sm text-neutral-300"><strong>{t("Note :")}</strong>{t(" Vous êtes automatiquement ajouté comme modérateur de votre room. Vous pouvez ajouter d'autres modérateurs pour gérer la room ensemble.")}</p>
                     </div>
                     <div class="rounded-lg bg-slate-800/50 p-5">
-                        <h3 class="mb-3 text-xl font-bold text-white">"Étape 2 : Attacher des playlists à la room"</h3>
-                        <p class=format!("mb-4 {TXT}")>"Une room peut utiliser plusieurs playlists. Les tracks de toutes les playlists attachées seront disponibles pour les parties."</p>
+                        <h3 class="mb-3 text-xl font-bold text-white">{t("Étape 2 : Attacher des playlists à la room")}</h3>
+                        <p class=format!("mb-4 {TXT}")>{t("Une room peut utiliser plusieurs playlists. Les tracks de toutes les playlists attachées seront disponibles pour les parties.")}</p>
                         <ul class=format!("space-y-2 {TXT}")>
                             {bullet_list(&[
                                 "Vous pouvez attacher vos propres playlists (publiques ou privées)",
@@ -955,12 +955,12 @@ pub fn DocsCreateContentPage() -> impl IntoView {
                             ])}
                         </ul>
                         <div class="mt-4 rounded-lg bg-purple-900/30 p-4">
-                            <p class="text-sm text-neutral-300"><strong class="text-purple-400">"Important :"</strong>" Une room sans playlist attachée ne peut pas démarrer de partie car il n'y a pas de tracks disponibles."</p>
+                            <p class="text-sm text-neutral-300"><strong class="text-purple-400">{t("Important :")}</strong>{t(" Une room sans playlist attachée ne peut pas démarrer de partie car il n'y a pas de tracks disponibles.")}</p>
                         </div>
                     </div>
                     <div class="rounded-lg bg-slate-800/50 p-5">
-                        <h3 class="mb-3 text-xl font-bold text-white">"Étape 3 : Configurer les options de jeu"</h3>
-                        <p class=format!("mb-4 {TXT}")>"Les options de jeu déterminent comment se déroulent les parties dans votre room :"</p>
+                        <h3 class="mb-3 text-xl font-bold text-white">{t("Étape 3 : Configurer les options de jeu")}</h3>
+                        <p class=format!("mb-4 {TXT}")>{t("Les options de jeu déterminent comment se déroulent les parties dans votre room :")}</p>
                         <div class="space-y-4">
                             {[
                                 ("Tracks par round", "Nombre de tracks joués dans chaque round.", "Minimum : 1 track · Maximum : 50 tracks · Valeur par défaut : 15 tracks"),
@@ -969,18 +969,18 @@ pub fn DocsCreateContentPage() -> impl IntoView {
                                 ("Pause entre les rounds", "Temps d'attente en secondes entre la fin d'un round et le début du suivant.", "Minimum : 0 secondes · Maximum : 60 secondes · Valeur par défaut : 10 secondes"),
                             ].into_iter().map(|(h, d, v)| view! {
                                 <div class="border-l-4 border-purple-500 pl-4">
-                                    <h4 class="mb-2 font-bold text-white">{h}</h4>
-                                    <p class="mb-2 text-sm text-neutral-300">{d}</p>
-                                    <p class="text-sm text-neutral-300">"• "{v}</p>
+                                    <h4 class="mb-2 font-bold text-white">{t(h)}</h4>
+                                    <p class="mb-2 text-sm text-neutral-300">{t(d)}</p>
+                                    <p class="text-sm text-neutral-300">"• "{t(v)}</p>
                                 </div>
                             }).collect::<Vec<_>>()}
                             <div class="border-l-4 border-purple-500 pl-4">
-                                <h4 class="mb-2 font-bold text-white">"Options booléennes"</h4>
+                                <h4 class="mb-2 font-bold text-white">{t("Options booléennes")}</h4>
                                 <ul class="space-y-2 text-sm text-neutral-300">
-                                    <li><strong>"Publique"</strong>" : Si activée, la room est accessible à tous. Si désactivée, la room est privée et nécessite un mot de passe."</li>
-                                    <li><strong>"Autostart"</strong>" : Si activée, les rounds démarrent automatiquement après la pause entre rounds. Si désactivée, un modérateur doit démarrer manuellement chaque round."</li>
-                                    <li><strong>"Aléatoire"</strong>" : Si activée, les tracks sont joués dans un ordre aléatoire. Si désactivée, les tracks sont joués dans l'ordre de la playlist."</li>
-                                    <li><strong>"Chat actif"</strong>" : Si activée, les joueurs peuvent utiliser le chat pendant les parties. Si désactivée, le chat est désactivé."</li>
+                                    <li><strong>{t("Publique")}</strong>{t(" : Si activée, la room est accessible à tous. Si désactivée, la room est privée et nécessite un mot de passe.")}</li>
+                                    <li><strong>{t("Autostart")}</strong>{t(" : Si activée, les rounds démarrent automatiquement après la pause entre rounds. Si désactivée, un modérateur doit démarrer manuellement chaque round.")}</li>
+                                    <li><strong>{t("Aléatoire")}</strong>{t(" : Si activée, les tracks sont joués dans un ordre aléatoire. Si désactivée, les tracks sont joués dans l'ordre de la playlist.")}</li>
+                                    <li><strong>{t("Chat actif")}</strong>{t(" : Si activée, les joueurs peuvent utiliser le chat pendant les parties. Si désactivée, le chat est désactivé.")}</li>
                                 </ul>
                             </div>
                         </div>
@@ -989,7 +989,7 @@ pub fn DocsCreateContentPage() -> impl IntoView {
             </div>
 
             <div class="rounded-2xl border border-green-700/50 bg-gradient-to-br from-green-900/20 to-green-800/20 p-6">
-                <h2 class="mb-6 text-3xl font-bold text-green-400">"Workflow recommandé"</h2>
+                <h2 class="mb-6 text-3xl font-bold text-green-400">{t("Workflow recommandé")}</h2>
                 <div class=format!("space-y-4 {TXT}")>
                     {[
                         ("Créer une ou plusieurs playlists", "Organisez vos tracks par thème ou genre dans des playlists réutilisables."),
@@ -1001,8 +1001,8 @@ pub fn DocsCreateContentPage() -> impl IntoView {
                         <div class="flex items-start gap-3">
                             <span class="text-xl font-bold text-green-400">{i + 1}"."</span>
                             <div>
-                                <p class="font-semibold text-white">{h}</p>
-                                <p class="text-sm">{d}</p>
+                                <p class="font-semibold text-white">{t(h)}</p>
+                                <p class="text-sm">{t(d)}</p>
                             </div>
                         </div>
                     }).collect::<Vec<_>>()}
@@ -1010,18 +1010,18 @@ pub fn DocsCreateContentPage() -> impl IntoView {
             </div>
 
             <div class="rounded-2xl border border-indigo-700/50 bg-gradient-to-br from-indigo-900/20 to-indigo-800/20 p-6">
-                <h2 class="mb-4 text-2xl font-bold text-indigo-400">"Points importants à retenir"</h2>
+                <h2 class="mb-4 text-2xl font-bold text-indigo-400">{t("Points importants à retenir")}</h2>
                 <ul class="space-y-3 text-neutral-300">
-                    <li><strong>"Les playlists sont réutilisables"</strong>" : Une même playlist peut être utilisée par plusieurs rooms différentes."</li>
-                    <li><strong>"Les tracks appartiennent à une seule playlist"</strong>" : Chaque track est lié à une playlist unique, mais cette playlist peut être partagée."</li>
-                    <li><strong>"Les réponses sont obligatoires"</strong>" : Chaque track doit avoir au minimum une réponse Artiste et une réponse Titre."</li>
-                    <li><strong>"Les points sont configurables"</strong>" : Vous pouvez définir le score de chaque réponse pour équilibrer la difficulté."</li>
-                    <li><strong>"Les modérateurs peuvent gérer"</strong>" : Vous pouvez ajouter des modérateurs pour gérer vos playlists et rooms ensemble."</li>
+                    <li><strong>{t("Les playlists sont réutilisables")}</strong>{t(" : Une même playlist peut être utilisée par plusieurs rooms différentes.")}</li>
+                    <li><strong>{t("Les tracks appartiennent à une seule playlist")}</strong>{t(" : Chaque track est lié à une playlist unique, mais cette playlist peut être partagée.")}</li>
+                    <li><strong>{t("Les réponses sont obligatoires")}</strong>{t(" : Chaque track doit avoir au minimum une réponse Artiste et une réponse Titre.")}</li>
+                    <li><strong>{t("Les points sont configurables")}</strong>{t(" : Vous pouvez définir le score de chaque réponse pour équilibrer la difficulté.")}</li>
+                    <li><strong>{t("Les modérateurs peuvent gérer")}</strong>{t(" : Vous pouvez ajouter des modérateurs pour gérer vos playlists et rooms ensemble.")}</li>
                 </ul>
             </div>
 
             <div class="pt-4 text-center">
-                <A href="/docs" attr:class="text-blue-400 transition-colors hover:text-blue-300">" ← Retour à la documentation "</A>
+                <A href="/docs" attr:class="text-blue-400 transition-colors hover:text-blue-300">" ← "{t("Retour à la documentation")}" "</A>
             </div>
         </div>
     }
@@ -1054,7 +1054,7 @@ fn month_label(key: &str) -> String {
     if m == 0 || m > 12 {
         return key.to_string();
     }
-    format!("{} {}", MONTHS[m - 1], year)
+    format!("{} {}", t(MONTHS[m - 1]), year)
 }
 
 #[component]
@@ -1127,7 +1127,7 @@ pub fn DocsSupportPage() -> impl IntoView {
                             list.into_iter().map(|d| view! {
                                 <div class="flex items-center justify-between rounded-lg bg-slate-800/50 px-4 py-2 text-sm">
                                     <span class="text-neutral-200">
-                                        {d["user"]["name"].as_str().unwrap_or("Anonyme").to_string()}
+                                        {d["user"]["name"].as_str().unwrap_or(t("Anonyme")).to_string()}
                                     </span>
                                     <span class="font-medium text-emerald-300">
                                         {euros(d["amount_cents"].as_i64().unwrap_or(0))}
@@ -1281,7 +1281,7 @@ pub fn CategoryLandingPage() -> impl IntoView {
                                             <h3 class="truncate font-semibold text-white group-hover:text-brand-accent">{name}</h3>
                                             <p class="text-xs text-neutral-400">
                                                 {members}" "{t("players")}
-                                                {playing.then(|| " · 🟢 Live")}
+                                                {playing.then(|| t(" · 🟢 Live"))}
                                             </p>
                                         </div>
                                     </A>

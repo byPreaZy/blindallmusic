@@ -4,7 +4,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json};
 use blindall_db::PlaylistRow;
-use blindall_db::playlists::PlaylistRepo;
+use blindall_db::playlists::{PlaylistRepo, TrackFilters};
 use blindall_game::store::GameStore;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -283,17 +283,38 @@ pub async fn destroy(
     }
 }
 
+/// Tracks-manager query params — Laravel `PlaylistController::edit`
+/// (`Track::scopeFilter`). PHP reads `sortable[field]`/`sortable[direction]`
+/// as a nested array; the bracketed names are matched literally here.
+/// Value params stay strings so a junk value degrades to "no filter"
+/// instead of a 400 — PHP coerces rather than rejects too.
 #[derive(Deserialize)]
-pub struct PageParams {
+pub struct TracksParams {
     page: Option<i64>,
     per_page: Option<i64>,
+    /// Laravel name for the page size (`Request::get('paginate') ?? 10`);
+    /// `per_page` is kept for existing clients.
+    paginate: Option<i64>,
+    search: Option<String>,
+    difficulty: Option<String>,
+    provider: Option<String>,
+    #[serde(rename = "minUpvotes")]
+    min_upvotes: Option<String>,
+    #[serde(rename = "minDownvotes")]
+    min_downvotes: Option<String>,
+    #[serde(rename = "downvoteReason")]
+    downvote_reason: Option<String>,
+    #[serde(rename = "sortable[field]")]
+    sortable_field: Option<String>,
+    #[serde(rename = "sortable[direction]")]
+    sortable_direction: Option<String>,
 }
 
 pub async fn tracks(
     State(state): State<AppState>,
     user: CurrentUser,
     Path(id): Path<i64>,
-    Query(q): Query<PageParams>,
+    Query(q): Query<TracksParams>,
 ) -> impl IntoResponse {
     if let Some(r) = crate::rooms::require_not_guest(&user.0) {
         return r;
@@ -302,8 +323,21 @@ pub async fn tracks(
         return r;
     }
     let page = q.page.unwrap_or(1).max(1);
-    let per = q.per_page.unwrap_or(10).clamp(1, 100);
-    match state.playlists.tracks_page(id, page, per).await {
+    let per = q.paginate.or(q.per_page).unwrap_or(10).clamp(1, 100);
+    // PHP `when()` skips empty strings — treat blank params as absent.
+    let text = |v: Option<String>| v.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    let num = |v: Option<String>| text(v).and_then(|s| s.parse::<i64>().ok());
+    let filters = TrackFilters {
+        search: text(q.search),
+        difficulty: num(q.difficulty),
+        provider: text(q.provider),
+        min_upvotes: num(q.min_upvotes),
+        min_downvotes: num(q.min_downvotes),
+        downvote_reason: text(q.downvote_reason),
+        sort_field: text(q.sortable_field),
+        sort_direction: text(q.sortable_direction),
+    };
+    match state.playlists.tracks_page(id, page, per, &filters).await {
         Ok((tracks, total)) => Json(json!({
             "data": tracks,
             "total": total,
@@ -1110,4 +1144,30 @@ pub async fn export(
         out,
     )
         .into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TracksParams;
+    use axum::extract::Query;
+
+    /// Laravel sends `sortable[field]`/`sortable[direction]` (PHP nested
+    /// array syntax); percent-decoded keys must hit the renamed fields.
+    #[test]
+    fn tracks_params_deserialize_laravel_names() {
+        let uri: http::Uri = "http://x/?page=2&search=abc&difficulty=1&provider=deezer&minUpvotes=10&minDownvotes=5&downvoteReason=sound_quality&sortable%5Bfield%5D=votes&sortable%5Bdirection%5D=asc&paginate=25"
+            .parse()
+            .unwrap();
+        let Query(q) = Query::<TracksParams>::try_from_uri(&uri).unwrap();
+        assert_eq!(q.page, Some(2));
+        assert_eq!(q.search.as_deref(), Some("abc"));
+        assert_eq!(q.difficulty.as_deref(), Some("1"));
+        assert_eq!(q.provider.as_deref(), Some("deezer"));
+        assert_eq!(q.min_upvotes.as_deref(), Some("10"));
+        assert_eq!(q.min_downvotes.as_deref(), Some("5"));
+        assert_eq!(q.downvote_reason.as_deref(), Some("sound_quality"));
+        assert_eq!(q.sortable_field.as_deref(), Some("votes"));
+        assert_eq!(q.sortable_direction.as_deref(), Some("asc"));
+        assert_eq!(q.paginate, Some(25));
+    }
 }

@@ -167,6 +167,7 @@ pub fn Footer() -> impl IntoView {
                             <li><A href="/" attr:class="text-white/70 transition-colors hover:text-white">{t("Home")}</A></li>
                             <li><A href="/docs" attr:class="text-white/70 transition-colors hover:text-white">{t("Documentation")}</A></li>
                             <li><A href="/docs/faq" attr:class="text-white/70 transition-colors hover:text-white">{t("FAQ")}</A></li>
+                            <li><A href="/bars" attr:class="text-white/70 transition-colors hover:text-white">{t("Pour les bars")}</A></li>
                             <li><A href="/contact" attr:class="text-white/70 transition-colors hover:text-white">{t("Contact")}</A></li>
                             <li><a href="https://github.com/byPreaZy/blindallmusic/issues" target="_blank" rel="noopener noreferrer" class="text-white/70 transition-colors hover:text-white">{t("Report a bug")}</a></li>
                         </ul>
