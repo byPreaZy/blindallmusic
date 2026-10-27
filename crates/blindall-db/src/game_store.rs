@@ -2,8 +2,8 @@ use crate::entities;
 use async_trait::async_trait;
 use blindall_core::types::{Standing, TrackAnswer, TrackHistoryEntry};
 use blindall_game::store::{
-    GameStore, GameTrack, PassthroughResolver, PlayerInfo, PreviewResolver, Result, RoomConfig,
-    RoundRow, StoreError, TrackDeletionNotice,
+    GameStore, GameTrack, PassthroughResolver, PlayerInfo, PreviewResolver, ProbeResult, Result,
+    RoomConfig, RoundRow, StoreError, TrackDeletionNotice,
 };
 use chrono::{DateTime, Utc};
 use sqlx::Row;
@@ -371,15 +371,23 @@ impl GameStore for DbGameStore {
         }))
     }
 
-    async fn probe_audio(&self, audio_url: &str) -> bool {
-        for _ in 0..3 {
+    async fn probe_audio(&self, audio_url: &str) -> ProbeResult {
+        let mut attempts = 0;
+        loop {
+            attempts += 1;
             match self.http.get(audio_url).send().await {
-                Ok(r) if r.status().is_success() => return true,
-                Ok(_) => return false, // responded but not 2xx, don't retry
-                Err(_) => tokio::time::sleep(Duration::from_millis(100)).await,
+                Ok(r) if r.status().is_success() => return ProbeResult::Alive,
+                // Only a definitive miss kills the track. 403/429 happen
+                // when the provider rate-limits or blocks our IP — deleting
+                // the catalogue on a transient ban is a data-loss bug.
+                Ok(r) if matches!(r.status().as_u16(), 404 | 410) => {
+                    return ProbeResult::Dead;
+                }
+                Ok(r) if r.status().is_client_error() => return ProbeResult::Transient,
+                _ if attempts >= 3 => return ProbeResult::Transient,
+                _ => tokio::time::sleep(Duration::from_millis(100)).await,
             }
         }
-        false
     }
 
     async fn delete_track(

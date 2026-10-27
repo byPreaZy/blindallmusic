@@ -36,6 +36,16 @@ impl GameTrack {
     }
 }
 
+/// Tri-state preview probe: only a definitive 404/410 marks a track dead.
+/// 403/429/5xx/timeouts are transient (provider rate-limit, blocked IP,
+/// network blip) — the track must NOT be deleted, only skipped for now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProbeResult {
+    Alive,
+    Dead,
+    Transient,
+}
+
 #[derive(Debug, Clone)]
 pub struct RoundRow {
     pub id: i64,
@@ -241,7 +251,7 @@ pub trait GameStore: Send + Sync {
     async fn finish_round(&self, round_id: i64, at: DateTime<Utc>) -> Result<()>;
     async fn set_room_playing(&self, room_id: i64, playing: bool) -> Result<()>;
     async fn load_track(&self, track_id: i64) -> Result<Option<GameTrack>>;
-    async fn probe_audio(&self, audio_url: &str) -> bool;
+    async fn probe_audio(&self, audio_url: &str) -> ProbeResult;
     async fn delete_track(
         &self,
         track_id: i64,

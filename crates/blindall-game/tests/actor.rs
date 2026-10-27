@@ -465,3 +465,30 @@ async fn track_mismatch_is_rejected() {
         .unwrap();
     assert_eq!(outcome, CheckOutcome::Bad);
 }
+
+#[tokio::test(start_paused = true)]
+async fn transient_probe_stalls_without_deleting_track() {
+    let mut fx = spawn_fixture().await;
+    *fx.store.probe_transient.lock().unwrap() = true;
+    start(&fx).await;
+
+    // Round starts, first track probes transient -> actor stalls and
+    // crucially does NOT delete the track (provider rate-limit/blocked IP
+    // must never vacuum the catalogue).
+    let _ = next_event(&mut fx.rx, "RoundStarted").await;
+    drain_events(&mut fx.rx).await;
+    tokio::task::yield_now().await;
+    assert!(fx.store.tracks.lock().unwrap().contains_key(&1));
+    let snap = snapshot(&fx.tx).await;
+    assert!(!snap.is_playing); // stalled rounds report not-playing
+
+    // Provider recovers -> the 5s stall retry resumes the round; the
+    // transient track was *skipped* (advance already committed) but never
+    // deleted — it stays playable in later rounds.
+    *fx.store.probe_transient.lock().unwrap() = false;
+    advance(Duration::from_secs(6)).await;
+    let played = next_event(&mut fx.rx, "TrackPlayed").await;
+    assert_eq!(played["track"]["id"], json!(2));
+    assert!(snapshot(&fx.tx).await.is_playing);
+    assert!(fx.store.tracks.lock().unwrap().contains_key(&1));
+}

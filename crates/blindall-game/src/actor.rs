@@ -1,6 +1,8 @@
 use crate::events;
 use crate::finalize;
-use crate::store::{GameStore, GameTrack, PresenceStore, RoomConfig, RoundRow, ScoreStore};
+use crate::store::{
+    GameStore, GameTrack, PresenceStore, ProbeResult, RoomConfig, RoundRow, ScoreStore,
+};
 use blindall_core::scoring::{self, CheckOutcome, CheckRequest};
 use blindall_realtime::Hub;
 use blindall_redis::scores::TrackRecord;
@@ -371,21 +373,28 @@ impl RoomActor {
             };
 
             if !track.skips_probe() {
-                let dead = match &track.audio {
+                let probe = match &track.audio {
                     None => {
                         tracing::info!(track_id, "missing audio url : skipping");
-                        true
+                        ProbeResult::Dead
                     }
-                    Some(url) => {
-                        if self.store.probe_audio(url).await {
-                            false
-                        } else {
-                            tracing::info!(track_id, "audio probe failed : skipping");
-                            true
+                    Some(url) => match self.store.probe_audio(url).await {
+                        ProbeResult::Alive => ProbeResult::Alive,
+                        ProbeResult::Dead => {
+                            tracing::info!(track_id, "audio probe 404 : deleting");
+                            ProbeResult::Dead
                         }
-                    }
+                        ProbeResult::Transient => {
+                            // Provider outage / rate-limit / blocked IP —
+                            // retry in 5s WITHOUT deleting the track (a
+                            // transient ban must not vacuum the catalogue).
+                            tracing::warn!(track_id, "audio probe transient failure : retrying later");
+                            self.stall_and_retry();
+                            return;
+                        }
+                    },
                 };
-                if dead {
+                if probe == ProbeResult::Dead {
                     let store = self.store.clone();
                     let hub = self.hub.clone();
                     tokio::spawn(async move {

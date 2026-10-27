@@ -18,6 +18,7 @@ pub struct FakeGameStore {
     pub next_round_id: Mutex<i64>,
     pub room_playing: Mutex<HashMap<i64, bool>>,
     pub probe_ok: Mutex<bool>,
+    pub probe_transient: Mutex<bool>,
     pub standings_written: Mutex<Vec<Standing>>,
     pub total_scores: Mutex<Vec<(i64, i64, f64)>>,
     pub required: Mutex<HashMap<i64, usize>>,
@@ -103,8 +104,14 @@ impl GameStore for FakeGameStore {
     async fn load_track(&self, track_id: i64) -> Result<Option<GameTrack>> {
         Ok(self.tracks.lock().unwrap().get(&track_id).cloned())
     }
-    async fn probe_audio(&self, _url: &str) -> bool {
-        *self.probe_ok.lock().unwrap()
+    async fn probe_audio(&self, _url: &str) -> crate::store::ProbeResult {
+        if *self.probe_transient.lock().unwrap() {
+            crate::store::ProbeResult::Transient
+        } else if *self.probe_ok.lock().unwrap() {
+            crate::store::ProbeResult::Alive
+        } else {
+            crate::store::ProbeResult::Dead
+        }
     }
     async fn delete_track(
         &self,
