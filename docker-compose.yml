@@ -1,8 +1,16 @@
 name: blindall
 
+# Cap container logs: a runaway loop must never fill the host disk again.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
 
   server:
+    logging: *default-logging
     build:
       context: .
       dockerfile: Dockerfile
@@ -63,6 +71,7 @@ services:
   # Ephemeral public URL for demos: `docker compose --profile tunnel up -d`
   cloudflared:
     image: cloudflare/cloudflared:latest
+    logging: *default-logging
     profiles: [tunnel]
     restart: unless-stopped
     command: tunnel --no-autoupdate --url http://server:8080
@@ -72,6 +81,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    logging: *default-logging
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
@@ -85,6 +95,7 @@ services:
 
   db:
     image: supabase/postgres:17.6.1.136
+    logging: *default-logging
     restart: unless-stopped
     volumes:
       - ./volumes/db/data:/var/lib/postgresql/data:Z
