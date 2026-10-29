@@ -98,6 +98,7 @@ jobs:
           $SSH "mkdir -p ~/blindall"
           $SCP docker-compose.yml docker-compose.prod.yml docker-compose.traefik.yml \
                "$VPS_USER@$VPS_HOST:~/blindall/"
+          $SCP -r rootverify "$VPS_USER@$VPS_HOST:~/blindall/"
 
           # .env.production : seed seulement si absent (les secrets vivent sur
           # le VPS / dans le secret GitHub, pas dans le repo)
