@@ -152,7 +152,7 @@ impl RoomActor {
     fn park_timer(&mut self) {
         self.timer
             .as_mut()
-            .reset(Instant::now() + Duration::from_secs(86400));
+            .reset(Instant::now() + Duration::from_secs(31_536_000));
     }
 
     /// A parked timer used to mean "stuck forever" (room counter frozen,
@@ -254,6 +254,7 @@ impl RoomActor {
             Ok(t) => t,
             Err(e) => {
                 tracing::error!(room = self.room.id, error = %e, "pick_tracks failed");
+                self.stall_and_retry();
                 return;
             }
         };
@@ -270,6 +271,7 @@ impl RoomActor {
                     Ok(id) => id,
                     Err(e) => {
                         tracing::error!(room = self.room.id, error = %e, "create_round failed");
+                        self.stall_and_retry();
                         return;
                     }
                 }
@@ -283,6 +285,7 @@ impl RoomActor {
                 Ok(id) => id,
                 Err(e) => {
                     tracing::error!(room = self.room.id, error = %e, "create_round failed");
+                    self.stall_and_retry();
                     return;
                 }
             }
@@ -308,6 +311,7 @@ impl RoomActor {
             .await;
             self.broadcast_public_state().await;
             tracing::warn!(room = self.room.id, "no tracks : round aborted");
+            self.stall_and_retry();
             return;
         }
 
@@ -582,7 +586,10 @@ impl RoomActor {
                     self.arm_timer();
                 }
             }
-            _ => {}
+            // Idle / Paused: nothing to do, but RE-ARM the timer — a fired
+            // Sleep stays Ready forever, so returning without re-arming
+            // would busy-loop the actor at 100% CPU.
+            _ => self.arm_timer(),
         }
     }
 
