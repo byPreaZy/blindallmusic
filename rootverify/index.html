@@ -134,7 +134,21 @@
       }
       .socials a:hover { border-color: var(--accent); transform: translateY(-2px); text-decoration: none; }
       .card p { margin: 0.55rem 0 0; color: var(--muted); font-size: 0.95rem; }
-      .card .url { margin-top: 0.6rem; font-size: 0.82rem; color: var(--accent); font-weight: 600; }
+      .card .url { display: block; margin-top: 0.6rem; font-size: 0.82rem; color: var(--accent); font-weight: 600; }
+      .plogo {
+        width: 2.3rem; height: 2.3rem;
+        border-radius: 0.55rem;
+        object-fit: contain;
+        background: #fff;
+        padding: 0.2rem;
+      }
+      .applink {
+        display: inline-block;
+        margin: 0.55rem 0 0 0.2rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--accent2);
+      }
 
       footer { margin-top: 4rem; text-align: center; color: #6b7086; font-size: 0.85rem; }
       footer a { color: #6b7086; margin: 0 0.5rem; }
@@ -159,7 +173,8 @@
         <section class="node">
           <a class="card" href="https://clerely-design.fr" target="_blank" rel="noopener noreferrer">
             <div class="top">
-              <h2>✨ Clerely Design</h2>
+              <img class="plogo" src="logo-clerely.svg" alt="Clerely Design" />
+              <h2>Clerely Design</h2>
               <span class="badge dev">Portfolio</span>
             </div>
             <p>
@@ -173,7 +188,8 @@
         <section class="node">
           <a class="card" href="https://blindallmusic.clerely.fr" target="_blank" rel="noopener noreferrer">
             <div class="top">
-              <h2>🎵 Blind'All Music</h2>
+              <img class="plogo" src="logo-blindall.png" alt="Blind'All Music" />
+              <h2>Blind'All Music</h2>
               <span class="badge">En ligne</span>
             </div>
             <p>
@@ -188,7 +204,8 @@
         <section class="node">
           <a class="card" href="https://maria.clerely.fr" target="_blank" rel="noopener noreferrer">
             <div class="top">
-              <h2>🧠 MARIA</h2>
+              <img class="plogo" src="logo-maria.png" alt="MARIA" />
+              <h2>MARIA</h2>
               <span class="badge">En ligne</span>
             </div>
             <p>
@@ -208,30 +225,18 @@
         <section class="node">
           <a class="card" href="https://ohaioai.com" target="_blank" rel="noopener noreferrer">
             <div class="top">
-              <h2>🗣️ OHAIO A.I</h2>
+              <img class="plogo" src="logo-ohaio.png" alt="OHAIO" />
+              <h2>OHAIO</h2>
               <span class="badge client">Projet client</span>
             </div>
             <p>
               Traduction vocale et vélotypie par IA en direct : supprimer la
-              friction linguistique des événements business pour des échanges
-              compréhensibles et engageants.
+              friction linguistique des événements business — messagerie de
+              traduction automatique en temps réel, pendant que l'orateur parle.
             </p>
             <span class="url">ohaioai.com →</span>
           </a>
-        </section>
-
-        <section class="node">
-          <a class="card" href="https://ohaio.io" target="_blank" rel="noopener noreferrer">
-            <div class="top">
-              <h2>📡 Ohaio Livespeaker</h2>
-              <span class="badge client">Projet client</span>
-            </div>
-            <p>
-              L'application live de la plateforme OHAIO — messagerie de
-              traduction automatique en temps réel, pendant que l'orateur parle.
-            </p>
-            <span class="url">ohaio.io →</span>
-          </a>
+          <a class="applink" href="https://ohaio.io" target="_blank" rel="noopener noreferrer">application live → ohaio.io</a>
         </section>
       </div>
 
@@ -240,6 +245,18 @@
         <a href="https://github.com/byPreaZy" target="_blank" rel="noopener noreferrer" aria-label="GitHub">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.17-.02-2.12-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.75 2.69 1.25 3.35.95.1-.74.4-1.25.72-1.54-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.83 1.18 3.09 0 4.41-2.69 5.38-5.25 5.67.41.35.77 1.05.77 2.12 0 1.53-.01 2.76-.01 3.14 0 .31.21.68.8.56A10.52 10.52 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/></svg>
           <span>GitHub</span>
+        </a>
+        <a href="https://gitlab.com/byPreaZy" target="_blank" rel="noopener noreferrer" aria-label="GitLab">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="m22.65 14.39-2.99-9.21c-.19-.56-.63-.93-1.19-.93-.56 0-1 .37-1.19.93L15.4 12.5H8.6L6.72 5.18c-.19-.56-.63-.93-1.19-.93-.56 0-1 .37-1.19.93l-2.99 9.21a1.24 1.24 0 0 0 .45 1.38L12 22.25l10.2-6.48c.37-.24.55-.7.45-1.38Z"/></svg>
+          <span>GitLab</span>
+        </a>
+        <a href="https://www.linkedin.com/in/k%C3%A9vin-clere/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05a3.74 3.74 0 0 1 3.37-1.85c3.6 0 4.27 2.37 4.27 5.45v6.29ZM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12ZM7.12 20.45H3.55V9h3.57v11.45Z"/></svg>
+          <span>LinkedIn</span>
+        </a>
+        <a href="https://www.facebook.com/Clerelydesign" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.09 10.13 24v-8.44H7.08v-3.49h3.04V9.41c0-3.02 1.8-4.7 4.54-4.7 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.26h3.33l-.53 3.49h-2.8V24C19.61 23.09 24 18.1 24 12.07Z"/></svg>
+          <span>Facebook</span>
         </a>
         <a href="https://twitter.com/PreaZyFX" target="_blank" rel="noopener noreferrer" aria-label="X (Twitter)">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M18.9 1.15h3.68l-8.04 9.19L24 22.85h-7.41l-5.8-7.58-6.64 7.58H.47l8.6-9.83L0 1.15h7.59l5.24 6.93 6.07-6.93Zm-1.29 19.5h2.04L6.49 3.24H4.3l13.31 17.41Z"/></svg>
