@@ -4,106 +4,206 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="google-adsense-account" content="ca-pub-9636110648577560" />
-    <meta name="description" content="Blind'All Music — le jeu de blind test en ligne multijoueur. Reconnais les chansons, défie tes amis, organise des soirées musicales. Gratuit, sans installation." />
+    <meta name="description" content="Clerely Design — studio indépendant. MARIA (IA souveraine), GitLaBot, Blind'All Music : des projets web conçus, hébergés et maintenus en France." />
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9636110648577560"
       crossorigin="anonymous"></script>
-    <title>Clerely — Blind'All Music, le blind test multijoueur en ligne</title>
+    <title>Clerely — projets &amp; sites</title>
     <style>
-      :root { color-scheme: dark; }
+      :root {
+        color-scheme: dark;
+        --bg: #0b0d14;
+        --panel: #141726;
+        --line: #2a2e3f;
+        --text: #e7e9f0;
+        --muted: #9aa0b8;
+        --accent: #f0b429;
+        --accent2: #8ab4ff;
+      }
       * { box-sizing: border-box; }
       body {
         margin: 0;
         font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-        background: #0b0d14;
-        color: #e7e9f0;
+        background:
+          radial-gradient(60rem 30rem at 80% -10%, rgba(240, 180, 41, 0.08), transparent 60%),
+          radial-gradient(50rem 30rem at 0% 30%, rgba(138, 180, 255, 0.07), transparent 60%),
+          var(--bg);
+        color: var(--text);
         line-height: 1.6;
       }
-      main { max-width: 760px; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
-      h1 { font-size: 2.1rem; line-height: 1.2; margin: 0 0 1rem; }
-      h2 { font-size: 1.25rem; margin: 2.5rem 0 0.75rem; color: #f0b429; }
-      p, li { color: #b9bdd0; }
-      a { color: #8ab4ff; text-decoration: none; }
-      a:hover { text-decoration: underline; }
-      .cta {
+      main { max-width: 820px; margin: 0 auto; padding: 4rem 1.25rem 5rem; }
+
+      header { text-align: center; margin-bottom: 4rem; }
+      .logo {
         display: inline-block;
-        margin: 1.25rem 0;
-        padding: 0.8rem 1.6rem;
-        background: #f0b429;
-        color: #14100a;
-        font-weight: 700;
-        border-radius: 0.6rem;
+        font-weight: 800;
+        font-size: 0.95rem;
+        letter-spacing: 0.35em;
+        text-transform: uppercase;
+        color: var(--accent);
+        border: 1px solid rgba(240, 180, 41, 0.35);
+        border-radius: 999px;
+        padding: 0.4rem 1.1rem;
+        margin-bottom: 1.5rem;
       }
-      .cta:hover { text-decoration: none; filter: brightness(1.08); }
-      ul { padding-left: 1.25rem; }
-      footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid #2a2e3f; font-size: 0.85rem; color: #6b7086; }
-      footer a { color: #6b7086; margin-right: 1rem; }
+      h1 { font-size: clamp(1.9rem, 5vw, 2.8rem); line-height: 1.15; margin: 0 0 1rem; }
+      header p { color: var(--muted); max-width: 46ch; margin: 0 auto; font-size: 1.05rem; }
+
+      /* ---- frise ---- */
+      .timeline { position: relative; margin: 3rem 0 0; padding-left: 2.25rem; }
+      .timeline::before {
+        content: "";
+        position: absolute;
+        left: 0.55rem; top: 0.4rem; bottom: 0.4rem;
+        width: 2px;
+        background: var(--line);
+        border-radius: 2px;
+      }
+      .timeline .fill {
+        position: absolute;
+        left: 0.55rem; top: 0.4rem;
+        width: 2px;
+        height: 0;
+        background: linear-gradient(var(--accent), var(--accent2));
+        border-radius: 2px;
+        transition: height 1.6s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .timeline.draw .fill { height: calc(100% - 0.8rem); }
+
+      .node {
+        position: relative;
+        opacity: 0;
+        transform: translateY(18px);
+        transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+        margin-bottom: 2.25rem;
+      }
+      .node.show { opacity: 1; transform: none; }
+      .node::before {
+        content: "";
+        position: absolute;
+        left: -1.83rem; top: 0.55rem;
+        width: 0.9rem; height: 0.9rem;
+        border-radius: 50%;
+        background: var(--bg);
+        border: 2px solid var(--accent);
+        box-shadow: 0 0 0 5px rgba(240, 180, 41, 0.12);
+      }
+      .node:nth-child(even)::before { border-color: var(--accent2); box-shadow: 0 0 0 5px rgba(138, 180, 255, 0.12); }
+
+      .card {
+        display: block;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        padding: 1.3rem 1.5rem;
+        text-decoration: none;
+        color: inherit;
+        transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+      }
+      a.card:hover {
+        border-color: var(--accent);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px -12px rgba(240, 180, 41, 0.25);
+        text-decoration: none;
+      }
+      .card .top { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
+      .card h2 { margin: 0; font-size: 1.25rem; }
+      .badge {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        background: rgba(46, 213, 115, 0.15);
+        color: #4be38a;
+        border: 1px solid rgba(75, 227, 138, 0.3);
+      }
+      .badge.dev { background: rgba(138, 180, 255, 0.12); color: var(--accent2); border-color: rgba(138, 180, 255, 0.3); }
+      .card p { margin: 0.55rem 0 0; color: var(--muted); font-size: 0.95rem; }
+      .card .url { margin-top: 0.6rem; font-size: 0.82rem; color: var(--accent); font-weight: 600; }
+
+      footer { margin-top: 4rem; text-align: center; color: #6b7086; font-size: 0.85rem; }
+      footer a { color: #6b7086; margin: 0 0.5rem; }
+      footer a:hover { color: var(--accent); }
     </style>
   </head>
   <body>
     <main>
-      <h1>Blind'All Music — le blind test multijoueur en ligne</h1>
-      <p>
-        <strong>Blind'All Music</strong> est un jeu de blind test gratuit qui se joue
-        directement dans le navigateur : un extrait de quelques secondes, et à toi de
-        retrouver le titre ou l'artiste avant les autres. Seul, entre amis, en famille
-        ou en soirée au bar, le principe reste le même — reconnaître la chanson le
-        plus vite possible et marquer des points.
-      </p>
-      <p>
-        <a class="cta" href="https://blindallmusic.clerely.fr">Jouer maintenant — c'est gratuit</a>
-      </p>
+      <header>
+        <span class="logo">Clerely</span>
+        <h1>Des projets conçus, hébergés<br />et maintenus ici.</h1>
+        <p>
+          Clerely Design — studio indépendant. Chaque projet ci-dessous est en
+          production, ouvert, et évolue régulièrement.
+        </p>
+      </header>
 
-      <h2>Comment ça marche ?</h2>
-      <p>
-        Chaque partie se déroule dans un <strong>salon</strong> : une série d'extraits
-        musicaux est jouée à tout le monde en même temps, et chaque joueur tape sa
-        réponse. Les bonnes réponses rapportent des points, la rapidité compte, et le
-        tableau des scores s'affiche en direct entre les morceaux.
-      </p>
-      <ul>
-        <li><strong>Des dizaines de catégories</strong> : années 80, années 90, Disney, dessins animés, génériques de séries, rap français, rock, jeux vidéo, musiques de films…</li>
-        <li><strong>Tes propres playlists</strong> : importe une playlist Deezer, Spotify ou YouTube, ou crée la tienne morceau par morceau.</li>
-        <li><strong>Duels et mini-jeux</strong> : affronte un autre joueur en tête-à-tête, ou lance des parties rapides pour occuper la file d'attente.</li>
-        <li><strong>Progression</strong> : XP, niveaux, classements globaux et par salon, badges et saisons compétitives.</li>
-      </ul>
+      <div class="timeline" id="timeline">
+        <div class="fill"></div>
 
-      <h2>Pour les bars et les soirées</h2>
-      <p>
-        Blind'All propose un <strong>mode TV pensé pour les bars</strong> : le jeu
-        s'affiche en plein écran sur la télévision de l'établissement, et les clients
-        participent en scannant un QR code avec leur téléphone — pas d'application à
-        installer, pas de matériel à louer. Le téléphone sert de buzzer et de clavier,
-        la télé fait office d'écran et de sono.
-      </p>
-      <p>
-        <a href="https://blindallmusic.clerely.fr/bars">Découvrir l'offre pour les bars</a>
-      </p>
+        <section class="node">
+          <a class="card" href="https://blindallmusic.clerely.fr">
+            <div class="top">
+              <h2>🎵 Blind'All Music</h2>
+              <span class="badge">En ligne</span>
+            </div>
+            <p>
+              Le blind test multijoueur dans le navigateur : salons temps réel,
+              playlists Deezer/Spotify/YouTube, duels, niveaux, classements —
+              et un mode TV fait pour animer les soirées de bar.
+            </p>
+            <span class="url">blindallmusic.clerely.fr →</span>
+          </a>
+        </section>
 
-      <h2>Pourquoi Blind'All ?</h2>
-      <p>
-        Le projet est né de la communauté des joueurs de blind test : l'idée est de
-        proposer un jeu <strong>rapide, fiable et fidèle</strong> à ce qui a fait le
-        succès du genre, avec un catalogue de pistes conséquent, des réponses souples
-        (titres, artistes, featuring), et une expérience qui marche aussi bien sur
-        téléphone que sur tablette, PC ou télévision.
-      </p>
-      <p>
-        L'inscription est facultative pour tester : tu peux jouer en invité en
-        quelques secondes, puis créer un compte pour garder tes scores, tes niveaux
-        et tes playlists.
-      </p>
+        <section class="node">
+          <a class="card" href="https://maria.clerely.fr">
+            <div class="top">
+              <h2>🧠 MARIA</h2>
+              <span class="badge">En ligne</span>
+            </div>
+            <p>
+              Plateforme IA souveraine tout-en-un : chat multi-modèles, agents
+              personnalisés, workflows visuels et orchestrateur. BYOK — tes clés
+              API, tes coûts, tes données.
+            </p>
+            <span class="url">maria.clerely.fr →</span>
+          </a>
+        </section>
+
+        <section class="node">
+          <a class="card" href="https://gitlabot.clerely.fr">
+            <div class="top">
+              <h2>🤖 GitLaBot</h2>
+              <span class="badge dev">Outil interne</span>
+            </div>
+            <p>
+              Automatisation et tableau de bord GitLab : suivi de pipelines,
+              déploiements et productivité des dépôts.
+            </p>
+            <span class="url">gitlabot.clerely.fr →</span>
+          </a>
+        </section>
+      </div>
 
       <footer>
-        <a href="https://blindallmusic.clerely.fr">Accueil du jeu</a>
-        <a href="https://blindallmusic.clerely.fr/faq">FAQ</a>
-        <a href="https://blindallmusic.clerely.fr/rankings">Classements</a>
-        <a href="https://blindallmusic.clerely.fr/bars">Pour les bars</a>
-        <a href="https://blindallmusic.clerely.fr/docs">Documentation</a>
         <a href="https://blindallmusic.clerely.fr/pages/mentions-legales">Mentions légales</a>
+        <a href="https://blindallmusic.clerely.fr/pages/politique-de-confidentialite">Confidentialité</a>
         <a href="https://blindallmusic.clerely.fr/pages/conditions-generales">CGU</a>
         <br />
         © Clerely — hébergement de projets personnels.
       </footer>
     </main>
+
+    <script>
+      var tl = document.getElementById("timeline");
+      requestAnimationFrame(function () { tl.classList.add("draw"); });
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) { e.target.classList.add("show"); io.unobserve(e.target); }
+        });
+      }, { threshold: 0.25 });
+      document.querySelectorAll(".node").forEach(function (n) { io.observe(n); });
+    </script>
   </body>
 </html>
