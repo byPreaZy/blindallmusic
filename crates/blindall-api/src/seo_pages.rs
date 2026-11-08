@@ -218,7 +218,7 @@ fn render(state: &AppState, shell: &str, head: &Head, landing: Option<&str>) -> 
 
 const MINIGAME_TYPES: [&str; 5] = ["quiz", "who-sang", "anagram", "first-letter", "album-cover"];
 
-const NOINDEX_PREFIXES: [&str; 16] = [
+const NOINDEX_PREFIXES: [&str; 17] = [
     "/login",
     "/register",
     "/forgot-password",
@@ -235,6 +235,7 @@ const NOINDEX_PREFIXES: [&str; 16] = [
     "/banned",
     "/user/banned",
     "/language",
+    "/rooms/create",
 ];
 
 fn noindex_head(state: &AppState, path: &str, title: &str) -> (StatusCode, Head, Option<String>) {
@@ -705,6 +706,15 @@ async fn decide(state: &AppState, path: &str, _locale: &str) -> Decision {
         "/games" => return Decision::Redirect("/minigames".into()),
         "/language" => return Decision::Redirect("/".into()),
         "/donations" => return Decision::Redirect("/premium".into()),
+        // Renamed room slugs (migration 0040).
+        "/rooms/old-songss" => return Decision::Redirect("/rooms/old-songs".into()),
+        "/rooms/dessin-anime-0" => {
+            return Decision::Redirect("/rooms/dessin-anime".into())
+        }
+        "/rooms/films-danimations" => {
+            return Decision::Redirect("/rooms/films-animations".into())
+        }
+        "/rooms/nouvel-an-2026" => return Decision::Redirect("/rooms/nouvel-an".into()),
         _ => {}
     }
     if let Some(rest) = path.strip_prefix("/games/") {

@@ -17,7 +17,7 @@
   "annees-70",
   "annees-80",
   "annees-90",
-  "old-songss",
+  "old-songs",
   "cest-noel",
   "halloween",
   "love",
@@ -25,7 +25,7 @@
   "saint-patrick",
   "summer",
   "anime-manga",
-  "dessin-anime-0",
+  "dessin-anime",
   "disney",
   "eurovision",
   "films",
@@ -138,7 +138,7 @@
     "intro_secondary": "Salle officielle : parties en direct 24h/24 selon l'activité communautaire."
    }
   },
-  "old-songss": {
+  "old-songs": {
    "fr": {
     "intro": "Blind test Time Machine : morceaux d'avant les années 70, classiques intemporels.",
     "intro_secondary": "Pour les amateurs d'histoire de la musique et de vieilles gloires."
@@ -186,7 +186,7 @@
     "intro_secondary": "Salle officielle « Sur les écrans », multijoueur en direct."
    }
   },
-  "dessin-anime-0": {
+  "dessin-anime": {
    "fr": {
     "intro": "Blind test Dessin animé : génériques et musiques de cartoons cultes.",
     "intro_secondary": "Pour les nostalgiques des dessins animés de leur enfance."

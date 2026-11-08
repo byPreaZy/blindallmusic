@@ -331,6 +331,13 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0039_room_descriptions.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            40,
+            "content_polish".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0040_content_polish.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {
