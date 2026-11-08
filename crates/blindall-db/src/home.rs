@@ -78,6 +78,7 @@ impl HomeRepo {
              AND r.password IS NULL AND r.deleted_at IS NULL \
              AND ($1::boolean = false OR r.visible_months IS NULL \
                   OR EXTRACT(MONTH FROM now())::int = ANY(r.visible_months)) \
+             AND EXISTS (SELECT 1 FROM playlist_room pr WHERE pr.room_id = r.id) \
              ORDER BY r.is_playing DESC, r.id",
             Self::COLS,
             Self::JOINS
