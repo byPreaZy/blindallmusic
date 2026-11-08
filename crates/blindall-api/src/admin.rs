@@ -1132,7 +1132,7 @@ fn suggest_work_name(title: &str) -> Option<String> {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
-        .trim_matches(|c: char| c == '-' || c == ':' || c == '–' || c == '|')
+        .trim_matches(|c: char| c == '-' || c == ':' || c == '\u{2013}' || c == '|')
         .to_string();
     if core.chars().count() >= 3 {
         Some(core)

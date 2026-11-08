@@ -116,7 +116,7 @@ fn cut_at_marker(s: &str) -> String {
         if let Some(i) = l.find(marker) {
             if i > 0 {
                 return s[..i]
-                    .trim_end_matches([' ', '-', '–', '—', ':', ','])
+                    .trim_end_matches([' ', '-', '\u{2013}', '\u{2014}', ':', ','])
                     .to_string();
             }
         }
@@ -225,7 +225,7 @@ fn strip_volume(s: &str) -> String {
             let digits =
                 rest.trim_start_matches(|c: char| c.is_ascii_digit() || c == ' ' || c == '.');
             let all_digits = digits.is_empty() && rest.chars().any(|c| c.is_ascii_digit());
-            let subtitled = digits.starts_with([':', '-', '–', '—', '(', '[', ',']);
+            let subtitled = digits.starts_with([':', '-', '\u{2013}', '\u{2014}', '(', '[', ',']);
             if all_digits || subtitled {
                 return s[..i].trim_end_matches([' ', ',']).to_string();
             }
@@ -268,7 +268,7 @@ fn clean_work_name(album: &str) -> String {
                 || tail.contains("single")
             {
                 s = s[..i]
-                    .trim_end_matches([' ', '-', '–', '—', ':', ','])
+                    .trim_end_matches([' ', '-', '\u{2013}', '\u{2014}', ':', ','])
                     .to_string();
             }
         }
@@ -277,7 +277,7 @@ fn clean_work_name(album: &str) -> String {
             break;
         }
     }
-    s.trim_matches(|c: char| " -–—,/'\"".contains(c))
+    s.trim_matches(|c: char| " -\u{2013}\u{2014},/'\"".contains(c))
         .trim()
         .to_string()
 }
@@ -425,12 +425,12 @@ fn strip_suffix(s: &str) -> String {
     let mut out = s.to_string();
     for suf in SUFFIXES {
         let l = out.trim_end().to_lowercase();
-        for sep in [" ", " - ", " – ", " : ", " : ", " / ", ", "] {
+        for sep in [" ", " - ", " \u{2013} ", " : ", " : ", " / ", ", "] {
             let needle = format!("{sep}{suf}");
             if l.ends_with(&needle) {
                 let cut = out.trim_end().len() - needle.len();
                 out = out.trim_end()[..cut]
-                    .trim_end_matches([' ', '-', '–', '—', ':', '/', ','])
+                    .trim_end_matches([' ', '-', '\u{2013}', '\u{2014}', ':', '/', ','])
                     .to_string();
                 return out;
             }
