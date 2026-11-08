@@ -459,6 +459,7 @@ impl RoomRepo {
             "SELECT slug, name, photo_path FROM rooms \
              WHERE is_public = true AND is_active = true \
              AND password IS NULL AND deleted_at IS NULL \
+             AND (visible_months IS NULL OR EXTRACT(MONTH FROM now())::int = ANY(visible_months)) \
              ORDER BY name",
         )
         .fetch_all(&self.pool)
@@ -513,6 +514,7 @@ impl RoomRepo {
              WHERE is_public = TRUE AND is_active = TRUE \
                AND password IS NULL AND deleted_at IS NULL \
                AND category_id = $1 AND id <> $2 AND slug = ANY($3) \
+               AND (visible_months IS NULL OR EXTRACT(MONTH FROM now())::int = ANY(visible_months)) \
              ORDER BY name LIMIT $4",
         )
         .bind(category_id)
@@ -708,7 +710,9 @@ impl RoomRepo {
         sqlx::query(&format!(
             "SELECT {} FROM rooms WHERE category_id = $1 AND is_public = true \
              AND is_active = true \
-             AND password IS NULL AND deleted_at IS NULL ORDER BY is_playing DESC",
+             AND password IS NULL AND deleted_at IS NULL \
+             AND (visible_months IS NULL OR EXTRACT(MONTH FROM now())::int = ANY(visible_months)) \
+             ORDER BY is_playing DESC",
             Self::COLS
         ))
         .bind(category_id)

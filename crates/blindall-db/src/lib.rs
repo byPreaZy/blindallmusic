@@ -310,6 +310,13 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0036_subscription_invoice.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            37,
+            "room_visible_months".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0037_room_visible_months.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {

@@ -31,6 +31,7 @@ impl SeoRepo {
             "SELECT r.slug, r.updated_at FROM rooms r \
              WHERE r.is_public = true AND r.is_active = true \
              AND r.password IS NULL AND r.deleted_at IS NULL \
+             AND (r.visible_months IS NULL OR EXTRACT(MONTH FROM now())::int = ANY(r.visible_months)) \
              ORDER BY (SELECT COUNT(*) FROM rounds ro WHERE ro.room_id = r.id) DESC",
         )
         .fetch_all(&self.pool)

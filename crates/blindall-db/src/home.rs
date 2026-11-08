@@ -76,6 +76,8 @@ impl HomeRepo {
             "SELECT {} FROM rooms r {} WHERE r.is_public = $1 \
              AND r.is_active = true \
              AND r.password IS NULL AND r.deleted_at IS NULL \
+             AND ($1::boolean = false OR r.visible_months IS NULL \
+                  OR EXTRACT(MONTH FROM now())::int = ANY(r.visible_months)) \
              ORDER BY r.is_playing DESC, r.id",
             Self::COLS,
             Self::JOINS
@@ -146,6 +148,7 @@ impl HomeRepo {
             "SELECT {} FROM rooms r {} \
              WHERE r.is_featured = true AND r.is_active = true \
              AND r.password IS NULL AND r.deleted_at IS NULL \
+             AND (r.visible_months IS NULL OR EXTRACT(MONTH FROM now())::int = ANY(r.visible_months)) \
              ORDER BY r.id",
             Self::COLS,
             Self::JOINS
@@ -164,6 +167,8 @@ impl HomeRepo {
              FROM categories c JOIN rooms r ON r.category_id = c.id \
              WHERE r.is_public = $1 AND r.is_active = true \
              AND r.password IS NULL AND r.deleted_at IS NULL \
+             AND ($1::boolean = false OR r.visible_months IS NULL \
+                  OR EXTRACT(MONTH FROM now())::int = ANY(r.visible_months)) \
              GROUP BY c.id, c.name ORDER BY c.id",
         )
         .bind(is_public)

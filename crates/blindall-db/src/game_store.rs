@@ -178,6 +178,7 @@ impl DbGameStore {
              (SELECT COUNT(*) FROM rounds WHERE rounds.room_id = rooms.id) AS round_count \
              FROM rooms \
              WHERE is_public = true AND is_active = true AND deleted_at IS NULL \
+             AND (visible_months IS NULL OR EXTRACT(MONTH FROM now())::int = ANY(visible_months)) \
              ORDER BY is_playing DESC, updated_at DESC LIMIT 50",
         )
         .fetch_all(&self.pool)
