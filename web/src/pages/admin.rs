@@ -4,6 +4,7 @@ use crate::i18n::t;
 use leptos::prelude::*;
 use leptos_router::components::A;
 use serde_json::{json, Value};
+use wasm_bindgen::JsCast;
 
 // ---- shared shell ------------------------------------------------------------
 
@@ -189,6 +190,142 @@ fn top_rooms_table(m: &Value) -> AnyView {
     .into_any()
 }
 
+fn sparkline(values: &[i64], color: &str) -> AnyView {
+    if values.len() < 2 {
+        return view! { <div class="h-10"></div> }.into_any();
+    }
+    let min = *values.iter().min().unwrap() as f64;
+    let max = *values.iter().max().unwrap() as f64;
+    let range = (max - min).max(1.0);
+    let pts = values
+        .iter()
+        .enumerate()
+        .map(|(i, v)| {
+            let x = i as f64 / (values.len() - 1) as f64 * 100.0;
+            let y = 29.0 - ((*v as f64 - min) / range) * 27.0;
+            format!("{x:.1},{y:.1}")
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    view! {
+        <svg viewBox="0 0 100 30" preserveAspectRatio="none" class="h-10 w-full">
+            <polyline points=pts fill="none" stroke=color stroke-width="1.5"
+                vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>
+        </svg>
+    }
+    .into_any()
+}
+
+fn series(history: &[Value], section: &str, key: &str) -> Vec<i64> {
+    // Downsample to ~120 points max for a clean polyline.
+    let all: Vec<i64> = history
+        .iter()
+        .map(|row| row["metrics"][section][key].as_i64().unwrap_or(0))
+        .collect();
+    if all.len() <= 120 {
+        return all;
+    }
+    let step = all.len() as f64 / 120.0;
+    (0..120)
+        .map(|i| all[(i as f64 * step) as usize])
+        .collect()
+}
+
+fn delta(values: &[i64]) -> i64 {
+    match (values.first(), values.last()) {
+        (Some(a), Some(b)) => b - a,
+        _ => 0,
+    }
+}
+
+#[component]
+fn TrendRow(label_key: &'static str, values: Vec<i64>, color: &'static str) -> impl IntoView {
+    let d = delta(&values);
+    let arrow = if d > 0 { "▲" } else if d < 0 { "▼" } else { "·" };
+    let delta_txt = format!("{d:+}");
+    let cls = if d > 0 {
+        "text-emerald-400"
+    } else if d < 0 {
+        "text-red-400"
+    } else {
+        "text-white/40"
+    };
+    view! {
+        <div>
+            <div class="mb-1 flex items-baseline justify-between">
+                <span class="text-xs text-white/60">{t(label_key)}</span>
+                <span class=format!("text-xs font-semibold {cls}")>
+                    {arrow}" "{delta_txt}
+                </span>
+            </div>
+            {sparkline(&values, color)}
+        </div>
+    }
+}
+
+#[component]
+fn MetricsHistory() -> impl IntoView {
+    let history = RwSignal::new(Vec::<Value>::new());
+    leptos::task::spawn_local(async move {
+        if let Ok(v) = api::get::<Value>("/api/v1/admin/dashboard/history?days=30").await {
+            if let Some(arr) = v["history"].as_array() {
+                history.set(arr.clone());
+            }
+        }
+    });
+    let export_csv = move |_| {
+        leptos::task::spawn_local(async move {
+            if let Ok(csv) = api::get_text("/api/v1/admin/dashboard/export").await {
+                let arr = js_sys::Array::of1(&wasm_bindgen::JsValue::from_str(&csv));
+                if let Ok(blob) = web_sys::Blob::new_with_str_sequence(&arr) {
+                    if let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) {
+                        if let Some(d) = web_sys::window()
+                            .and_then(|w| w.document())
+                            .and_then(|d| d.create_element("a").ok())
+                        {
+                            let _ = d.set_attribute("href", &url);
+                            let _ = d.set_attribute("download", "blindall-metrics.csv");
+                            if let Some(b) = d.dyn_ref::<web_sys::HtmlElement>() {
+                                b.click();
+                            }
+                            let _ = web_sys::Url::revoke_object_url(&url);
+                        }
+                    }
+                }
+            }
+        });
+    };
+    view! {
+        <div class="card mb-6 p-5">
+            <div class="mb-4 flex items-center justify-between">
+                <h2 class="font-bold text-white">{t("Evolution (30 days)")}</h2>
+                <button type="button"
+                    class="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/70 hover:bg-white/5"
+                    on:click=export_csv>
+                    {t("Export CSV")}
+                </button>
+            </div>
+            {move || {
+                let h = history.get();
+                if h.len() < 2 {
+                    return view! {
+                        <p class="text-sm text-white/50">
+                            {t("Snapshots are recorded hourly — check back later.")}
+                        </p>
+                    }.into_any();
+                }
+                view! {
+                    <div class="grid gap-6 md:grid-cols-3">
+                        <TrendRow label_key="Total users" values=series(&h, "users", "total") color="#f59e0b"/>
+                        <TrendRow label_key="Plus subscribers" values=series(&h, "subscriptions", "plus") color="#34d399"/>
+                        <TrendRow label_key="Pro subscribers" values=series(&h, "subscriptions", "pro") color="#60a5fa"/>
+                    </div>
+                }.into_any()
+            }}
+        </div>
+    }
+}
+
 #[component]
 fn MetricsGrid(data: RwSignal<Value>) -> impl IntoView {
     view! {
@@ -296,6 +433,7 @@ pub fn AdminDashboard() -> impl IntoView {
                 <div class="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300">{m}</div>
             })}
             <MetricsGrid data=data/>
+            <MetricsHistory/>
             <div class="grid gap-4 md:grid-cols-2">
                 <div class="card p-5">
                     <h2 class="mb-2 font-bold text-white">{t("Disk space")}</h2>

@@ -82,6 +82,15 @@ async fn sweep_once(
         }
         Err(e) => tracing::warn!(error = %e, "sweeper: season ensure_current failed"),
     }
+    let admin = blindall_db::AdminRepo::new(pool.clone());
+    match admin.metrics().await {
+        Ok(m) => {
+            if let Err(e) = admin.record_snapshot(&m).await {
+                tracing::warn!(error = %e, "sweeper: metric snapshot failed");
+            }
+        }
+        Err(e) => tracing::warn!(error = %e, "sweeper: metrics failed"),
+    }
 }
 
 async fn delete_stored_file(storage_root: &Path, path: &str) {

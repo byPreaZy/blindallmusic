@@ -1619,6 +1619,37 @@ impl AdminRepo {
             "top_rooms_30d": top_rooms,
         }))
     }
+
+    /// Persist a metrics snapshot (called hourly by the sweeper).
+    pub async fn record_snapshot(&self, metrics: &Value) -> Result<(), sqlx::Error> {
+        sqlx::query("INSERT INTO admin_metric_snapshots (metrics) VALUES ($1)")
+            .bind(metrics)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// Snapshot history for the dashboard trend charts, oldest first.
+    pub async fn metric_history(&self, days: i64) -> Result<Vec<Value>, sqlx::Error> {
+        let days = days.clamp(1, 365);
+        let rows = sqlx::query(
+            "SELECT captured_at, metrics FROM admin_metric_snapshots \
+             WHERE captured_at > NOW() - make_interval(days => $1::int) \
+             ORDER BY captured_at ASC",
+        )
+        .bind(days as i32)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|r| {
+                json!({
+                    "captured_at": r.get::<chrono::DateTime<chrono::Utc>, _>("captured_at"),
+                    "metrics": r.get::<Value, _>("metrics"),
+                })
+            })
+            .collect())
+    }
 }
 
 // ---- data-quality: extra queues (compilation artists, duplicates, featuring) ----

@@ -3306,6 +3306,12 @@ fn es<'a>(key: &'a str) -> &'a str {
         "Public playlists" => "Playlists públicas",
         "Minigame plays" => "Partidas de minijuegos",
         "No data yet." => "Aún no hay datos.",
+        "Evolution (30 days)" => "Evolución (30 días)",
+        "Export CSV" => "Exportar CSV",
+        "Total users" => "Total usuarios",
+        "Plus subscribers" => "Suscriptores Plus",
+        "Pro subscribers" => "Suscriptores Pro",
+        "Snapshots are recorded hourly — check back later." => "Las instantáneas se registran cada hora — vuelve más tarde.",
         k => k,
     }
 }
@@ -4332,6 +4338,12 @@ fn fr<'a>(key: &'a str) -> &'a str {
         "Public playlists" => "Playlists publiques",
         "Minigame plays" => "Parties minijeux",
         "No data yet." => "Pas encore de données.",
+        "Evolution (30 days)" => "Évolution (30 jours)",
+        "Export CSV" => "Exporter en CSV",
+        "Total users" => "Total utilisateurs",
+        "Plus subscribers" => "Abonnés Plus",
+        "Pro subscribers" => "Abonnés Pro",
+        "Snapshots are recorded hourly — check back later." => "Des instantanés sont enregistrés toutes les heures — revenez plus tard.",
         k => k,
     }
 }

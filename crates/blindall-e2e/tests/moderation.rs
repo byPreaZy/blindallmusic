@@ -85,6 +85,31 @@ async fn admin_dashboard_metrics_shape() {
 }
 
 #[tokio::test]
+async fn admin_dashboard_history_and_export() {
+    let admin = Client::admin().await;
+    let r = admin
+        .get("/api/v1/admin/dashboard/history?days=30")
+        .await
+        .expect_ok("history");
+    assert!(r.body["history"].is_array(), "{}", r.text);
+
+    let r = admin
+        .get("/api/v1/admin/dashboard/export")
+        .await
+        .expect_ok("export");
+    assert!(
+        r.text.starts_with("captured_at,users_total"),
+        "csv header: {}",
+        &r.text[..r.text.len().min(120)]
+    );
+
+    let r = Client::anon()
+        .get("/api/v1/admin/dashboard/export")
+        .await;
+    assert_eq!(r.status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
 async fn admin_users_list_and_search() {
     let admin = Client::admin().await;
     let r = admin.get("/api/v1/admin/users").await.expect_ok("users");

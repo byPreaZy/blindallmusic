@@ -319,6 +319,14 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/v1/admin/dashboard", get(admin::dashboard))
         .route(
+            "/api/v1/admin/dashboard/history",
+            get(admin::dashboard_history),
+        )
+        .route(
+            "/api/v1/admin/dashboard/export",
+            get(admin::dashboard_export),
+        )
+        .route(
             "/api/v1/admin/playlists",
             get(admin::playlists).post(admin::create_playlist),
         )

@@ -124,6 +124,17 @@ pub async fn get<T: DeserializeOwned>(path: &str) -> Result<T, ApiError> {
     parse(resp).await
 }
 
+/// Authenticated GET returning the raw body (CSV exports, etc.).
+pub async fn get_text(path: &str) -> Result<String, ApiError> {
+    let resp = send(RequestBuilder::new(path).method(Method::GET)).await?;
+    resp.text().await.map_err(|e| ApiError {
+        status: 0,
+        body: Value::Null,
+        message: e.to_string(),
+        errors: HashMap::new(),
+    })
+}
+
 pub async fn post<T: DeserializeOwned, B: Serialize>(path: &str, body: &B) -> Result<T, ApiError> {
     let body = serde_json::to_string(body).map_err(|e| ApiError {
         status: 0,

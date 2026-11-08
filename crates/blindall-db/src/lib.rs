@@ -345,6 +345,13 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0041_featured_two_rooms.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            42,
+            "admin_metric_snapshots".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0042_admin_metric_snapshots.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {

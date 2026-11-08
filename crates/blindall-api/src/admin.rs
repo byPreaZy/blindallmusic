@@ -623,6 +623,72 @@ pub async fn dashboard(State(state): State<AppState>, CurrentUser(user): Current
     .into_response()
 }
 
+#[derive(Deserialize)]
+pub struct HistoryQuery {
+    days: Option<i64>,
+}
+
+pub async fn dashboard_history(
+    State(state): State<AppState>,
+    Query(q): Query<HistoryQuery>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
+    if !user.is_administrator {
+        return forbidden();
+    }
+    match state.admin.metric_history(q.days.unwrap_or(30)).await {
+        Ok(v) => Json(json!({"history": v})).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// CSV export of the metrics snapshot history (up to 1 year).
+pub async fn dashboard_export(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
+    if !user.is_administrator {
+        return forbidden();
+    }
+    let history = match state.admin.metric_history(365).await {
+        Ok(v) => v,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+    let mut csv = String::from(
+        "captured_at,users_total,members,guests,new_7d,new_30d,banned,rooms_total,rooms_public,rooms_playing,rooms_featured,rooms_pro,tracks,playlists,rounds_total,rounds_7d,rounds_30d,players_7d,messages_total,messages_7d,minigame_plays_total,minigame_plays_7d,subs_plus,subs_pro,subs_past_due\n",
+    );
+    for row in &history {
+        let m = &row["metrics"];
+        let num = |section: &str, key: &str| {
+            m[section][key].as_i64().unwrap_or(0).to_string()
+        };
+        let ts = row["captured_at"].as_str().unwrap_or("");
+        csv.push_str(&format!(
+            "{ts},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n",
+            num("users", "total"), num("users", "members"), num("users", "guests"),
+            num("users", "new_7d"), num("users", "new_30d"), num("users", "banned"),
+            num("rooms", "total"), num("rooms", "public"), num("rooms", "playing_now"),
+            num("rooms", "featured"), num("rooms", "pro"),
+            num("content", "tracks"), num("content", "playlists"),
+            num("activity", "rounds_total"), num("activity", "rounds_7d"), num("activity", "rounds_30d"),
+            num("activity", "players_7d"), num("activity", "messages_total"), num("activity", "messages_7d"),
+            num("minigames", "plays_total"), num("minigames", "plays_7d"),
+            num("subscriptions", "plus"), num("subscriptions", "pro"), num("subscriptions", "past_due"),
+        ));
+    }
+    (
+        [
+            (axum::http::header::CONTENT_TYPE, "text/csv; charset=utf-8"),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                "attachment; filename=\"blindall-metrics.csv\"",
+            ),
+        ],
+        csv,
+    )
+        .into_response()
+}
+
 // ---- playlists ---------------------------------------------------------------
 
 #[derive(Deserialize)]
