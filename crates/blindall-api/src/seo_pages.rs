@@ -715,7 +715,6 @@ async fn decide(state: &AppState, path: &str, _locale: &str) -> Decision {
             return Decision::Redirect(format!("/rankings?sort={sort}"));
         }
     }
-
     let segs: Vec<&str> = path.trim_matches('/').split('/').collect();
 
     // Rooms — before the single-segment catch-all.
@@ -890,6 +889,14 @@ async fn room_decision(state: &AppState, key: &str) -> Decision {
     if row.has_password {
         head.robots = NOINDEX;
         return Decision::Page(StatusCode::OK, head, None);
+    }
+    if state
+        .rooms
+        .is_out_of_season(row.id)
+        .await
+        .unwrap_or(false)
+    {
+        head.robots = NOINDEX;
     }
 
     // JSON-LD: VideoGame + Breadcrumb + FAQ (official rooms get rich copy).

@@ -53,7 +53,10 @@ impl SeoRepo {
             "SELECT c.slug, c.updated_at FROM categories c \
              WHERE EXISTS(SELECT 1 FROM rooms r \
                           WHERE r.category_id = c.id AND r.is_public \
-                          AND r.password IS NULL AND r.deleted_at IS NULL) \
+                          AND r.is_active \
+                          AND r.password IS NULL AND r.deleted_at IS NULL \
+                          AND (r.visible_months IS NULL \
+                               OR EXTRACT(MONTH FROM now())::int = ANY(r.visible_months))) \
              {} ORDER BY c.name",
             if hidden_ids.is_empty() {
                 String::new()

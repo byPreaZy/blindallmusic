@@ -92,6 +92,21 @@ impl RoomRepo {
         is_chat_active, is_playing, is_autostart, is_featured, color, venue_name, password, \
         user_count, deleted_at";
 
+    /// True when the room has a seasonal window that excludes the current
+    /// month. Direct access stays allowed — callers use this for SEO
+    /// noindex only, never to block the room itself.
+    pub async fn is_out_of_season(&self, id: i64) -> Result<bool, sqlx::Error> {
+        sqlx::query_scalar::<_, bool>(
+            "SELECT visible_months IS NOT NULL \
+             AND NOT (EXTRACT(MONTH FROM now())::int = ANY(visible_months)) \
+             FROM rooms WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .map(|o| o.unwrap_or(false))
+    }
+
     pub async fn password_of(&self, id: i64) -> Result<Option<String>, sqlx::Error> {
         sqlx::query_scalar::<_, Option<String>>("SELECT password FROM rooms WHERE id = $1")
             .bind(id)
