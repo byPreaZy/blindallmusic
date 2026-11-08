@@ -1,7 +1,9 @@
 use crate::api;
 use crate::i18n::t;
+use leptos::portal::Portal;
 use leptos::prelude::*;
 use leptos_router::components::A;
+use leptos_router::hooks::use_location;
 use serde_json::{json, Value};
 
 #[component]
@@ -10,6 +12,13 @@ pub fn Notifications() -> impl IntoView {
         use_context::<crate::app::NotificationFeed>().unwrap_or_else(|| RwSignal::new(Vec::new()));
     let open = RwSignal::new(false);
     let busy = RwSignal::new(false);
+    // The portaled click-catcher can't cover the nav strip itself — close
+    // on route change instead.
+    let pathname = use_location().pathname;
+    Effect::new(move |_| {
+        pathname.track();
+        open.set(false);
+    });
 
     leptos::task::spawn_local(async move {
         if let Ok(v) = api::get::<Value>("/api/v1/users/notifications").await {
@@ -72,9 +81,17 @@ pub fn Notifications() -> impl IntoView {
                 let message = data["message"].as_str().unwrap_or("").to_string();
                 let room_slug = data["room"]["slug"].as_str().unwrap_or("").to_string();
                 let nid = p["id"].as_str().unwrap_or("").to_string();
-                let nid_done = nid.clone();
                 Some(view! {
-                    <div class="fixed left-0 right-0 top-0 z-30 flex w-full justify-center px-4">
+                    // Portal: same backdrop-blur containing-block trap as the dropdown.
+                    // z-40 ties the sticky nav and wins by DOM order (portal mounts
+                    // last in <body>).
+                    <Portal>
+                    {{
+                        let message = message.clone();
+                        let room_slug = room_slug.clone();
+                        let nid_done = nid.clone();
+                        view! {
+                    <div class="fixed left-0 right-0 top-0 z-40 flex w-full justify-center px-4">
                         <div class="retro-flash retro-flash--success my-2 max-w-2xl p-2">
                             <div class="mb-1 flex items-center justify-between border-b border-white/10 pb-1">
                                 <h4 class="flex items-center font-bold uppercase text-red-400">
@@ -85,7 +102,7 @@ pub fn Notifications() -> impl IntoView {
                                 </span>
                             </div>
                             <div class="my-2 text-sm font-medium">
-                                {(!room_slug.is_empty()).then(|| view! {
+                                {(!room_slug.is_empty()).then(move || view! {
                                     <A href=format!("/rooms/{room_slug}")>{message}</A>
                                 })}
                             </div>
@@ -95,6 +112,9 @@ pub fn Notifications() -> impl IntoView {
                             </button>
                         </div>
                     </div>
+                        }
+                    }}
+                    </Portal>
                 })
             }}
             <button type="button" class="retro-icon-btn relative cursor-pointer" title="Notifications"
@@ -113,7 +133,11 @@ pub fn Notifications() -> impl IntoView {
             </button>
 
             <Show when=move || open.get()>
-                <div class="fixed inset-0 z-40" on:click=move |_| open.set(false)/>
+                // Portaled: backdrop-blur on .surface-nav traps position:fixed.
+                // z-30 stays under the nav (z-40) so the panel remains clickable.
+                <Portal>
+                    <div class="fixed inset-0 z-30" on:click=move |_| open.set(false)/>
+                </Portal>
                 <div class="absolute right-0 z-50 mt-2 w-96 max-w-[90vw] rounded-xl border border-white/10 bg-surface-raised shadow-2xl">
                     <div class="max-h-96 overflow-y-auto p-2">
                         {move || {

@@ -2,6 +2,7 @@ use crate::auth::use_auth;
 use crate::components::level::LevelDisplay;
 use crate::components::notifications::Notifications;
 use crate::i18n::{locale, set_locale, t};
+use leptos::portal::Portal;
 use leptos::prelude::*;
 use leptos_router::components::A;
 use leptos_router::hooks::{use_location, use_navigate, use_query_map};
@@ -179,6 +180,13 @@ fn user_icon(cls: &'static str) -> impl IntoView {
 #[component]
 fn HelpDropdown() -> impl IntoView {
     let open = RwSignal::new(false);
+    // The portaled click-catcher can't cover the nav strip itself — close
+    // on route change instead.
+    let pathname = use_location().pathname;
+    Effect::new(move |_| {
+        pathname.track();
+        open.set(false);
+    });
     let link = move |href: &'static str, label: &'static str| {
         view! {
             <A href=href attr:class="retro-menu-link" on:click=move |_| open.set(false)>
@@ -194,7 +202,11 @@ fn HelpDropdown() -> impl IntoView {
                 {help_icon("h-5 w-5")}
             </button>
             <Show when=move || open.get()>
-                <div class="fixed inset-0 z-40" on:click=move |_| open.set(false)/>
+                // Portaled: backdrop-blur on .surface-nav traps position:fixed.
+                // z-30 stays under the nav (z-40) so the panel remains clickable.
+                <Portal>
+                    <div class="fixed inset-0 z-30" on:click=move |_| open.set(false)/>
+                </Portal>
                 <div class="absolute left-0 z-50 mt-2 w-56 rounded-xl border border-white/10 bg-surface-raised py-2 shadow-2xl">
                     <div class="retro-menu-label">{t("Guides")}</div>
                     {link("/docs/howto", "Comment jouer")}
@@ -234,6 +246,12 @@ fn UserDropdown() -> impl IntoView {
         }
     };
 
+    let pathname = use_location().pathname;
+    Effect::new(move |_| {
+        pathname.track();
+        open.set(false);
+    });
+
     let link = move |href: String, label: &'static str| {
         view! {
             <li>
@@ -251,7 +269,9 @@ fn UserDropdown() -> impl IntoView {
                 <span class="mr-1 whitespace-nowrap">{avatar}</span>
             </button>
             <Show when=move || open.get()>
-                <div class="fixed inset-0 z-40" on:click=move |_| open.set(false)/>
+                <Portal>
+                    <div class="fixed inset-0 z-30" on:click=move |_| open.set(false)/>
+                </Portal>
                 <ul class="absolute right-0 z-50 mt-2 w-48 rounded-xl border border-white/10 bg-surface-raised py-1 shadow-2xl">
                     {link("/me".into(), "My account")}
                     {link("/teams".into(), "Teams")}

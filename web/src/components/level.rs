@@ -1,5 +1,6 @@
 use crate::auth::use_auth;
 use crate::i18n::t;
+use leptos::portal::Portal;
 use leptos::prelude::*;
 use serde_json::Value;
 
@@ -250,6 +251,10 @@ pub fn LevelDisplay() -> impl IntoView {
                         {move || show_modal.get().then(|| {
                             let u2 = auth.user.get();
                             view! {
+                                // Portal: the header's backdrop-blur creates a
+                                // containing block that would trap position:fixed
+                                // inside the nav — teleport to <body> instead.
+                                <Portal>
                                 <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4"
                                     on:click=move |_| show_modal.set(false)>
                                     <div class="max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 shadow-2xl"
@@ -299,6 +304,7 @@ pub fn LevelDisplay() -> impl IntoView {
                                         </div>
                                     </div>
                                 </div>
+                                </Portal>
                             }
                         })}
                     </div>
