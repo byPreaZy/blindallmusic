@@ -150,7 +150,7 @@ impl HomeRepo {
              WHERE r.is_featured = true AND r.is_active = true \
              AND r.password IS NULL AND r.deleted_at IS NULL \
              AND (r.visible_months IS NULL OR EXTRACT(MONTH FROM now())::int = ANY(r.visible_months)) \
-             ORDER BY r.id",
+             ORDER BY r.id LIMIT 2",
             Self::COLS,
             Self::JOINS
         ))
