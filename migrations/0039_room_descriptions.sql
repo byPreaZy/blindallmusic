@@ -1,0 +1,13 @@
+-- Replace lazy "Room officielle X, blind test en ligne" placeholder
+-- descriptions with real copy matching the tone of the curated rooms.
+UPDATE rooms SET description = 'Le peace and love, le disco et les guitares acoustiques... Les années 70 ont vu naître le rock progressif et la pop folk. Testez vos connaissances sur cette décennie qui a tout changé !', updated_at = now() WHERE slug = 'annees-70';
+UPDATE rooms SET description = 'De Daft Punk à Justice en passant par les pionniers de la French Touch, testez vos connaissances sur la musique électronique et ses tubes cultes !', updated_at = now() WHERE slug = 'electro';
+UPDATE rooms SET description = 'Douze points pour la gagnante ! Testez vos connaissances sur les plus grands tubes de l''Eurovision à travers les décennies et les pays.', updated_at = now() WHERE slug = 'eurovision';
+UPDATE rooms SET description = 'Ratatouille, La Reine des Neiges, Le Roi Lion... Les bandes originales des grands dessins animés ont marqué toute une génération. Testez vos connaissances !', updated_at = now() WHERE slug = 'films-danimations';
+UPDATE rooms SET description = 'Love songs, slows et déclarations d''amour... Testez vos connaissances sur les plus belles chansons d''amour de tous les temps, du jazz aux tubes actuels.', updated_at = now() WHERE slug = 'love';
+UPDATE rooms SET description = 'Confettis, cotillons et champagne ! La playlist ultime pour la soirée du Nouvel An : hits de fête, classics de bal et tubes à chanter sous les luminières.', updated_at = now() WHERE slug = 'nouvel-an-2026';
+UPDATE rooms SET description = 'Dock of the Bay, Satisfaction, les premiers rock''n''roll... Les tubes qui ont fait danser nos parents et nos grands-parents. Testez vos connaissances sur les plus grands hits d''hier !', updated_at = now() WHERE slug = 'old-songss';
+UPDATE rooms SET description = 'De Madonna à Taylor Swift en passant par les tubes mondiaux, testez vos connaissances sur la pop internationale et ses plus grands hits !', updated_at = now() WHERE slug = 'pop';
+UPDATE rooms SET description = 'De Drake à Aya Nakamura en passant par les légendes du R''n''B, testez vos connaissances sur les plus grands hits rap et R''n''B !', updated_at = now() WHERE slug = 'rap-rnb';
+UPDATE rooms SET description = 'Le 17 mars arrive ! Plongez dans l''ambiance irlandaise avec les airs celtiques, les hymnes de pub et les tubes de la Saint-Patrick. Testez vos connaissances !', updated_at = now() WHERE slug = 'saint-patrick';
+UPDATE rooms SET description = 'Plage, soleil et bonnes vibrations ! Testez vos connaissances sur les hits de l''été : tubes festifs, classiques de vacances et sons qui sentent les vacances.', updated_at = now() WHERE slug = 'summer';

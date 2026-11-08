@@ -317,6 +317,20 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0037_room_visible_months.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            38,
+            "category_slug_les_speciales".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0038_category_slug_les_speciales.sql").into(),
+            false,
+        ),
+        sqlx::migrate::Migration::new(
+            39,
+            "room_descriptions".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0039_room_descriptions.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {

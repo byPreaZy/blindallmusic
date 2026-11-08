@@ -715,6 +715,10 @@ async fn decide(state: &AppState, path: &str, _locale: &str) -> Decision {
             return Decision::Redirect(format!("/rankings?sort={sort}"));
         }
     }
+    if path == "/blind-test-divers" {
+        return Decision::Redirect("/blind-test-les-speciales".into());
+    }
+
     let segs: Vec<&str> = path.trim_matches('/').split('/').collect();
 
     // Rooms — before the single-segment catch-all.
