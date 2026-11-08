@@ -1,88 +1,228 @@
 # Go-to-market & MRR, Blind'All Music
 
-Stratégie de monétisation : faire passer Blind'All de "projet avec un
-système de paiement" à "produit qui génère du MRR récurrent". Toutes les
-pièces techniques existent déjà, le goulot est la distribution et la
-conversion, pas le code.
+Stratégie de monétisation pour la France : transformer Blind'All de
+"projet avec un système de paiement" en "produit qui génère du MRR
+récurrent". Toutes les pièces techniques sont en place et vérifiées,
+le goulot est la distribution et la conversion, pas le code.
 
-## Positionnement
+## État des lieux (honnête)
 
-- **Produit** : blind test musical multijoueur (rooms publiques, duels
-  async, daily challenge, mini-jeux). Gratuit pour tout le monde.
-- **Plus, 4,99 €/mois** ( joueurs solo ) : zéro pub, revive quotidien sur
-  le daily, tag personnalisé, tous les perks supporter (couronne,
+| Indicateur | Valeur prod (nov. 2026) |
+|---|---|
+| Utilisateurs | 9 (7 membres, 2 invités) |
+| Abonnés payants | 0 (infra Stripe validée, jamais testée en réel) |
+| Rooms publiques | 33 (catalogue complet, saisonnalité active) |
+| Rounds 30 jours | ~30 |
+| Bars Pro | 0 |
+
+Le produit est **pré-lancement** : billing, perks, remboursements,
+SEO, saisonnalité, dashboard admin sont finis et testés. Il n'y a
+encore aucun revenu et quasi aucun utilisateur. Tout le travail
+restant est commercial.
+
+## Positionnement France
+
+**"Blind test" est déjà le mot français.** En France, le "blind test"
+est un format de bar connu : un animateur passe des extraits, les
+équipes devinent l'artiste ou le titre. Blind'All est la version
+digitale de ce format, sans animateur, sans matériel, sur les
+téléphones des clients.
+
+- **Produit** : blind test musical multijoueur (rooms publiques,
+  duels async, daily challenge, mini-jeux). Gratuit pour tous.
+- **Plus, 4,99 €/mois** (joueurs solo) : zéro pub, revive quotidien
+  sur le daily, tag personnalisé, perks supporter (couronne,
   réactions chat).
-- **Pro, 29 €/mois** ( bars, pubs, événements ) : tout Plus + branding de
-  l'établissement sur l'écran TV (nom + photo de salle), QR code vers la
-  room. Cible B2B : un seul bar abonné = ~6 joueurs Plus en MRR équivalent.
+- **Pro, 29 €/mois** (bars, pubs, événements) : tout Plus + branding
+  de l'établissement sur l'écran TV (nom + photo de salle), QR code
+  vers la room. Cible B2B : un bar abonné = ~6 joueurs Plus en MRR
+  équivalent, avec un panier 6x plus gros.
 
-Le Positionnement clé : **le bar est le canal d'acquisition**, pas une
-simple cible payante. Chaque soirée dans un bar Pro expose le jeu à 20-50
-joueurs qui peuvent devenir des utilisateurs (et des Plus) demain.
+**Le bar est le canal d'acquisition**, pas seulement une cible
+payante. Chaque soirée dans un bar Pro expose le jeu à 20-50 joueurs
+qui deviennent utilisateurs (et potentiellement Plus) demain.
+
+## Pourquoi ça peut marcher en France
+
+1. **Le format est culturellement ancré** : le blind test en bar
+   existe déjà, les gens connaissent la règle. Pas d'éducation marché.
+2. **Zéro friction d'installation** : le client scanne un QR code et
+   joue dans le navigateur. Pas de download, pas de compte obligatoire
+   (guest upgradeable). C'est l'argument anti-animateur parfait.
+3. **Le prix est dans l'impulsion** : 4,99 €/mois est sous le seuil
+   psychologique des 5 € en France. Un café par mois.
+4. **La concurrence bar est chère** : animateur 150-300 €/soir,
+   ou concepts clés en main (matériel + animation). Pro à 29 €/mois
+   coûte moins qu'une seule soirée animée.
+5. **Un calendrier marketing déjà construit** : les rooms
+   saisonnières (Noël, Halloween, Eurovision, Saint-Patrick, été)
+   pilotent automatiquement la visibilité. Chaque saison est un
+   pic de communication clé en main.
 
 ## Entonnoir de conversion
 
 ```
-Trafic (stores, SEO, TikTok, bars)
-   → inscription (compte ou guest → converti)
-   → parties quotidiennes (rétention)
+Trafic (bars, TikTok, Discord, SEO, stores)
+   → landing (/ ou /blind-test-*, /daily, /duels)
+   → première partie (guest OK, zéro friction)
+   → inscription (compte pour garder son score)
+   → parties quotidiennes (daily + rooms)
    → friction pub / envie de perks
-   → /premium → Stripe Payment Link
+   → /premium → case CGV → Stripe Payment Link
    → webhook → perks actifs immédiatement
    → Customer Portal pour gestion/résiliation
 ```
 
-Points de contact payants déjà en place : navbar, home (pitch card),
-footer, `/premium`, `/docs/support`, page `/bars` (argumentaire B2B),
-settings (bloc abonnement + CTA perks), bannière "Me support CTA".
+Points de contact payants en place : navbar, home (pitch card),
+footer, `/premium`, `/docs/support`, `/bars` (argumentaire B2B
+complet), settings (bloc abonnement + CTA perks), bannière
+"Me support". Pages légales FR complètes : CGV, CGU, mentions
+légales, politique de confidentialité.
 
 ## Canaux, par ordre de ROI attendu
 
 ### 1. Bars & événements (Pro), priorité absolue
 
-- **Cible** : bars à quiz/trivia existants, bars de jeu, soirées team
-  building, événements associatifs. Ils ont déjà l'habitude de payer pour
-  animer une salle (un blind test = zéro matériel, zéro animation).
-- **Action** : liste de 30-50 établissements FR (Discord, groupes
-  "animateurs de soirée quiz", CCI, salons du jeu). Outreach direct par
-  email/DM avec la page `/bars` + une room de démo publique à rejoindre.
-- **Offre de lancement** : 3 premiers bars à 19 €/mois pendant 3 mois
-  (prix d'entrée Startup/Bar), ensuite tarif plein. Objectif : 5 bars
-  sous 90 jours = ~145 €/mois de MRR B2B seul.
-- **Argumentaire** : vs. un animateur payé (150-300 €/soir) ou un quiz
-  box (matériel + abonnement), Pro coûte moins qu'une soirée.
+C'est le canal le plus rentable ET le plus fort en acquisition.
 
-### 2. Stores (Google Play + iOS)
+**Segments cibles** :
+- Bars à quiz / bars à thème existants : ils connaissent le format,
+  ils cherchent un outil digital moins cher qu'un animateur.
+- Bars de jeu et bars à cocktails : clientèle qui aime les
+  animations interactives.
+- Bars étudiants (Lyon, Lille, Bordeaux, Toulouse, Montpellier,
+  Nantes, Strasbourg, Rennes) : volume élevé, budget sensible,
+  forte affinité jeu.
+- Licence IV / bars de nuit : besoin d'animation les soirs creux
+  (dimanche-mardi).
+- Événements : team building, soirées associatives, festivals
+  locaux, soirées d'entreprise (via agences d'animation).
 
-- Plan déjà documenté dans `docs/STORES.md` (TWA Bubblewrap Android,
-  PWABuilder iOS). Coût : 25 $ Google + 99 $/an Apple.
-- Le store est le plus gros levier de **découverte organique** pour un
-  jeu grand public : "blind test" est une recherche store réelle.
+**Proposition commerciale** :
+- Offre de lancement : **3 premiers bars à 19 €/mois pendant 3 mois**
+  (tarif d'entrée), ensuite 29 €/mois. Objectif : 5 bars sous 90 jours
+  = ~95-145 €/mois de MRR B2B.
+- Argumentaire chiffré : "Une soirée animée vous coûte 150-300 €.
+  Blind'All Pro = 29 €/mois, illimité, sur l'écran que vous avez déjà."
+- Démo : créer une room publique de démo par ville, envoyer le lien.
+  Le prospect voit le jeu en 30 secondes sans install.
+
+**Canaux d'outreach concrets** :
+- Instagram/TikTok : DM aux pages de bars (recherche "bar quiz",
+  "blind test", "bar à thème" + ville).
+- Groupes Facebook : "animateurs de soirée quiz", "organisateurs
+  d'animations bar", réseaux d'animations locales.
+- Google Maps : liste des bars avec "quiz", "blind test", "karaoke"
+  dans leurs avis/description, puis email ou visite.
+- LinkedIn : agences d'animation, organisateurs d'événements
+  d'entreprise (pro positionnement Pro).
+- CCI et réseaux d'animation municipaux : permanences, salons
+  des associations.
+- Partenariat blanc possible plus tard : les concepts "blind test"
+  clés en main (franchises) pourraient adopter l'outil.
+
+**Argumentaire page `/bars`** (déjà en ligne) : zéro matériel,
+mode TV grand écran, QR code, playlists officielles, scoreboard
+temps réel, branding établissement, photo de salle.
+
+### 2. TikTok / YouTube Shorts / Instagram (acquisition B2C)
+
+Le produit est **visuellement partageable** : extraire des clips de
+parties folles (mauvaise réponse du groupe, comeback en daily,
+suspense sur une intro).
+
+**Formats qui marchent en FR** :
+- "On a fait un blind test entre potes, regarde ce qui s'est passé"
+  (screen recording + réactions).
+- "Devine la suite" : clip musical + suspense, le jeu en fond.
+- POV bar : "ton blind test au bar mais versionextrême".
+- Challenges saisonniers calés sur les rooms : "l'épreuve chantée
+  de Noël en blind test" en novembre-décembre.
+- Face caméra : streamer/réaction sur les réponses absurdes du
+  groupe (l'audio des joueurs fait le contenu).
+
+**Cadence** : 1 vidéo/semaine minimum, pas de stratégie complexe.
+Mesurer avec `?utm_source=tiktok` / `utm_campaign=shorts` sur les
+liens (à vérifier : les UTM ne sont pas encore trackés côté analytics,
+le dashboard admin donne les volumes globaux).
+
+### 3. Discord & communautés existantes
+
+- Serveur Discord officiel déjà lié (footer). Annoncer le lancement
+  Premium aux early adopters : ce sont les utilisateurs les plus chauds.
+- Serveurs Discord FR de musique, de jeux, de quiz : proposer une
+  room privée pour tester, mesure d'audience avant tout post.
+- Communautés "blind test" Telegram/Discord existantes : le produit
+  est leur version digitale officielle.
+
+### 4. SEO & pages publiques (déjà en place, à alimenter)
+
+Pages indexables existantes : `/premium`, `/bars`, `/duels`,
+`/daily`, `/docs/*`, `/blind-test-{slug}` (landings catégories avec
+vrai copy SEO), `/games/{type}`, sitemap dynamique avec saisonnalité.
+
+**Mots-clés FR prioritaires** :
+- "blind test en ligne", "blindtest en ligne", "blind test gratuit"
+- "quiz musical multijoueur", "jeu blind test entre amis"
+- "blind test pop / années 80 / chanson française / electro" (déjà
+  couverts par les slugs de rooms)
+- "blind test bar" (B2B, page `/bars`)
+
+**Actions** :
+- Contenu régulier : articles "meilleurs blind test en ligne",
+  comparatifs, pages par genre. Commencer par 2-3 pages à fort
+  intent.
+- La saisonnalité est un atout SEO : les landings événementielles
+  (Noël, Halloween) ont un pic de recherche naturel chaque année.
+  Préparer les posts quand la room devient visible.
+
+### 5. Stores (Google Play + iOS)
+
+Plan documenté dans `docs/STORES.md` (TWA Bubblewrap Android,
+PWABuilder iOS). Coût : 25 $ Google + 99 $/an Apple.
+
+- Le store est le plus gros levier de **découverte organique** pour
+  un jeu grand public : "blind test" est une recherche store réelle.
+- Ordre : **Android d'abord** (25 $ one-shot, marché FR large),
+  iOS ensuite si les métriques le justifient.
 - SEO store : titre "Blind Test : quiz musical multijoueur", screenshots
-  de parties épiques, FR + EN.
+  de parties, description FR (EN plus tard).
 
-### 3. SEO & pages publiques (déjà en place, à alimenter)
+### 6. PWA & bouche-à-oreille
 
-- Pages indexables existantes : `/premium`, `/bars`, `/duels`, `/daily`,
-  `/docs/*`, `/blind-test-{slug}` (category landings).
-- Ajouter du contenu régulier : articles "meilleurs blind test en ligne",
-  comparatifs, pages par genre musical. C'est le canal le moins coûteux
-  sur le long terme.
-
-### 4. Contenu court (TikTok / YouTube Shorts / Instagram)
-
-- Le produit est **visuellement partageable** : extraire des clips de
-  parties folles (mauvaise réponse du groupe, победа en daily).
-- Format : "on a fait un blind test dans un bar, regarde ce qui s'est
-  passé", boucle de partage native.
-- Objectif : 1 vidéo/semaine, pas de stratégie complexe. Mesurer via
-  UTM `?utm_source=tiktok` sur les liens (à ajouter si absent).
-
-### 5. Discord & communauté existante
-
-- Serveur Discord déjà lié (footer). Annoncer le lancement Premium aux
-  early adopters, les 7 users actuels sont les plus chauds.
+- La PWA a déjà une invite d'installation ("Installer l'application").
+  En France, "ajouter à l'écran d'accueil" est un réflexe connu :
+  zéro friction store.
+- Chaque room publique est un vecteur : le joueurinvite un ami,
+  la boucle grandit seule.
 - Système de parrainage éventuel plus tard (quand MRR > 0).
+
+### 7. Partenariats & presse (secondaire)
+
+- Blogs/médias FR de jeux vidéo et de culture pop : pitch "le blind
+  test de bar, en ligne et gratuit".
+- Podcasts FR de musique/jeux : format "on a testé le blind test
+  en ligne entre nous".
+- Communautés d'"animateurs de soirée" : ils sont les prescripteurs
+  naturels du format en bar.
+
+## Calendrier marketing saisonnier (déjà construit)
+
+Les rooms saisonnières pilotent automatiquement la visibilité.
+Aligner la communication dessus :
+
+| Période | Room visible | Angle com' |
+|---|---|---|
+| Octobre | Halloween | "Le blind test d'Halloween" |
+| Novembre-décembre | C'est Noël | Pic recherche "blind test noël" |
+| Décembre-janvier | Nouvel an | Rétrospective année + résolution |
+| Mars | Saint-Patrick | Angle fête/green, communauté IRL |
+| Mai-juin | Eurovision | Suivi de l'Eurovision (très FR) |
+| Été | Summer hits | Playlists estivales |
+
+Chaque changement de saison = une excuse pour poster (TikTok,
+Discord, communities). Préparer les assets quand la room devient
+visible dans le sitemap.
 
 ## Pricing & packaging, décisions actées
 
@@ -90,58 +230,54 @@ settings (bloc abonnement + CTA perks), bannière "Me support CTA".
 |---|---|---|---|
 | Gratuit | 0 € | Tous | Acquisition, volume, funnel |
 | Plus | 4,99 €/mois | Joueurs engagés | MRR volume (long tail) |
-| Pro | 29 €/mois | Bars/événements | MRR qualité (peu de clients, gros panier) |
+| Pro | 29 €/mois (19 € promo lancement) | Bars/événements | MRR qualité |
 
-- **Pas de don** : le système de dons mensuels a été retiré, il créait
-  une confusion avec les abonnements (les perks étaient déjà inclus dans
-  Plus/Pro) et ne générait aucun revenu (0 don en prod).
-- Pas de plan annuel pour l'instant : valider la rétention mensuelle
-  d'abord. Réévaluer à 50+ abonnés (offre -20 % annuel).
-- Les pubs AdSense restent sur le gratuit : c'est le coût acceptable de
-  la monétisation indirecte des non-payants, et un argument Plus concret.
+- **Pas de plan don** : retiré, créait de la confusion avec les
+  abonnements et ne générait rien (0 don en prod).
+- **Pas de plan annuel** pour l'instant : valider la rétention
+  mensuelle d'abord. Réévaluer à 50+ abonnés (offre -20 % annuel).
+- **AdSense reste sur le gratuit** : monétisation indirecte des
+  non-payants, et argument Plus concret ("zéro pub").
+- Le prix Pro à 29 € est volontairement sous le seuil "un repas"
+  pour un commerce : décision facile pour un gérant de bar.
 
 ## Remboursements & droit de rétractation (B2C)
 
-- **Base légale** : art. L221-18 C. conso, 14 jours de rétractation pour
-  le consommateur. Pour du contenu numérique exécuté immédiatement, le
-  droit peut être levé par une **renonciation expresse** (art. L221-28
-  13°) : c'est la case à cocher des pages `/premium` et `/docs/support`,
-  dont le libellé est repris dans les CGV (art. 6). Les boutons Stripe
-  restent verrouillés tant que la case n'est pas cochée.
-- **Révocation automatique** : un remboursement **intégral** dans le
-  dashboard Stripe déclenche `charge.refunded` → la souscription passe à
-  `canceled`, les perks (ads, revive, tag, venue Pro) sont retirés et
-  l'utilisateur est notifié par e-mail. La résolution se fait par
-  `stripe_invoice_id` (maintenu via `invoice.payment_succeeded`) avec
-  fallback sur le customer Stripe si un seul abonnement est actif.
-- **Remboursement partiel** : ignoré volontairement, un geste commercial
-  ne doit pas couper l'abonnement.
-- **Procédure ops** : remboursement dans Stripe (Payments → la charge →
-  Refund) **puis** résiliation de l'abonnement dans le dashboard (ou
-  laisser le portail client le faire). Le webhook `charge.refunded` couvre
-  le cas où seul le refund est fait ; `customer.subscription.deleted`
-  couvre la résiliation sans refund.
-- **Fait côté Stripe (prod, via API)** : webhook endpoint
-  `/api/v1/stripe/webhook` écoute les 7 events (`checkout.session.completed`,
-  `async_payment_succeeded`, `customer.subscription.*`,
-  `invoice.payment_succeeded`, `charge.refunded`) ; les deux Payment Links
-  Plus/Pro ont `consent_collection.terms_of_service=required` ; le Payment
-  Link de don one-time est désactivé.
-- **Reste à vérifier (dashboard, manuel)** : Settings → Public details →
-  *Terms of service URL* doit pointer vers
-  `/pages/conditions-generales-vente`, c'est la cible du checkbox CGV
-  affiché par Stripe au paiement.
+- **Base légale** : art. L221-18 C. conso, 14 jours de rétractation.
+  Pour du contenu numérique exécuté immédiatement, le droit peut
+  être levé par **renonciation expresse** (art. L221-28 13°) : c'est
+  la case à cocher des pages `/premium` et `/docs/support`, reprise
+  dans les CGV (art. 6). Les boutons Stripe restent verrouillés
+  tant que la case n'est pas cochée.
+- **Révocation automatique** : un remboursement intégral dans le
+  dashboard Stripe déclenche `charge.refunded` → souscription
+  `canceled`, perks retirés (ads, revive, tag, venue Pro),
+  notification e-mail. Résolution par `stripe_invoice_id` avec
+  fallback customer Stripe.
+- **Remboursement partiel** : ignoré volontairement, un geste
+  commercial ne doit pas couper l'abonnement.
+- **Procédure ops** : refund dans Stripe puis résiliation (ou
+  portail client). Le webhook couvre les deux chemins.
+- **B2B (bars)** : les clients pro ne bénéficient pas du droit de
+  rétractation grand public de la même façon (client professionnel) ;
+  les CGV s'appliquent. Vérifier le wording CGV pour la distinction
+  B2C/B2B si des bars s'abonnent.
 
-## KPIs à suivre (dashboard admin ou requêtes SQL)
+## KPIs à suivre
 
-| Métrique | Cible 90 jours | Source |
+Le **dashboard admin** (`/admin`) affiche maintenant les métriques
+en direct : users, rooms, subscriptions, activité 7j/30j, contenu,
+top rooms, plus l'historique (snapshots horaires) et l'export CSV.
+
+| Métrique | Cible 90 jours | Où |
 |---|---|---|
-| Utilisateurs actifs hebdo | 500+ | rooms/parties |
-| Taux free → inscription | > 30 % | auth |
+| Utilisateurs actifs hebdo | 500+ | dashboard admin (activity) |
+| Taux free → inscription | > 30 % | auth (users guests vs membres) |
 | Taux inscription → payant | > 2 % | user_subscriptions |
-| MRR | > 300 € | user_subscriptions actives |
+| MRR | > 300 € | dashboard (subscriptions) |
 | Bars Pro | 3-5 | rooms.is_pro |
 | Churn mensuel | < 15 % | subscription.deleted events |
+| Nouveaux users / semaine | croissance | dashboard history |
 
 Requête MRR rapide :
 
@@ -155,18 +291,57 @@ GROUP BY plan;
 
 ## Roadmap 90 jours
 
-- **Sem. 1-2** : déployer la bascule dons → abonnements (cette branche),
-  vérifier le tunnel Stripe en conditions réelles (1 paiement test).
-- **Sem. 2-4** : outreach bars (30 contacts), soumission stores Android,
-  4 posts courts.
-- **Mois 2** : itérer sur les objections (pricing, features manquantes),
-  contenu SEO (2-3 pages), iOS si Android validé.
-- **Mois 3** : décision annuel, parrainage, ou feature Pro n°2
+**Semaines 1-2 (fondations, fait)** :
+- Billing Stripe complet et vérifié : payment links live, webhook
+  signature OK, portail client, refunds auto, perks testés
+  (free/plus/pro validés, comptes de test supprimés).
+- SEO, saisonnalité, catalogue, dashboard admin : déployés.
+- Reste manuel : **1 paiement test réel 4,99 € + remboursement**
+  pour valider le tunnel Stripe de bout en bout, et vérifier le
+  statut du site dans la console AdSense.
+
+**Semaines 2-6 (premiers revenus)** :
+- Outreach bars : 30 contacts (Instagram/Maps/FB), 3 démos de rooms
+  par ville cible. Objectif : 1-2 bars en offre lancement 19 €.
+- TikTok : 4-6 posts courts (screen recordings de parties), UTM
+  sur les liens.
+- Annonce Discord : lancement Premium aux early adopters.
+- Soumission Google Play (TWA Android).
+
+**Mois 2 (itération)** :
+- Itérer sur les objections pricing/features remontées par les bars.
+- 2-3 pages SEO à fort intent.
+- iOS si Android validé.
+- Premier bar Pro plein tarif : le cas client à documenter pour
+  la prospection suivante.
+
+**Mois 3 (scale ou pivot)** :
+- Décision : plan annuel, parrainage, ou feature Pro n°2
   (sonorisation/quiz house depuis la room ?).
+- Si 0 bar après 60 contacts : revoir le ciblage (peut-être les
+  animateurs de soirée plutôt que les bars, ou les événements
+  associatifs d'abord).
 
 ## Ce qui n'est PAS dans le scope
+
 - Reconstruction du billing : Stripe Payment Links + webhooks +
   Customer Portal suffisent à cette échelle.
 - Programme d'affiliation, facturation entreprise, multi-devises :
   prématuré avant 100+ abonnés.
 - Marketing payant (Ads, influenceurs) : burn sans produit-prouvé.
+- Contenu audio/licences : le catalogue Deezer preview + playlists
+  existantes suffisent pour la validation ; les questions de
+  droits à grande échelle se poseront après traction.
+
+## Checklist lancement (prochaine session)
+
+- [ ] Paiement test réel 4,99 € sur `/premium` + refund Stripe,
+      vérifier perks activés puis retirés.
+- [ ] Console AdSense : statut du site (approuvé ? démarrage des
+      impressions ?).
+- [ ] Stripe dashboard : *Terms of service URL* →
+      `/pages/conditions-generales-vente` (cible du checkbox CGV).
+- [ ] Pitch bar type : 1 page PDF/Notion avec screenshots + offre
+      19 €/mois pour les 3 premiers.
+- [ ] 30 noms de bars cibles + canaux de contact (première liste).
+- [ ] 4 concepts de posts TikTok/Shorts filmables en 1 journée.
