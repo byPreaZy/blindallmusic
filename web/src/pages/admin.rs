@@ -144,6 +144,133 @@ fn role_badge(role: &str) -> impl IntoView {
 
 // ---- dashboard -----------------------------------------------------------------
 
+fn mv(m: &Value, section: &str, key: &str) -> String {
+    m[section][key]
+        .as_i64()
+        .map(|n| n.to_string())
+        .unwrap_or_else(|| "—".to_string())
+}
+
+#[component]
+fn Stat(label_key: &'static str, value: String) -> impl IntoView {
+    view! {
+        <div class="rounded-lg bg-white/5 px-3 py-2">
+            <div class="text-lg font-bold text-white">{value}</div>
+            <div class="text-xs text-white/50">{t(label_key)}</div>
+        </div>
+    }
+}
+
+fn top_rooms_table(m: &Value) -> AnyView {
+    let rooms = m["top_rooms_30d"].as_array().cloned().unwrap_or_default();
+    if rooms.is_empty() {
+        return view! { <p class="text-sm text-white/50">{t("No data yet.")}</p> }.into_any();
+    }
+    view! {
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-white/10 text-left text-xs text-white/50">
+                        <th class="pb-2 pr-4">{t("Room")}</th>
+                        <th class="pb-2 text-right">{t("Rounds")}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rooms.iter().map(|r| view! {
+                        <tr class="border-b border-white/5">
+                            <td class="py-2 pr-4 text-white/80">{r["name"].as_str().unwrap_or("—").to_string()}</td>
+                            <td class="py-2 text-right text-white/80">{r["plays"].as_i64().unwrap_or(0)}</td>
+                        </tr>
+                    }).collect::<Vec<_>>()}
+                </tbody>
+            </table>
+        </div>
+    }
+    .into_any()
+}
+
+#[component]
+fn MetricsGrid(data: RwSignal<Value>) -> impl IntoView {
+    view! {
+        <div class="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {move || {
+                let d = data.get();
+                let m = &d["metrics"];
+                if m.is_null() {
+                    return view! {
+                        <div class="card p-5 text-white/50 md:col-span-2 xl:col-span-3">
+                            {t("Loading")}"…"
+                        </div>
+                    }.into_any();
+                }
+                view! {
+                    <div class="card p-5">
+                        <h2 class="mb-3 font-bold text-white">{t("Users")}</h2>
+                        <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                            <Stat label_key="Total" value=mv(m, "users", "total")/>
+                            <Stat label_key="Members" value=mv(m, "users", "members")/>
+                            <Stat label_key="Guests" value=mv(m, "users", "guests")/>
+                            <Stat label_key="New (7d)" value=mv(m, "users", "new_7d")/>
+                            <Stat label_key="New (30d)" value=mv(m, "users", "new_30d")/>
+                            <Stat label_key="Banned" value=mv(m, "users", "banned")/>
+                        </div>
+                    </div>
+                    <div class="card p-5">
+                        <h2 class="mb-3 font-bold text-white">{t("Rooms")}</h2>
+                        <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                            <Stat label_key="Total" value=mv(m, "rooms", "total")/>
+                            <Stat label_key="Public" value=mv(m, "rooms", "public")/>
+                            <Stat label_key="Playing now" value=mv(m, "rooms", "playing_now")/>
+                            <Stat label_key="Featured" value=mv(m, "rooms", "featured")/>
+                            <Stat label_key="Pro" value=mv(m, "rooms", "pro")/>
+                            <Stat label_key="Active" value=mv(m, "rooms", "active")/>
+                        </div>
+                    </div>
+                    <div class="card p-5">
+                        <h2 class="mb-3 font-bold text-white">{t("Subscriptions")}</h2>
+                        <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                            <Stat label_key="Plus" value=mv(m, "subscriptions", "plus")/>
+                            <Stat label_key="Pro" value=mv(m, "subscriptions", "pro")/>
+                            <Stat label_key="Past due" value=mv(m, "subscriptions", "past_due")/>
+                        </div>
+                    </div>
+                    <div class="card p-5">
+                        <h2 class="mb-3 font-bold text-white">{t("Activity (7 days)")}</h2>
+                        <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                            <Stat label_key="Rounds" value=mv(m, "activity", "rounds_7d")/>
+                            <Stat label_key="Players" value=mv(m, "activity", "players_7d")/>
+                            <Stat label_key="Messages" value=mv(m, "activity", "messages_7d")/>
+                            <Stat label_key="Minigame plays" value=mv(m, "minigames", "plays_7d")/>
+                        </div>
+                    </div>
+                    <div class="card p-5">
+                        <h2 class="mb-3 font-bold text-white">{t("Content")}</h2>
+                        <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                            <Stat label_key="Tracks" value=mv(m, "content", "tracks")/>
+                            <Stat label_key="Local tracks" value=mv(m, "content", "local_tracks")/>
+                            <Stat label_key="Playlists" value=mv(m, "content", "playlists")/>
+                            <Stat label_key="Public playlists" value=mv(m, "content", "public_playlists")/>
+                            <Stat label_key="Categories" value=mv(m, "content", "categories")/>
+                        </div>
+                    </div>
+                    <div class="card p-5">
+                        <h2 class="mb-3 font-bold text-white">{t("All-time totals")}</h2>
+                        <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                            <Stat label_key="Rounds" value=mv(m, "activity", "rounds_total")/>
+                            <Stat label_key="Messages" value=mv(m, "activity", "messages_total")/>
+                            <Stat label_key="Minigame plays" value=mv(m, "minigames", "plays_total")/>
+                        </div>
+                    </div>
+                    <div class="card p-5 md:col-span-2 xl:col-span-3">
+                        <h2 class="mb-3 font-bold text-white">{t("Top rooms (30 days)")}</h2>
+                        {top_rooms_table(m)}
+                    </div>
+                }.into_any()
+            }}
+        </div>
+    }
+}
+
 #[component]
 pub fn AdminDashboard() -> impl IntoView {
     let data = RwSignal::new(Value::Null);
@@ -168,6 +295,7 @@ pub fn AdminDashboard() -> impl IntoView {
             {move || msg.get().map(|m| view! {
                 <div class="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300">{m}</div>
             })}
+            <MetricsGrid data=data/>
             <div class="grid gap-4 md:grid-cols-2">
                 <div class="card p-5">
                     <h2 class="mb-2 font-bold text-white">{t("Disk space")}</h2>

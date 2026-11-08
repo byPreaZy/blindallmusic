@@ -604,7 +604,7 @@ pub async fn delete_faq(
 
 // ---- dashboard -------------------------------------------------------------
 
-pub async fn dashboard(State(_state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
+pub async fn dashboard(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
     if !user.is_administrator {
         return forbidden();
     }
@@ -614,9 +614,11 @@ pub async fn dashboard(State(_state): State<AppState>, CurrentUser(user): Curren
         .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .unwrap_or_else(|| "Unable to retrieve disk space information".to_string());
+    let metrics = state.admin.metrics().await.unwrap_or(Value::Null);
     Json(json!({
         "diskSpace": disk,
         "cacheDriver": "redis",
+        "metrics": metrics,
     }))
     .into_response()
 }

@@ -1531,6 +1531,94 @@ impl AdminRepo {
             })
             .collect())
     }
+
+    /// Aggregate metrics for the admin dashboard. All counts are cheap
+    /// indexed COUNT/SUM queries — no event pipeline required.
+    pub async fn metrics(&self) -> Result<Value, sqlx::Error> {
+        let one = |sql: &'static str| {
+            let pool = self.pool.clone();
+            async move {
+                sqlx::query_scalar::<_, i64>(sql)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap_or(0)
+            }
+        };
+        let users = json!({
+            "total": one("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL").await,
+            "members": one("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND is_guest = false").await,
+            "guests": one("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND is_guest = true").await,
+            "admins": one("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND is_administrator = true").await,
+            "new_7d": one("SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '7 days'").await,
+            "new_30d": one("SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '30 days'").await,
+            "banned": one(
+                "SELECT COUNT(DISTINCT bannable_id) FROM bans \
+                 WHERE bannable_type = 'App\\Models\\User' AND deleted_at IS NULL \
+                 AND (expired_at IS NULL OR expired_at > NOW())"
+            ).await,
+        });
+        let rooms = json!({
+            "total": one("SELECT COUNT(*) FROM rooms WHERE deleted_at IS NULL").await,
+            "public": one("SELECT COUNT(*) FROM rooms WHERE deleted_at IS NULL AND is_public = true").await,
+            "active": one("SELECT COUNT(*) FROM rooms WHERE deleted_at IS NULL AND is_active = true").await,
+            "featured": one("SELECT COUNT(*) FROM rooms WHERE deleted_at IS NULL AND is_featured = true").await,
+            "pro": one("SELECT COUNT(*) FROM rooms WHERE deleted_at IS NULL AND is_pro = true").await,
+            "playing_now": one("SELECT COUNT(*) FROM rooms WHERE deleted_at IS NULL AND is_playing = true").await,
+        });
+        let content = json!({
+            "tracks": one("SELECT COUNT(*) FROM tracks").await,
+            "local_tracks": one("SELECT COUNT(*) FROM local_tracks").await,
+            "playlists": one("SELECT COUNT(*) FROM playlists").await,
+            "public_playlists": one("SELECT COUNT(*) FROM playlists WHERE is_public = true").await,
+            "categories": one("SELECT COUNT(*) FROM categories").await,
+        });
+        let activity = json!({
+            "rounds_total": one("SELECT COUNT(*) FROM rounds").await,
+            "rounds_7d": one("SELECT COUNT(*) FROM rounds WHERE created_at > NOW() - INTERVAL '7 days'").await,
+            "rounds_30d": one("SELECT COUNT(*) FROM rounds WHERE created_at > NOW() - INTERVAL '30 days'").await,
+            "players_7d": one(
+                "SELECT COUNT(DISTINCT user_id) FROM round_standings \
+                 WHERE round_id IN (SELECT id FROM rounds WHERE created_at > NOW() - INTERVAL '7 days')"
+            ).await,
+            "messages_total": one("SELECT COUNT(*) FROM messages WHERE deleted_at IS NULL").await,
+            "messages_7d": one("SELECT COUNT(*) FROM messages WHERE deleted_at IS NULL AND created_at > NOW() - INTERVAL '7 days'").await,
+        });
+        let subscriptions = json!({
+            "plus": one("SELECT COUNT(DISTINCT user_id) FROM user_subscriptions WHERE plan = 'plus' AND status IN ('active','trialing','past_due')").await,
+            "pro": one("SELECT COUNT(DISTINCT user_id) FROM user_subscriptions WHERE plan = 'pro' AND status IN ('active','trialing','past_due')").await,
+            "past_due": one("SELECT COUNT(*) FROM user_subscriptions WHERE status = 'past_due'").await,
+        });
+        let minigames = json!({
+            "plays_total": one("SELECT COUNT(*) FROM minigame_scores").await,
+            "plays_7d": one("SELECT COUNT(*) FROM minigame_scores WHERE created_at > NOW() - INTERVAL '7 days'").await,
+        });
+        let top_rooms = sqlx::query(
+            "SELECT r.name, r.slug, COUNT(*) AS plays \
+             FROM rounds rd JOIN rooms r ON r.id = rd.room_id \
+             WHERE rd.created_at > NOW() - INTERVAL '30 days' AND r.deleted_at IS NULL \
+             GROUP BY r.id, r.name, r.slug ORDER BY plays DESC LIMIT 5",
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .iter()
+        .map(|r| {
+            json!({
+                "name": r.get::<String, _>("name"),
+                "slug": r.get::<String, _>("slug"),
+                "plays": r.get::<i64, _>("plays"),
+            })
+        })
+        .collect::<Vec<_>>();
+        Ok(json!({
+            "users": users,
+            "rooms": rooms,
+            "content": content,
+            "activity": activity,
+            "subscriptions": subscriptions,
+            "minigames": minigames,
+            "top_rooms_30d": top_rooms,
+        }))
+    }
 }
 
 // ---- data-quality: extra queues (compilation artists, duplicates, featuring) ----

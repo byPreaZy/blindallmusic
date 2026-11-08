@@ -68,6 +68,23 @@ async fn admin_dashboard_shape() {
 }
 
 #[tokio::test]
+async fn admin_dashboard_metrics_shape() {
+    let admin = Client::admin().await;
+    let r = admin
+        .get("/api/v1/admin/dashboard")
+        .await
+        .expect_ok("dashboard");
+    let m = &r.body["metrics"];
+    for section in [
+        "users", "rooms", "content", "activity", "subscriptions", "minigames",
+    ] {
+        assert!(m.get(section).is_some(), "metrics.{section} missing: {}", r.text);
+    }
+    assert!(m["users"]["total"].is_number());
+    assert!(m["top_rooms_30d"].is_array());
+}
+
+#[tokio::test]
 async fn admin_users_list_and_search() {
     let admin = Client::admin().await;
     let r = admin.get("/api/v1/admin/users").await.expect_ok("users");
