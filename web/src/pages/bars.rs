@@ -5,15 +5,15 @@ use leptos_router::components::A;
 use serde_json::Value;
 
 // Pro subscription CTA: links straight to the Stripe payment page when the
-// server exposes `pro_url` (same source as the donations page), otherwise it
-// falls back to /donations where the subscribe card lives.
+// server exposes `pro_url` (same source as the premium page), otherwise it
+// falls back to /premium where the subscribe card lives.
 fn pro_cta(pro_url: RwSignal<String>, class: &'static str) -> impl IntoView {
     view! {
         <a
             href=move || {
                 let u = pro_url.get();
                 if u.is_empty() {
-                    "/donations".to_string()
+                    "/premium".to_string()
                 } else {
                     u
                 }
@@ -158,10 +158,10 @@ pub fn BarsPage() -> impl IntoView {
     crate::i18n::set_title_key("Blind test pour bars & pubs");
     crate::seo::apply_page("/bars", t("Transformez votre TV en blind test géant : vos clients buzzent depuis leur téléphone, le score s'affiche en direct. 29 €/mois, sans engagement."));
 
-    // Same source as the donations page for the Pro Stripe payment link.
+    // Same source as the premium page for the Pro Stripe payment link.
     let pro_url = RwSignal::new(String::new());
     leptos::task::spawn_local(async move {
-        if let Ok(v) = api::get::<Value>("/api/v1/donations/progress").await {
+        if let Ok(v) = api::get::<Value>("/api/v1/billing/status").await {
             if let Some(u) = v["pro_url"].as_str() {
                 pro_url.set(u.to_string());
             }

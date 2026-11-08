@@ -33,7 +33,6 @@ impl ProfileRepo {
         );
         let Some(user) = sqlx::query(&sql)
         .bind(user_id)
-        .bind(crate::donations::current_month_key())
         .fetch_optional(&self.pool)
         .await?
         else {

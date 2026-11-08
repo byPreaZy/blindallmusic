@@ -370,14 +370,11 @@ async fn room_state(state: &AppState, room_id: i64) -> Value {
         scores.insert(uid.to_string(), json!(s));
     }
 
-    let supporter_ids: std::collections::HashSet<i64> = state
-        .donations_repo
-        .supporter_ids(&member_ids, &blindall_db::donations::current_month_key())
+    let plans = state
+        .subscriptions
+        .active_plans(&member_ids)
         .await
-        .unwrap_or_default()
-        .into_iter()
-        .collect();
-    let configured: Vec<String> = state.donations.supporter_perks.clone();
+        .unwrap_or_default();
 
     // PHP parity: the in-room user list comes from the presence channel
     // membership (.here), not the Redis zset — the zset only feeds
@@ -394,16 +391,15 @@ async fn room_state(state: &AppState, room_id: i64) -> Value {
         if !seen.contains(uid) {
             seen.insert(*uid);
             if let Some(p) = info.get(uid) {
-                let perks: &[String] = if supporter_ids.contains(&p.id) {
-                    &configured
-                } else {
-                    &[]
-                };
+                let perks = crate::payments::perks_for_plan(
+                    &state.payments,
+                    plans.get(&p.id).map(String::as_str),
+                );
                 users.push(player_info_json(
                     state,
                     p,
                     raw_map.get(&p.id).copied().unwrap_or(0.0),
-                    perks,
+                    &perks,
                 ));
             }
         }

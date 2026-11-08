@@ -308,7 +308,6 @@ impl RankingsRepo {
         );
         let user_rows = sqlx::query(&sql)
         .bind(user_ids.to_vec())
-        .bind(crate::donations::current_month_key())
         .fetch_all(&self.pool)
         .await?;
         let any_n = if room_id.is_some() { 2 } else { 1 };

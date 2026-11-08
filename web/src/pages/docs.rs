@@ -203,7 +203,7 @@ pub fn DocsIndexPage() -> impl IntoView {
                     {link_card("/docs/glossary", "Glossaire", "Définitions des termes techniques", "green")}
                     {link_card("/docs/howto", "Guide de démarrage", "Comment jouer à un blind test", "orange")}
                     {link_card("/docs/create-content", "Créer du contenu", "Rooms, playlists, tracks et réponses", "teal")}
-                    {link_card("/docs/support", "Soutenir Blind'All Music", "Objectif mensuel et dons", "pink")}
+                    {link_card("/docs/support", "Soutenir Blind'All Music", "Abonnements Premium", "pink")}
                     {link_card("/docs/faq", "FAQ", "Questions fréquentes", "blue")}
                 </div>
             })}
@@ -1027,53 +1027,20 @@ pub fn DocsCreateContentPage() -> impl IntoView {
     }
 }
 
-// ---- /docs/support : donation-backed -----------------------------------------------
-
-fn euros(cents: i64) -> String {
-    format!("{:.2} €", cents as f64 / 100.0)
-}
-
-fn month_label(key: &str) -> String {
-    const MONTHS: &[&str] = &[
-        "janvier",
-        "février",
-        "mars",
-        "avril",
-        "mai",
-        "juin",
-        "juillet",
-        "août",
-        "septembre",
-        "octobre",
-        "novembre",
-        "décembre",
-    ];
-    let mut it = key.split('-');
-    let year = it.next().unwrap_or("");
-    let m = it.next().and_then(|m| m.parse::<usize>().ok()).unwrap_or(0);
-    if m == 0 || m > 12 {
-        return key.to_string();
-    }
-    format!("{} {}", t(MONTHS[m - 1]), year)
-}
+// ---- /docs/support : Premium plans -------------------------------------------------
 
 #[component]
 pub fn DocsSupportPage() -> impl IntoView {
     crate::i18n::set_title_key("Docs support title");
     crate::seo::apply_page("/docs/support", t("Docs support description"));
-    let history = RwSignal::new(Vec::<Value>::new());
-    let recent = RwSignal::new(Vec::<Value>::new());
-    let progress = RwSignal::new(Value::Null);
+    let status = RwSignal::new(Value::Null);
+    // Same express withdrawal waiver as /premium (art. L221-28 13°): the
+    // Stripe CTA stays locked until the box is ticked.
+    let consent = RwSignal::new(false);
 
     leptos::task::spawn_local(async move {
-        if let Ok(v) = api::get::<Value>("/api/v1/donations/progress").await {
-            progress.set(v);
-        }
-        if let Ok(v) = api::get::<Value>("/api/v1/donations/history?months=12").await {
-            history.set(v["history"].as_array().cloned().unwrap_or_default());
-        }
-        if let Ok(v) = api::get::<Value>("/api/v1/donations/recent?limit=30").await {
-            recent.set(v["donations"].as_array().cloned().unwrap_or_default());
+        if let Ok(v) = api::get::<Value>("/api/v1/billing/status").await {
+            status.set(v);
         }
     });
 
@@ -1081,102 +1048,105 @@ pub fn DocsSupportPage() -> impl IntoView {
         <div class="mx-auto max-w-5xl space-y-8 px-4 py-8">
             <div class="space-y-4 text-center">
                 <h1 class="text-4xl font-bold text-white">{t("Support Blind'All Music")}</h1>
-                <p class="mx-auto max-w-2xl text-lg text-neutral-400">{move || crate::i18n::tr("Docs support intro", &[("goal", crate::ads::goal_or(&progress.get()["goal_cents"].as_i64().map(crate::ads::euros).unwrap_or_default()))])}</p>
+                <p class="mx-auto max-w-2xl text-lg text-neutral-400">{t("Docs premium intro")}</p>
             </div>
 
             {move || {
-                let p = progress.get();
-                let raised = p["raised_cents"].as_i64().unwrap_or(0);
-                let goal = p["goal_cents"].as_i64().unwrap_or(1).max(1);
-                let pct = (raised as f64 / goal as f64 * 100.0).min(100.0);
-                view! {
-                    <div class=CARD>
-                        <h2 class="mb-3 text-2xl font-bold text-white">{t("Monthly goal")}</h2>
-                        <div class="mb-2 h-3 overflow-hidden rounded-full bg-slate-700">
-                            <div class="h-full rounded-full bg-brand-accent" style=format!("width:{pct:.0}%")></div>
+                let p = status.get();
+                let plus_url = p["plus_url"].as_str().unwrap_or("").to_string();
+                let pro_url = p["pro_url"].as_str().unwrap_or("").to_string();
+                let plan = p["plan"].as_str().unwrap_or("").to_string();
+                let offered = p["plus_offered"].as_bool().unwrap_or(false);
+                if !offered && plan.is_empty() {
+                    return view! {
+                        <div class="rounded-xl border border-white/10 bg-surface-raised/60 p-6 text-center text-white/50">
+                            {t("Subscriptions are not available yet.")}
                         </div>
-                        <p class="text-sm text-neutral-300">
-                            {format!("{} / {} : {:.0}%", euros(raised), euros(goal), raised as f64 / goal as f64 * 100.0)}
-                        </p>
-                        <div class="mt-4">
-                            <A href="/donations" attr:class="btn-primary !px-4 !py-2 text-sm">{t("Donate")}</A>
+                    }.into_any();
+                }
+                let cta = move |url: String| {
+                    if !consent.get() {
+                        return view! {
+                            <span class="btn-primary cursor-not-allowed !px-4 !py-2 text-sm opacity-40">
+                                {t("Subscribe")}
+                            </span>
+                        }
+                        .into_any();
+                    }
+                    let (href, external) = if url.is_empty() {
+                        ("/login".to_string(), false)
+                    } else {
+                        (url, true)
+                    };
+                    view! {
+                        <a href=href
+                            class="btn-primary !px-4 !py-2 text-sm"
+                            target=external.then_some("_blank")
+                            rel=external.then_some("noopener")>
+                            {t("Subscribe")}
+                        </a>
+                    }
+                    .into_any()
+                };
+                view! {
+                    <label class="mb-4 flex cursor-pointer items-start gap-2 text-xs leading-relaxed text-white/60">
+                        <input type="checkbox" class="mt-0.5"
+                            prop:checked=move || consent.get()
+                            on:change=move |ev| consent.set(event_target_checked(&ev)) />
+                        <span>
+                            {t("I accept the Terms of Sale, request immediate access and waive my 14-day withdrawal right (art. L221-28).")}
+                        </span>
+                    </label>
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <div class=format!("rounded-2xl border p-5 {}", if plan == "plus" { "border-amber-400/50 bg-amber-500/10" } else { "border-amber-400/30 bg-amber-500/5" })>
+                            <h2 class="text-xl font-bold text-amber-300">"⭐ Blind'All Plus"</h2>
+                            <p class="mt-1 text-sm font-semibold text-amber-200">{t("4.99 €/month — cancel anytime")}</p>
+                            <ul class=format!("mt-3 space-y-1.5 text-sm {}", TXT)>
+                                <li>"🚫 " {t("No ads, forever")}</li>
+                                <li>"💛 " {t("Daily-challenge revive")}</li>
+                                <li>"🏷️ " {t("Custom tag")}</li>
+                                <li>"👑 " {t("All supporter perks")}</li>
+                            </ul>
+                            <div class="mt-4">
+                                {(plan.is_empty()).then(|| cta(plus_url.clone()))}
+                                {(plan == "plus").then(|| view! {
+                                    <span class="text-xs font-semibold uppercase text-amber-200">{t("Active plan")}</span>
+                                })}
+                            </div>
+                        </div>
+                        <div class=format!("rounded-2xl border p-5 {}", if plan == "pro" { "border-purple-400/50 bg-purple-500/10" } else { "border-purple-400/30 bg-purple-500/5" })>
+                            <h2 class="text-xl font-bold text-purple-300">"🏢 Blind'All Pro"</h2>
+                            <p class="mt-1 text-sm font-semibold text-purple-200">{t("29.00 €/month — cancel anytime")}</p>
+                            <ul class=format!("mt-3 space-y-1.5 text-sm {}", TXT)>
+                                <li>"📍 " {t("Venue branding on the TV screen")}</li>
+                                <li>"📺 " {t("Room photo for your venue")}</li>
+                                <li>"👑 " {t("All supporter perks")}</li>
+                            </ul>
+                            <p class="mt-2 text-xs text-purple-200/60">{t("For bars & events")}</p>
+                            <div class="mt-4">
+                                {(plan.is_empty()).then(|| cta(pro_url.clone()))}
+                                {(plan == "pro").then(|| view! {
+                                    <span class="text-xs font-semibold uppercase text-purple-200">{t("Active plan")}</span>
+                                })}
+                            </div>
                         </div>
                     </div>
-                }
+                }.into_any()
             }}
 
             {section(view! {
-                <h2 class="mb-4 text-2xl font-bold text-white">{t("How donations work")}</h2>
+                <h2 class="mb-4 text-2xl font-bold text-white">{t("How Premium works")}</h2>
                 <ul class=format!("ml-4 list-inside list-disc space-y-2 {TXT}")>
-                    <li>{move || crate::i18n::tr("Donation howto goal", &[("goal", crate::ads::goal_or(&progress.get()["goal_cents"].as_i64().map(crate::ads::euros).unwrap_or_default()))])}</li>
-                    <li>{t("Donation howto ads")}</li>
-                    <li>{move || crate::i18n::tr("Donation howto surplus", &[("goal", crate::ads::goal_or(&progress.get()["goal_cents"].as_i64().map(crate::ads::euros).unwrap_or_default()))])}</li>
-                    <li>{t("Donation howto transparency")}</li>
+                    <li>{t("Premium howto subscribe")}</li>
+                    <li>{t("Premium howto instant")}</li>
+                    <li>{t("Premium howto cancel")}</li>
+                    <li>{t("Premium howto refund")}</li>
+                    <li>{t("Premium howto pro")}</li>
                 </ul>
             })}
 
-            {section(view! {
-                <h2 class="mb-4 text-2xl font-bold text-white">{t("Recent donations")}</h2>
-                <p class="mb-4 text-sm text-neutral-400">{t("Recent donations intro")}</p>
-                <div class="space-y-2">
-                    {move || {
-                        let list = recent.get();
-                        if list.is_empty() {
-                            view! { <p class="text-sm text-neutral-500">{t("No donations yet this month.")}</p> }.into_any()
-                        } else {
-                            list.into_iter().map(|d| view! {
-                                <div class="flex items-center justify-between rounded-lg bg-slate-800/50 px-4 py-2 text-sm">
-                                    <span class="text-neutral-200">
-                                        {d["user"]["name"].as_str().unwrap_or(t("Anonyme")).to_string()}
-                                    </span>
-                                    <span class="font-medium text-emerald-300">
-                                        {euros(d["amount_cents"].as_i64().unwrap_or(0))}
-                                    </span>
-                                </div>
-                            }).collect::<Vec<_>>().into_any()
-                        }
-                    }}
-                </div>
-            })}
-
-            <div class=format!("overflow-x-auto {CARD}")>
-                <h2 class="mb-4 text-2xl font-bold text-white">{t("Monthly history")}</h2>
-                <table class="w-full min-w-[40rem] border-collapse text-sm">
-                    <thead>
-                        <tr class="border-b border-slate-700 text-left text-neutral-400">
-                            <th class="px-3 py-2 font-semibold">{t("Month")}</th>
-                            <th class="px-3 py-2 font-semibold">{t("Raised")}</th>
-                            <th class="px-3 py-2 font-semibold">{t("Carryover")}</th>
-                            <th class="px-3 py-2 font-semibold">{t("Effective")}</th>
-                            <th class="px-3 py-2 font-semibold">{t("Surplus")}</th>
-                            <th class="px-3 py-2 font-semibold">{t("Status")}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {move || history.get().into_iter().map(|row| {
-                            let key = row["month_key"].as_str().unwrap_or_default().to_string();
-                            let carry = row["carryover_cents"].as_i64().unwrap_or(0);
-                            let surplus = row["surplus_cents"].as_i64().unwrap_or(0);
-                            let reached = row["goal_reached"].as_bool().unwrap_or(false);
-                            view! {
-                                <tr class="border-b border-slate-700/50 text-neutral-200">
-                                    <td class="px-3 py-3 capitalize">{month_label(&key)}</td>
-                                    <td class="px-3 py-3">{euros(row["raised_cents"].as_i64().unwrap_or(0))}</td>
-                                    <td class="px-3 py-3 text-amber-200/90">{if carry > 0 { euros(carry) } else { "—".into() }}</td>
-                                    <td class="px-3 py-3 font-medium">{euros(row["effective_cents"].as_i64().unwrap_or(0))}</td>
-                                    <td class="px-3 py-3 text-emerald-300/90">{if surplus > 0 { euros(surplus) } else { "—".into() }}</td>
-                                    <td class="px-3 py-3">
-                                        {if reached {
-                                            view! { <span class="text-emerald-400">{t("Reached")}</span> }.into_any()
-                                        } else {
-                                            view! { <span class="text-neutral-400">{t("In progress")}</span> }.into_any()
-                                        }}
-                                    </td>
-                                </tr>
-                            }
-                        }).collect::<Vec<_>>()}
-                    </tbody>
-                </table>
+            <div class="text-center">
+                <A href="/premium" attr:class="btn-secondary !px-5 !py-2 text-sm">{t("See plans & pricing")}</A>
             </div>
 
             <div class="text-center">

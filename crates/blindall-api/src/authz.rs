@@ -47,21 +47,18 @@ impl ChannelAuthorizer for RoomChannelAuthorizer {
                             .unwrap_or(0.0),
                         None => 0.0,
                     };
-                    let perks: Vec<String> = if !p.is_guest
-                        && self
-                            .app
-                            .donations_repo
-                            .user_is_supporter(
-                                user_id,
-                                &blindall_db::donations::current_month_key(),
-                            )
-                            .await
-                            .unwrap_or(false)
-                    {
-                        self.app.donations.supporter_perks.clone()
+                    let plan = if p.is_guest {
+                        None
                     } else {
-                        vec![]
+                        self.app
+                            .subscriptions
+                            .active_plan(user_id)
+                            .await
+                            .ok()
+                            .flatten()
                     };
+                    let perks =
+                        crate::payments::perks_for_plan(&self.app.payments, plan.as_deref());
                     Ok(Some(crate::rooms::player_info_json(
                         &self.app,
                         &p,

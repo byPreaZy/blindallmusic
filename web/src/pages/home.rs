@@ -735,7 +735,7 @@ fn PlusPitchCard() -> impl IntoView {
     let offered = RwSignal::new(true);
     let has_plan = RwSignal::new(false);
     leptos::task::spawn_local(async move {
-        if let Ok(v) = api::get::<Value>("/api/v1/donations/progress").await {
+        if let Ok(v) = api::get::<Value>("/api/v1/billing/status").await {
             offered.set(v["plus_offered"].as_bool().unwrap_or(true));
             has_plan.set(!v["plan"].as_str().unwrap_or("").is_empty());
         }
@@ -751,89 +751,10 @@ fn PlusPitchCard() -> impl IntoView {
                 <p class="mt-1 text-xs text-white/45">
                     {t("Pro 29 €/month for bars & events: your venue name on the TV screen.")}
                 </p>
-                <A href="/donations" attr:class="mt-3 inline-flex w-full justify-center rounded-lg border border-amber-400/40 bg-amber-400/15 px-3 py-1.5 text-sm font-semibold text-amber-200 transition-colors hover:bg-amber-400/25">
+                <A href="/premium" attr:class="mt-3 inline-flex w-full justify-center rounded-lg border border-amber-400/40 bg-amber-400/15 px-3 py-1.5 text-sm font-semibold text-amber-200 transition-colors hover:bg-amber-400/25">
                     {t("See plans")}
                 </A>
             </div>
-        </Show>
-    }
-}
-
-#[component]
-fn DonationGoalCard() -> impl IntoView {
-    let goal = RwSignal::new(Option::<Value>::None);
-    leptos::task::spawn_local(async move {
-        if let Ok(v) = api::get::<Value>("/api/v1/donations/progress").await {
-            goal.set(Some(v));
-        }
-    });
-
-    view! {
-        <Show when=move || goal.get().is_some()>
-            {move || {
-                let g = goal.get().unwrap();
-                let reached = g["goal_reached"].as_bool().unwrap_or(false);
-                let effective = g["effective_cents"].as_f64().unwrap_or(0.0) / 100.0;
-                let percent = g["percent"].as_f64().unwrap_or(0.0).min(100.0);
-                let supporters = g["monthly_supporters"].as_array().cloned().unwrap_or_default();
-                let days = g["days_remaining"].as_i64().unwrap_or(0);
-                view! {
-                    <div class="donation-goal-card relative overflow-hidden">
-                        <div class="relative z-10 space-y-3">
-                            <div class="flex items-start justify-between gap-3">
-                                <div class="min-w-0 space-y-1">
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <p class="game-section-kicker">{t("Donation card kicker")}</p>
-                                        {reached.then(|| view! { <span class="donation-goal-badge">{t("Objectif tenu !")}</span> })}
-                                    </div>
-                                    <p class="font-semibold leading-snug text-white">
-                                        {if reached { t("Merci, objectif atteint !") } else { t("Offrez un café à Blind'All Music") }}
-                                    </p>
-                                    <p class="text-sm leading-snug text-white/70">
-                                        {if reached {
-                                            t("Objectif tenu : merci à la communauté qui porte Blind'All Music ce mois-ci.").to_string()
-                                        } else {
-                                            format!("{} {} {}", t("Jours restants"), days, t("ce mois-ci"))
-                                        }}
-                                    </p>
-                                </div>
-                                <div class="shrink-0 text-right">
-                                    <p class=format!("text-2xl font-black tabular-nums leading-none {}", if reached { "text-emerald-400" } else { "text-white" })>
-                                        {format!("{effective:.0} €")}
-                                    </p>
-                                    <p class="mt-1 max-w-[5.5rem] text-[10px] font-semibold uppercase leading-tight tracking-wide text-white/45">
-                                        {t("ce mois-ci")}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {(!supporters.is_empty()).then(|| view! {
-                                <div class="flex -space-x-2">
-                                    {supporters.iter().take(10).filter_map(|s| {
-                                        s["photo"].as_str().map(|p| view! {
-                                            <img src=p.to_string() class="h-6 w-6 rounded-full ring-2 ring-brand-deep" loading="lazy" />
-                                        })
-                                    }).collect_view()}
-                                </div>
-                            })}
-
-                            <div class="space-y-1.5">
-                                <div class="relative h-1.5 overflow-hidden rounded-full bg-white/10" role="progressbar">
-                                    <div class="absolute inset-y-0 left-0 flex overflow-hidden rounded-full transition-all duration-500 ease-out" style=format!("width:{}%", percent)>
-                                        <div class="h-full bg-brand-accent" style="width:100%" />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <A href="/donations" attr:class="game-btn-play-primary inline-flex w-full justify-center">
-                                {if reached { t("Offrir encore un café") } else { t("Offrir un café") }}
-                                <span class="ml-1" aria-hidden="true">"☕"</span>
-                            </A>
-                            <p class="text-center text-[11px] text-white/40">{t("Donation perks and transparency")}</p>
-                        </div>
-                    </div>
-                }
-            }}
         </Show>
     }
 }
@@ -848,11 +769,7 @@ fn HomeSidebar(
     view! {
         <aside class="w-full shrink-0 lg:w-80 xl:w-96">
             <div class="retro-panel lg:sticky lg:top-6 lg:self-start">
-                <div id="home-donation-goal" class="scroll-mt-24 border-b border-white/10 p-4">
-                    <DonationGoalCard />
-                </div>
-
-                <div class="border-b border-white/10 p-4">
+                <div id="home-premium" class="scroll-mt-24 border-b border-white/10 p-4">
                     <PlusPitchCard />
                 </div>
 

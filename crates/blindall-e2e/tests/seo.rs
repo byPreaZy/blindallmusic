@@ -199,7 +199,7 @@ async fn indexable_content_routes_render_landing() {
         "/match/who-sang",
         "/duels",
         "/daily",
-        "/donations",
+        "/premium",
         "/contact",
     ] {
         let r = c.get(path).await;
@@ -217,7 +217,7 @@ async fn sitemap_lists_public_routes() {
         "/minigames",
         "/duels",
         "/daily",
-        "/donations",
+        "/premium",
         "/docs/faq",
         "/blind-test-",
         "/rooms/",

@@ -122,7 +122,8 @@ async fn users_me_shape() {
         "name",
         "email",
         "stats",
-        "donation_summary",
+        "plan",
+        "donor_perks",
         "is_supporter",
     ] {
         assert!(acc.get(k).is_some(), "missing account.{k}: {}", r.text);

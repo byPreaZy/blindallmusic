@@ -7,7 +7,7 @@ pub mod avatar;
 pub mod category_content;
 pub mod chat;
 pub mod content;
-pub mod donations;
+pub mod payments;
 pub mod faqs;
 pub mod home;
 pub mod levels;
@@ -392,15 +392,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/pages/{slug}", get(content::page))
         .route("/api/v1/user/banned", get(content::banned_user))
         .route("/api/v1/contact", post(content::contact))
-        .route("/api/v1/donations/progress", get(donations::progress))
-        .route("/api/v1/donations/history", get(donations::history))
-        .route("/api/v1/donations/supporters", get(donations::supporters))
-        .route("/api/v1/donations/recent", get(donations::recent))
-        .route(
-            "/api/v1/users/{id}/donations",
-            get(donations::user_donations),
-        )
-        .route("/api/v1/stripe/webhook", post(donations::stripe_webhook))
+        .route("/api/v1/billing/status", get(payments::billing_status))
+        .route("/api/v1/stripe/webhook", post(payments::stripe_webhook))
         .route("/robots.txt", get(seo::robots))
         .route("/ads.txt", get(seo::ads_txt))
         .route(
@@ -410,7 +403,7 @@ pub fn router(state: AppState) -> Router {
         .route("/llms.txt", get(seo::llms))
         .route("/sitemap.xml", get(seo::sitemap))
         .route("/contact", post(content::contact).get(seo_pages::spa_page))
-        .route("/stripe/webhook", post(donations::stripe_webhook))
+        .route("/stripe/webhook", post(payments::stripe_webhook))
         .route("/api/v1/faqs", get(faqs::index))
         .route("/api/v1/faqs/{id}/vote/{direction}", post(faqs::vote))
         .route(
@@ -563,10 +556,6 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/v1/users/{id}/password",
             axum::routing::put(users::update_password),
-        )
-        .route(
-            "/api/v1/users/{id}/donation-preferences",
-            axum::routing::patch(users::update_donation_preferences),
         )
         .route(
             "/api/v1/users/{id}/photo",

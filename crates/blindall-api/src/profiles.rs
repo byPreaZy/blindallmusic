@@ -20,26 +20,13 @@ pub async fn show(State(state): State<AppState>, Path(user_id): Path<i64>) -> Re
         Ok(None) => return StatusCode::NOT_FOUND.into_response(),
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
-    let key = blindall_db::donations::current_month_key();
-    let is_supporter = state
-        .donations_repo
-        .user_is_supporter(user_id, &key)
+    let plan = state
+        .subscriptions
+        .active_plan(user_id)
         .await
-        .unwrap_or(false);
-    let perks: Vec<String> = if is_supporter {
-        state.donations.supporter_perks.clone()
-    } else {
-        vec![]
-    };
-    let summary = state
-        .donations_repo
-        .user_summary(user_id)
-        .await
-        .unwrap_or(json!({}));
-    let show_donations = profile["show_donation_history_on_profile"]
-        .as_bool()
-        .unwrap_or(false)
-        && summary["donation_count"].as_i64().unwrap_or(0) > 0;
+        .ok()
+        .flatten();
+    let perks = crate::payments::perks_for_plan(&state.payments, plan.as_deref());
     if let Some(o) = profile.as_object_mut() {
         let name = o["name"].as_str().unwrap_or("").to_string();
         let path = o["photo"].as_str().unwrap_or("").to_string();
@@ -50,10 +37,8 @@ pub async fn show(State(state): State<AppState>, Path(user_id): Path<i64>) -> Re
             team.insert("photo".into(), json!(photo_url(&state, &tp, &tname)));
         }
         o.insert("donor_perks".into(), json!(perks));
-        o.insert("is_supporter".into(), json!(is_supporter));
-        if show_donations {
-            o.insert("donation_summary".into(), summary);
-        }
+        o.insert("is_supporter".into(), json!(plan.is_some()));
+        o.insert("plan".into(), json!(plan));
     }
     Json(profile).into_response()
 }
@@ -192,12 +177,13 @@ pub async fn highlights(State(state): State<AppState>, Path(user_id): Path<i64>)
                     r["room"]["photo"] = json!(room_photo_url(&state, &path, &name));
                 }
             }
-            let month = blindall_db::donations::current_month_key();
             let is_supporter = state
-                .donations_repo
-                .user_is_supporter(user_id, &month)
+                .subscriptions
+                .active_plan(user_id)
                 .await
-                .unwrap_or(false);
+                .ok()
+                .flatten()
+                .is_some();
             let elo_rank = v["rank"]["position"].as_i64();
             let m = &v["badge_metrics"];
             let g = |k: &str| m[k].as_i64().unwrap_or(0);
@@ -208,7 +194,7 @@ pub async fn highlights(State(state): State<AppState>, Path(user_id): Path<i64>)
                     is_supporter,
                     is_supporter as i64,
                     1,
-                    "/docs/support",
+                    "/premium",
                 ),
                 badge(
                     "creator",

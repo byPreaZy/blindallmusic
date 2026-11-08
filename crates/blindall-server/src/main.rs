@@ -221,16 +221,9 @@ async fn main() -> anyhow::Result<()> {
             .split(',')
             .filter_map(|s| s.trim().parse::<i64>().ok())
             .collect(),
-        donations_repo: blindall_db::DonationRepo::new(pool.clone()),
         subscriptions: blindall_db::SubscriptionRepo::new(pool.clone()),
-        donations: {
-            let mut cfg = blindall_api::donations::DonationsConfig::default();
-            if let Ok(v) = std::env::var("DONATIONS_MONTHLY_GOAL_CENTS") {
-                cfg.monthly_goal_cents = v.parse().unwrap_or(cfg.monthly_goal_cents);
-            }
-            if let Ok(v) = std::env::var("STRIPE_DONATION_URL") {
-                cfg.stripe_payment_url = v;
-            }
+        payments: {
+            let mut cfg = blindall_api::payments::PaymentsConfig::default();
             if let Ok(v) = std::env::var("STRIPE_PLUS_URL") {
                 cfg.stripe_plus_payment_url = v;
             }

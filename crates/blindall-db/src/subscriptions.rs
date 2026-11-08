@@ -40,7 +40,9 @@ impl SubscriptionRepo {
     }
 
     /// checkout.session.completed with mode=subscription. Idempotent on
-    /// stripe_checkout_session_id (unique index).
+    /// stripe_checkout_session_id (unique index). `invoice_id` is the first
+    /// invoice (in_...) — kept so a later charge.refunded can be mapped
+    /// back to this subscription.
     pub async fn record_checkout(
         &self,
         user_id: i64,
@@ -48,13 +50,15 @@ impl SubscriptionRepo {
         session_id: &str,
         customer_id: Option<&str>,
         subscription_id: Option<&str>,
+        invoice_id: Option<&str>,
     ) -> Result<bool, sqlx::Error> {
         let now = chrono::Utc::now();
         let rows = sqlx::query(
             "INSERT INTO user_subscriptions \
              (user_id, plan, status, stripe_checkout_session_id, \
-              stripe_customer_id, stripe_subscription_id, created_at, updated_at) \
-             VALUES ($1, $2, 'active', $3, $4, $5, $6, $6) \
+              stripe_customer_id, stripe_subscription_id, stripe_invoice_id, \
+              created_at, updated_at) \
+             VALUES ($1, $2, 'active', $3, $4, $5, $6, $7, $7) \
              ON CONFLICT (stripe_checkout_session_id) \
              WHERE stripe_checkout_session_id IS NOT NULL \
              DO NOTHING",
@@ -64,10 +68,82 @@ impl SubscriptionRepo {
         .bind(session_id)
         .bind(customer_id)
         .bind(subscription_id)
+        .bind(invoice_id)
         .bind(now)
         .execute(&self.pool)
         .await?;
         Ok(rows.rows_affected() == 1)
+    }
+
+    /// invoice.payment_succeeded — refresh the latest invoice id on the
+    /// subscription row so charge.refunded resolves to the right sub even
+    /// after renewals (each cycle issues a new invoice).
+    pub async fn set_invoice(
+        &self,
+        subscription_id: &str,
+        invoice_id: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE user_subscriptions SET stripe_invoice_id = $2, updated_at = $3 \
+             WHERE stripe_subscription_id = $1",
+        )
+        .bind(subscription_id)
+        .bind(invoice_id)
+        .bind(chrono::Utc::now())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// charge.refunded — cancel the subscription behind a refunded invoice.
+    /// Returns the user_id ONLY on an entitled -> canceled transition, so a
+    /// replayed refund event neither re-emails nor falls through to the
+    /// customer fallback.
+    pub async fn cancel_by_invoice(&self, invoice_id: &str) -> Result<Option<i64>, sqlx::Error> {
+        let now = chrono::Utc::now();
+        sqlx::query(
+            "UPDATE user_subscriptions SET status = 'canceled', \
+             canceled_at = COALESCE(canceled_at, $2), updated_at = $2 \
+             WHERE stripe_invoice_id = $1 \
+               AND status IN ('active', 'trialing', 'past_due') \
+             RETURNING user_id",
+        )
+        .bind(invoice_id)
+        .bind(now)
+        .fetch_optional(&self.pool)
+        .await
+        .map(|r| r.map(|r| r.get::<i64, _>("user_id")))
+    }
+
+    /// Fallback refund resolution when the charge carries an invoice id we
+    /// don't know (e.g. issued before invoice tracking): every subscription
+    /// row of the Stripe customer as (stripe_subscription_id, user_id,
+    /// status). The caller revokes only when the customer has exactly ONE
+    /// row and it is still entitled — several rows mean the refund likely
+    /// targets an old subscription and a blind cancel would over-revoke.
+    pub async fn subs_by_customer(
+        &self,
+        customer_id: &str,
+    ) -> Result<Vec<(String, i64, String)>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT stripe_subscription_id, user_id, status::text AS status \
+             FROM user_subscriptions \
+             WHERE stripe_customer_id = $1 \
+               AND stripe_subscription_id IS NOT NULL",
+        )
+        .bind(customer_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|r| {
+                (
+                    r.get::<String, _>("stripe_subscription_id"),
+                    r.get::<i64, _>("user_id"),
+                    r.get::<String, _>("status"),
+                )
+            })
+            .collect())
     }
 
     /// Attach the subscription/customer ids once customer.subscription.created
@@ -137,6 +213,34 @@ impl SubscriptionRepo {
         .fetch_optional(&self.pool)
         .await
         .map(|r| r.map(|r| r.get::<i64, _>("user_id")))
+    }
+
+    /// Batch variant of `active_plan` for perk enrichment (chat messages,
+    /// room rosters): returns user_id -> plan for every entitled id, with
+    /// 'pro' outranking 'plus' per user.
+    pub async fn active_plans(
+        &self,
+        user_ids: &[i64],
+    ) -> Result<std::collections::HashMap<i64, String>, sqlx::Error> {
+        use sqlx::Row;
+        if user_ids.is_empty() {
+            return Ok(Default::default());
+        }
+        let rows = sqlx::query(
+            "SELECT DISTINCT ON (user_id) user_id, plan::text AS plan \
+             FROM user_subscriptions \
+             WHERE user_id = ANY($1) \
+               AND status IN ('active', 'trialing', 'past_due') \
+               AND (current_period_end IS NULL OR current_period_end > now()) \
+             ORDER BY user_id, (plan = 'pro') DESC, updated_at DESC NULLS LAST, id DESC",
+        )
+        .bind(user_ids.to_vec())
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|r| (r.get::<i64, _>("user_id"), r.get::<String, _>("plan")))
+            .collect())
     }
 
     /// A status that keeps paid perks (past_due = Stripe dunning retry window).

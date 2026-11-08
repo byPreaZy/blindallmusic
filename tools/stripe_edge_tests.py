@@ -61,11 +61,15 @@ def checkout_session(uid, plan, session_id, sub_id, cus="cus_test", email=None):
             "client_reference_id": f"{uid}:{plan}",
             "customer": cus,
             "subscription": sub_id,
+            # subscription-mode sessions carry the first invoice id — the
+            # server stores it so charge.refunded can resolve the sub.
+            "invoice": f"in_{session_id}",
             "customer_details": {"email": email or f"u{uid}@t.local"},
         }},
     }
 
-def donation_session(uid, session_id, amount_cents, email=None):
+def one_time_payment_session(uid, session_id, amount_cents, email=None):
+    """Legacy one-time payment (former donation flow) — must be ignored."""
     return {
         "type": "checkout.session.completed",
         "data": {"object": {
@@ -91,6 +95,36 @@ def sub_event(kind, sub_id, status="active", cancel_at_period_end=False,
             "canceled_at": canceled_at,
             "current_period_end": period_end or int(time.time()) + 30 * 86400,
             "customer": cus,
+        }},
+    }
+
+def invoice_paid_event(sub_id, invoice_id, cus="cus_test"):
+    """invoice.payment_succeeded — refreshes stripe_invoice_id on the row
+    (each renewal issues a new invoice)."""
+    return {
+        "type": "invoice.payment_succeeded",
+        "data": {"object": {
+            "id": invoice_id,
+            "subscription": sub_id,
+            "customer": cus,
+            "billing_reason": "subscription_cycle",
+            "status": "paid",
+        }},
+    }
+
+def charge_refunded_event(invoice_id, cus="cus_test", full=True):
+    """charge.refunded — `refunded` is only true on a FULL refund; partial
+    refunds must not revoke the plan."""
+    return {
+        "type": "charge.refunded",
+        "data": {"object": {
+            "id": sid("ch"),
+            "invoice": invoice_id,
+            "customer": cus,
+            "amount": 499,
+            "amount_refunded": 499 if full else 100,
+            "refunded": full,
+            "currency": "eur",
         }},
     }
 
@@ -124,7 +158,7 @@ def report(num, name, ok, proof):
     print(f"\n=== TEST {num}: {name} -> {status}\n    {proof}")
 
 def main():
-    print("Stack check:", requests.get(f"{BASE}/api/v1/donations/progress", timeout=10).status_code)
+    print("Stack check:", requests.get(f"{BASE}/api/v1/billing/status", timeout=10).status_code)
 
     # ------------------------------------------------------------------
     # TEST 1: upgrade plus -> pro shows "pro" in /me
@@ -228,19 +262,19 @@ def main():
            f"statuses {sc1}/{sc2}, rows={n}")
 
     # ------------------------------------------------------------------
-    # TEST 5: donation + subscription same day
+    # TEST 5: one-time payment (legacy donation mode) is ignored
     tok, u = register("t5")
     uid = u["id"]
     print("\n--- T5 setup: user", uid)
-    sc1, _ = webhook(donation_session(uid, sid("cs_t5_don"), 500))
+    sc1, _ = webhook(one_time_payment_session(uid, sid("cs_t5_pay"), 500))
+    n_pay = psql(f"SELECT count(*) FROM user_subscriptions WHERE user_id={uid}")
     sc2, _ = webhook(checkout_session(uid, "plus", sid("cs_t5_sub"), sid("sub_t5")))
     m = me(tok)
-    don = psql(f"SELECT amount_cents, month_key FROM donations WHERE user_id={uid}")
-    prog = requests.get(f"{BASE}/api/v1/donations/progress",
+    bill = requests.get(f"{BASE}/api/v1/billing/status",
                         headers={"Authorization": f"Bearer {tok}"}, timeout=15).json()
-    report(5, "donation 5eur + plus sub same day",
-           sc1 == 200 and sc2 == 200 and m["plan"] == "plus" and "500" in don,
-           f"donation row={don!r}; plan={m['plan']!r}; progress.raised={prog.get('raised_cents')} is_supporter={m['is_supporter']}")
+    report(5, "one-time payment ignored; plus sub still grants plan",
+           sc1 == 200 and sc2 == 200 and n_pay == "0" and m["plan"] == "plus",
+           f"payment-mode rows={n_pay!r}; plan={m['plan']!r}; billing.plan={bill.get('plan')!r} is_supporter={m['is_supporter']}")
 
     # ------------------------------------------------------------------
     # TEST 6: daily revive — wrong answer, revive ok, second revive 422
@@ -386,6 +420,109 @@ def main():
     report(10, "past_due -> plan kept, venue kept",
            m["plan"] == "pro" and "Club T10" in roomdb,
            f"plan={m['plan']!r}; room={roomdb!r}")
+
+    # ------------------------------------------------------------------
+    # TEST 11: full refund (droit de rétractation) -> plan revoked +
+    # venue stripped. Invoice id resolves the exact subscription row.
+    tok, u = register("t11")
+    uid = u["id"]
+    cus11 = sid("cus_t11")
+    sess11 = sid("cs_t11")
+    sub11 = sid("sub_t11")
+    inv11 = sid("in_t11_renewal")
+    print("\n--- T11 setup: user", uid)
+    webhook(checkout_session(uid, "pro", sess11, sub11, cus=cus11))
+    # renewal invoice refreshes stripe_invoice_id, then it is refunded
+    webhook(invoice_paid_event(sub11, inv11, cus=cus11))
+    r = requests.post(f"{BASE}/api/v1/rooms",
+                      headers={"Authorization": f"Bearer {tok}"},
+                      json={"name": f"T11 room {uid}", "category_id": 1}, timeout=15)
+    room11 = r.json()
+    rid11 = room11["id"] if isinstance(room11, dict) and "id" in room11 else room11.get("room", {}).get("id")
+    requests.put(f"{BASE}/api/v1/rooms/{rid11}/options",
+                 headers={"Authorization": f"Bearer {tok}"},
+                 json={"tracks_by_round": 10, "track_duration": 20,
+                       "pause_between_tracks": 5, "pause_between_rounds": 10,
+                       "is_chat_active": True, "is_autostart": False,
+                       "is_random": True, "venue_name": "Bar T11"},
+                 timeout=15)
+    sc, b = webhook(charge_refunded_event(inv11, cus=cus11))
+    print("refund:", sc, b)
+    m = me(tok)
+    roomdb = psql(f"SELECT is_pro, venue_name FROM rooms WHERE id={rid11}")
+    subrow = psql(f"SELECT status FROM user_subscriptions WHERE user_id={uid}")
+    print("after refund: plan=", m["plan"], "room:", roomdb, "sub:", subrow)
+    report(11, "full refund -> plan revoked, venue stripped, sub canceled",
+           sc == 200 and m["plan"] is None and "Bar T11" not in roomdb
+           and "canceled" in subrow,
+           f"plan={m['plan']!r}; room={roomdb!r}; sub={subrow!r}")
+
+    # ------------------------------------------------------------------
+    # TEST 12: PARTIAL refund -> plan kept (goodwill gesture, not a
+    # withdrawal)
+    tok, u = register("t12")
+    uid = u["id"]
+    cus12 = sid("cus_t12")
+    sess12 = sid("cs_t12")
+    print("\n--- T12 setup: user", uid)
+    webhook(checkout_session(uid, "plus", sess12, sid("sub_t12"), cus=cus12))
+    sc, b = webhook(charge_refunded_event(f"in_{sess12}", cus=cus12, full=False))
+    m = me(tok)
+    subrow = psql(f"SELECT status FROM user_subscriptions WHERE user_id={uid}")
+    print("after partial refund: plan=", m["plan"], "sub:", subrow)
+    report(12, "partial refund -> plan kept",
+           sc == 200 and m["plan"] == "plus" and "canceled" not in subrow,
+           f"plan={m['plan']!r}; sub={subrow!r}")
+
+    # ------------------------------------------------------------------
+    # TEST 13: refund with an UNKNOWN invoice id (e.g. issued before
+    # invoice tracking) -> customer fallback cancels the single entitled
+    # sub. invoice=null (one-time charge) must NOT reach this path.
+    tok, u = register("t13")
+    uid = u["id"]
+    cus13 = sid("cus_t13")
+    print("\n--- T13 setup: user", uid)
+    webhook(checkout_session(uid, "plus", sid("cs_t13"), sid("sub_t13"), cus=cus13))
+    sc, b = webhook(charge_refunded_event(sid("in_t13_old"), cus=cus13))
+    m = me(tok)
+    subrow = psql(f"SELECT status FROM user_subscriptions WHERE user_id={uid}")
+    print("after customer-fallback refund: plan=", m["plan"], "sub:", subrow)
+    report(13, "refund w/ unknown invoice -> customer fallback revokes single sub",
+           sc == 200 and m["plan"] is None and "canceled" in subrow,
+           f"plan={m['plan']!r}; sub={subrow!r}")
+
+    # ------------------------------------------------------------------
+    # TEST 13b: one-time charge refund (invoice=null) on a customer WITH an
+    # active sub -> must NOT revoke (not subscription-backed)
+    tok, u = register("t13b")
+    uid = u["id"]
+    cus13b = sid("cus_t13b")
+    print("\n--- T13b setup: user", uid)
+    webhook(checkout_session(uid, "plus", sid("cs_t13b"), sid("sub_t13b"), cus=cus13b))
+    sc, b = webhook(charge_refunded_event(None, cus=cus13b))
+    m = me(tok)
+    subrow = psql(f"SELECT status FROM user_subscriptions WHERE user_id={uid}")
+    print("after one-time refund: plan=", m["plan"], "sub:", subrow)
+    report("13b", "one-time charge refund (invoice=null) -> sub untouched",
+           sc == 200 and m["plan"] == "plus" and "canceled" not in subrow,
+           f"plan={m['plan']!r}; sub={subrow!r}")
+
+    # ------------------------------------------------------------------
+    # TEST 14: refund with unknown invoice + customer owning TWO subs ->
+    # ambiguous, nothing revoked (manual review)
+    tok, u = register("t14")
+    uid = u["id"]
+    cus14 = sid("cus_t14")
+    print("\n--- T14 setup: user", uid)
+    webhook(checkout_session(uid, "plus", sid("cs_t14p"), sid("sub_t14p"), cus=cus14))
+    webhook(checkout_session(uid, "pro", sid("cs_t14r"), sid("sub_t14r"), cus=cus14))
+    sc, b = webhook(charge_refunded_event(sid("in_unknown"), cus=cus14))
+    m = me(tok)
+    subrow = psql(f"SELECT string_agg(status, ',') FROM user_subscriptions WHERE user_id={uid}")
+    print("after ambiguous refund: plan=", m["plan"], "subs:", subrow)
+    report(14, "ambiguous refund (2 subs) -> nothing revoked",
+           sc == 200 and m["plan"] == "pro" and "canceled" not in subrow,
+           f"plan={m['plan']!r}; subs={subrow!r}")
 
     # ------------------------------------------------------------------
     print("\n\n================== SUMMARY ==================")

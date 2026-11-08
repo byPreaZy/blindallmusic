@@ -1,7 +1,6 @@
 pub mod admin;
 pub mod auth;
 pub mod chat;
-pub mod donations;
 pub mod entities;
 pub mod faqs;
 pub mod game_store;
@@ -26,7 +25,6 @@ pub mod votes;
 pub use admin::AdminRepo;
 pub use auth::AuthRepo;
 pub use chat::ChatRepo;
-pub use donations::DonationRepo;
 pub use faqs::FaqRepo;
 pub use game_store::DbGameStore;
 pub use home::{CatalogRoom, HomeRepo};
@@ -47,13 +45,11 @@ pub use teams::{TEAM_SEATS, TeamRepo, TeamRow};
 pub use votes::VoteRepo;
 
 /// Single source of truth for the paid-perk `custom_tag` gate: the tag is
-/// only served when the user is an administrator, a current-month donor
-/// (`dn.month_key = $2`), or holds an active/trialing/past_due
-/// subscription. Stored tags survive subscription loss — reads mask them.
-/// Every SELECT that exposes `u.custom_tag` must embed this fragment or
-/// the gates drift.
+/// only served when the user is an administrator or holds an
+/// active/trialing/past_due subscription. Stored tags survive subscription
+/// loss — reads mask them. Every SELECT that exposes `u.custom_tag` must
+/// embed this fragment or the gates drift.
 pub const CUSTOM_TAG_CASE: &str = "CASE WHEN u.is_administrator \
-    OR EXISTS(SELECT 1 FROM donations dn WHERE dn.user_id = u.id AND dn.month_key = $2) \
     OR EXISTS(SELECT 1 FROM user_subscriptions s WHERE s.user_id = u.id \
       AND s.status IN ('active','trialing','past_due') \
       AND (s.current_period_end IS NULL OR s.current_period_end > now())) \
@@ -305,6 +301,13 @@ fn migrations() -> sqlx::migrate::Migrator {
             "update_cgu".into(),
             sqlx::migrate::MigrationType::Simple,
             include_str!("../../../migrations/0035_update_cgu.sql").into(),
+            false,
+        ),
+        sqlx::migrate::Migration::new(
+            36,
+            "subscription_invoice".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0036_subscription_invoice.sql").into(),
             false,
         ),
     ];

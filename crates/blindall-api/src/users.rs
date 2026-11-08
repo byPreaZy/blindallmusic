@@ -122,9 +122,9 @@ pub async fn update(
                 .collect::<String>()
         })
         .filter(|t| !t.is_empty());
-    // custom_tag is a paid perk: only entitled members (supporter of the
-    // month, active subscription, admin) may write it. Others keep their
-    // stored tag — display-side gating hides it until they re-subscribe.
+    // custom_tag is a paid perk: only entitled members (active
+    // subscription, admin) may write it. Others keep their stored tag —
+    // display-side gating hides it until they re-subscribe.
     let tag_entitled = user.is_administrator
         || state
             .subscriptions
@@ -132,12 +132,7 @@ pub async fn update(
             .await
             .ok()
             .flatten()
-            .is_some()
-        || state
-            .donations_repo
-            .user_is_supporter(id, &blindall_db::donations::current_month_key())
-            .await
-            .unwrap_or(false);
+            .is_some();
     if tag_entitled && state.auth.update_custom_tag(id, tag.as_deref()).await.is_err() {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
@@ -191,34 +186,6 @@ pub async fn update_password(
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
     match state.auth.update_password(id, &hash).await {
-        Ok(()) => Json(json!({"ok": true})).into_response(),
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    }
-}
-
-#[derive(Deserialize)]
-pub struct DonationPreferencesBody {
-    show_donation_history_on_profile: bool,
-}
-
-pub async fn update_donation_preferences(
-    State(state): State<AppState>,
-    Path(id): Path<i64>,
-    CurrentUser(user): CurrentUser,
-    Json(body): Json<DonationPreferencesBody>,
-) -> Response {
-    if let Some(r) = crate::rooms::require_not_guest(&user) {
-        return r;
-    }
-
-    if user.id != id {
-        return forbidden();
-    }
-    match state
-        .auth
-        .update_donation_preferences(id, body.show_donation_history_on_profile)
-        .await
-    {
         Ok(()) => Json(json!({"ok": true})).into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
@@ -307,35 +274,13 @@ pub async fn me(State(state): State<AppState>, CurrentUser(user): CurrentUser) -
         .is_some();
     let photo_path = state.auth.photo_path(user.id).await.ok().flatten();
     let photo = crate::profiles::photo_url(&state, photo_path.as_deref().unwrap_or(""), &user.name);
-    let key = blindall_db::donations::current_month_key();
-    let is_supporter = state
-        .donations_repo
-        .user_is_supporter(user.id, &key)
-        .await
-        .unwrap_or(false);
     let plan = state
         .subscriptions
         .active_plan(user.id)
         .await
         .ok()
         .flatten();
-    let mut perks: Vec<String> = if is_supporter || plan.is_some() {
-        state.donations.supporter_perks.clone()
-    } else {
-        vec![]
-    };
-    if plan.is_some() {
-        for p in crate::donations::PLUS_PERKS {
-            if !perks.iter().any(|x| x == p) {
-                perks.push(p.to_string());
-            }
-        }
-    }
-    let donation_summary = state
-        .donations_repo
-        .user_summary(user.id)
-        .await
-        .unwrap_or(json!({}));
+    let perks = crate::payments::perks_for_plan(&state.payments, plan.as_deref());
     let stats = header
         .as_ref()
         .map(|h| h["stats"].clone())
@@ -362,16 +307,11 @@ pub async fn me(State(state): State<AppState>, CurrentUser(user): CurrentUser) -
             "created_at_from_now": created_at_from_now,
             "has_password": has_password,
             "stats": stats,
-            "donation_summary": donation_summary,
-            "show_donation_history_on_profile": header
-                .as_ref()
-                .map(|h| h["show_donation_history_on_profile"].as_bool().unwrap_or(true))
-                .unwrap_or(true),
             "donor_perks": perks,
-            "is_supporter": is_supporter || plan.is_some(),
+            "is_supporter": plan.is_some(),
             "plan": plan,
             "is_administrator": user.is_administrator,
-            "custom_tag": if is_supporter || plan.is_some() {
+            "custom_tag": if plan.is_some() {
                 state
                     .auth
                     .custom_tag_of(user.id)

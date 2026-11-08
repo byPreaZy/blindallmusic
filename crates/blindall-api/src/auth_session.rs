@@ -153,12 +153,6 @@ pub(crate) async fn enriched_user_json(
     base["level_metrics"] = snap
         .map(|s| s["level_metrics"].clone())
         .unwrap_or(Value::Null);
-    let is_supporter = !u.is_guest
-        && state
-            .donations_repo
-            .user_is_supporter(u.id, &blindall_db::donations::current_month_key())
-            .await
-            .unwrap_or(false);
     // An active paid plan grants the supporter perks plus its own
     // (PLUS_PERKS) — a Plus member is at least a supporter.
     let plan = if u.is_guest {
@@ -171,21 +165,10 @@ pub(crate) async fn enriched_user_json(
             .ok()
             .flatten()
     };
-    let mut perks: Vec<String> = if is_supporter || plan.is_some() {
-        state.donations.supporter_perks.clone()
-    } else {
-        vec![]
-    };
-    if plan.is_some() {
-        for p in crate::donations::PLUS_PERKS {
-            if !perks.iter().any(|x| x == p) {
-                perks.push(p.to_string());
-            }
-        }
-    }
+    let perks = crate::payments::perks_for_plan(&state.payments, plan.as_deref());
     base["plan"] = json!(plan);
     base["donor_perks"] = json!(perks);
-    base["is_supporter"] = json!(is_supporter || plan.is_some());
+    base["is_supporter"] = json!(plan.is_some());
     // Stripe Customer Portal self-service link (dashboard "share a link" URL).
     // Exposed only to subscribers — it's useless (and confusing) otherwise.
     base["portal_url"] = if plan.is_some() {
@@ -195,7 +178,7 @@ pub(crate) async fn enriched_user_json(
     };
     // custom_tag is a paid perk — only surface the stored tag while the
     // user is entitled (it stays in the DB and returns on re-subscribe).
-    if !(is_supporter || plan.is_some()) {
+    if plan.is_none() {
         base["custom_tag"] = json!("");
     }
     // Laravel HandleInertiaRequests `can` map (Gate abilities): lets the

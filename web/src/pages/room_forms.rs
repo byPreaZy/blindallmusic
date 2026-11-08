@@ -493,7 +493,7 @@ pub fn RoomEditPage() -> impl IntoView {
                                         <div class="max-w-md rounded-lg border border-purple-500/25 bg-purple-500/5 px-3 py-2 text-sm text-white/50">
                                             "🏢 " {t("Venue branding is a Pro feature — for bars & events.")}
                                             " "
-                                            <A href="/donations" attr:class="text-purple-300 underline underline-offset-2">{"Pro"}</A>
+                                            <A href="/premium" attr:class="text-purple-300 underline underline-offset-2">{"Pro"}</A>
                                         </div>
                                     }.into_any()
                                 }

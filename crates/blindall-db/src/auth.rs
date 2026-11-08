@@ -295,21 +295,16 @@ impl AuthRepo {
         Ok(())
     }
 
-    pub async fn update_donation_preferences(
-        &self,
-        user_id: i64,
-        show: bool,
-    ) -> Result<(), sqlx::Error> {
-        sqlx::query(
-            "UPDATE users SET show_donation_history_on_profile = $1, updated_at = $2 \
-             WHERE id = $3",
+    /// Non-guest, non-deleted member id for an email — Stripe checkout
+    /// fallback when `client_reference_id` can't be resolved.
+    pub async fn member_id_by_email(&self, email: &str) -> Result<Option<i64>, sqlx::Error> {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT id FROM users WHERE LOWER(email) = $1 AND is_guest = false \
+             AND deleted_at IS NULL LIMIT 1",
         )
-        .bind(show)
-        .bind(chrono::Utc::now())
-        .bind(user_id)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
+        .bind(email.to_lowercase())
+        .fetch_optional(&self.pool)
+        .await
     }
 
     pub async fn find_name(&self, user_id: i64) -> Result<Option<String>, sqlx::Error> {

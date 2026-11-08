@@ -294,7 +294,6 @@ impl SeasonRepo {
         } else {
             sqlx::query(&sql)
             .bind(&ids)
-            .bind(crate::donations::current_month_key())
             .fetch_all(&self.pool)
             .await?
             .iter()

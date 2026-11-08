@@ -105,36 +105,15 @@ fn PartnersCarousel() -> impl IntoView {
 }
 
 #[component]
-fn FooterDonationGoal() -> impl IntoView {
-    let data = RwSignal::new(Option::<Value>::None);
-    leptos::task::spawn_local(async move {
-        if let Ok(v) = api::get::<Value>("/api/v1/donations/progress").await {
-            data.set(Some(v));
-        }
-    });
+fn FooterPremiumCta() -> impl IntoView {
     view! {
-        <Show when=move || data.get().is_some() fallback=|| ()>
-            {move || {
-                let d = data.get().unwrap_or_default();
-                let raised = d["raised_cents"].as_f64().unwrap_or(0.0) / 100.0;
-                let goal = d["goal_cents"].as_f64().unwrap_or(0.0) / 100.0;
-                let pct = d["percent"].as_f64().unwrap_or(0.0).min(100.0);
-                view! {
-                    <A href="/donations" attr:class="group block">
-                        <div class="mb-2 flex items-baseline justify-between">
-                            <span class="text-sm font-bold text-white">{format!("{raised:.0} €")}</span>
-                            <span class="text-xs text-white/50">{format!("{} {goal:.0} €", t("of"))}</span>
-                        </div>
-                        <div class="retro-progress">
-                            <div class="retro-progress__fill" style=format!("width:{pct}%") />
-                        </div>
-                        <p class="mt-2 text-xs text-white/50 transition group-hover:text-white/70">
-                            {t("Offrir un café")}
-                        </p>
-                    </A>
-                }.into_any()
-            }}
-        </Show>
+        <A href="/premium" attr:class="group block">
+            <p class="text-sm font-bold text-white transition group-hover:text-amber-300">{"⭐ Blind'All Plus"}</p>
+            <p class="mt-1 text-sm font-bold text-white transition group-hover:text-purple-300">{"🏢 Blind'All Pro"}</p>
+            <p class="mt-2 text-xs text-white/50 transition group-hover:text-white/70">
+                {t("No ads, daily revive and venue branding — see plans & pricing.")}
+            </p>
+        </A>
     }
 }
 
@@ -185,7 +164,7 @@ pub fn Footer() -> impl IntoView {
 
                     <div class="col-span-1">
                         <h3 class="retro-footer-title">{t("Support Blind'All Music")}</h3>
-                        <FooterDonationGoal />
+                        <FooterPremiumCta />
                     </div>
 
                     <div class="col-span-1">

@@ -704,6 +704,7 @@ async fn decide(state: &AppState, path: &str, _locale: &str) -> Decision {
         "/faq" => return Decision::Redirect("/docs/faq".into()),
         "/games" => return Decision::Redirect("/minigames".into()),
         "/language" => return Decision::Redirect("/".into()),
+        "/donations" => return Decision::Redirect("/premium".into()),
         _ => {}
     }
     if let Some(rest) = path.strip_prefix("/games/") {
@@ -787,13 +788,13 @@ async fn decide(state: &AppState, path: &str, _locale: &str) -> Decision {
             "Défi du jour",
             "<p>Chaque jour, les mêmes 10 questions pour tous les joueurs. Une seule partie par jour, un classement quotidien : reviens demain pour défendre ton rang.</p>",
         ),
-        ("donations", 1) => simple_decision(
+        ("premium", 1) => simple_decision(
             state,
             path,
-            "Soutenir Blind'All Music | Dons",
-            "Blind'All Music est un projet indépendant et gratuit. Les dons financent les serveurs et le développement du jeu.",
-            "Soutenir Blind'All Music",
-            "<p>Blind'All Music est gratuit et indépendant : les dons couvrent l'hébergement, la bande passante audio et le développement. Merci pour ton soutien !</p>",
+            "Blind'All Plus & Pro : abonnements | Blind'All Music",
+            "Blind'All Plus (4,99 €/mois) : sans pubs, revive quotidien, tag perso. Blind'All Pro (29 €/mois) pour les bars : nom de ton établissement sur l'écran TV.",
+            "Blind'All Premium",
+            "<p>Deux formules pour aller plus loin : Plus pour les joueurs (sans publicité, revive quotidien sur le défi du jour, tag personnalisé) et Pro pour les bars & événements (image de ton établissement sur l'écran TV, photo de salle). Sans engagement, résiliable à tout moment.</p>",
         ),
         ("bars", 1) => simple_decision(
             state,

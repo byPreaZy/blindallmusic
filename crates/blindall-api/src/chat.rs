@@ -325,7 +325,7 @@ pub async fn store(
         .chat_moderation
         .record_sent(user.id, room_id, body_text);
     let mut payload = message_json(&state, msg_id, room_id).await;
-    crate::donations::enrich_messages(&state, std::slice::from_mut(&mut payload)).await;
+    crate::payments::enrich_messages(&state, std::slice::from_mut(&mut payload)).await;
     state
         .hub
         .broadcast(
@@ -343,7 +343,7 @@ pub async fn config(State(state): State<AppState>) -> Response {
     Json(json!({
         "reactions": {
             "standard": state.chat_reaction_emojis,
-            "supporter": state.donations.supporter_reaction_emojis,
+            "supporter": state.payments.supporter_reaction_emojis,
         },
         "public_moderator_ids": public_moderator_ids,
     }))
@@ -389,7 +389,7 @@ pub async fn history(
     }
     match state.chat.room_messages(room_id, 30).await {
         Ok(mut msgs) => {
-            crate::donations::enrich_messages(&state, &mut msgs).await;
+            crate::payments::enrich_messages(&state, &mut msgs).await;
             Json(json!({"messages": msgs})).into_response()
         }
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
@@ -408,7 +408,7 @@ fn can_react(
         return Err("validation");
     }
     let standard = &state.chat_reaction_emojis;
-    let supporter = &state.donations.supporter_reaction_emojis;
+    let supporter = &state.payments.supporter_reaction_emojis;
     if standard.contains(&emoji.to_string()) {
         return if is_guest {
             Err("unauthorized")
@@ -462,23 +462,17 @@ pub async fn toggle_reaction(
     if user.is_guest {
         return StatusCode::FORBIDDEN.into_response();
     }
-    // "supporter_reactions" is granted to monthly donors AND any active plan
-    // — /me already advertises the perk to Plus/Pro members, so the check
-    // must match (donation OR subscription), else subscribers get 422s.
-    let is_supporter = (state
-        .donations_repo
-        .user_is_supporter(user.id, &blindall_db::donations::current_month_key())
+    // "supporter_reactions" is a paid-plan perk — /me already advertises
+    // it to Plus/Pro members, so the check must match.
+    let is_supporter = state
+        .subscriptions
+        .active_plan(user.id)
         .await
-        .unwrap_or(false)
-        || state
-            .subscriptions
-            .active_plan(user.id)
-            .await
-            .ok()
-            .flatten()
-            .is_some())
+        .ok()
+        .flatten()
+        .is_some()
         && state
-            .donations
+            .payments
             .supporter_perks
             .iter()
             .any(|p| p == "supporter_reactions");

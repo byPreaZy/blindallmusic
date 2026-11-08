@@ -57,26 +57,17 @@ async fn contact_validation() {
     assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY);
 }
 
-// ---- donations ---------------------------------------------------------------
+// ---- billing / subscriptions -------------------------------------------------
 
 #[tokio::test]
-async fn donations_public_endpoints() {
+async fn billing_status_public() {
     let c = Client::anon();
-    for ep in [
-        "/api/v1/donations/progress",
-        "/api/v1/donations/supporters",
-        "/api/v1/donations/recent",
-        "/api/v1/donations/history",
-    ] {
-        let r = c.get(ep).await;
-        assert!(r.status.is_success(), "{ep}: {} {}", r.status, r.text);
-    }
-    let r = c
-        .get("/api/v1/donations/progress")
-        .await
-        .expect_ok("progress");
+    let r = c.get("/api/v1/billing/status").await;
+    assert!(r.status.is_success(), "{} {}", r.status, r.text);
     let t = &r.text;
-    assert!(t.contains("goal") || t.contains("percent"), "{t}");
+    for k in ["plan", "plus_offered", "ads_disabled", "adsense_client"] {
+        assert!(t.contains(k), "missing {k}: {t}");
+    }
 }
 
 #[tokio::test]

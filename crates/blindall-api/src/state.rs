@@ -56,9 +56,8 @@ pub struct AppState {
     pub seo: blindall_db::SeoRepo,
     pub home: blindall_db::HomeRepo,
     pub hidden_category_ids: Vec<i64>,
-    pub donations_repo: blindall_db::DonationRepo,
     pub subscriptions: blindall_db::SubscriptionRepo,
-    pub donations: crate::donations::DonationsConfig,
+    pub payments: crate::payments::PaymentsConfig,
     pub adsense_client: String,
     pub adsense_slot: String,
     // Android TWA (Play Store): package name + signing cert fingerprint

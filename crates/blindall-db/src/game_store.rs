@@ -499,7 +499,6 @@ impl GameStore for DbGameStore {
         );
         let rows = sqlx::query(&sql)
         .bind(user_ids.to_vec())
-        .bind(crate::donations::current_month_key())
         .fetch_all(&self.pool)
         .await
         .map_err(|e| StoreError::Other(e.into()))?;

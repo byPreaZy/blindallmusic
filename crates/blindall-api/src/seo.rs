@@ -139,7 +139,7 @@ const DOC_PATHS: [(&str, &str); 18] = [
     ("minigames/album-cover", "0.60"),
     ("duels", "0.50"),
     ("daily", "0.50"),
-    ("donations", "0.30"),
+    ("premium", "0.30"),
     ("contact", "0.25"),
 ];
 

@@ -13,7 +13,6 @@ pub fn ProfilePage() -> impl IntoView {
     crate::auth::require_registered(auth);
     let profile = RwSignal::new(Value::Null);
     let highlights = RwSignal::new(Value::Null);
-    let donations = RwSignal::new(Vec::<Value>::new());
     let evolution = RwSignal::new(Vec::<(String, f64)>::new());
     let initial_tab = leptos_router::hooks::use_query_map()
         .get_untracked()
@@ -43,9 +42,6 @@ pub fn ProfilePage() -> impl IntoView {
             loading.set(false);
             if let Ok(v) = api::get::<Value>(&format!("/api/v1/profile/{uid}/highlights")).await {
                 highlights.set(v);
-            }
-            if let Ok(v) = api::get::<Value>(&format!("/api/v1/users/{uid}/donations")).await {
-                donations.set(v["donations"].as_array().cloned().unwrap_or_default());
             }
             if let Ok(v) =
                 api::get::<Value>(&format!("/api/v1/profile/{uid}/score-evolution")).await
@@ -144,21 +140,6 @@ pub fn ProfilePage() -> impl IntoView {
                         <div class="rounded-xl border border-white/10 bg-surface-raised/60 p-4">
                             <LevelInfoCard profile=profile compact=true />
                         </div>
-                        {move || {
-                            let ds = profile.get()["donation_summary"].clone();
-                            (ds["donation_count"].as_i64().unwrap_or(0) > 0).then(|| {
-                                view! {
-                                    <div class="rounded-xl border border-white/10 bg-surface-raised/60">
-                                        <div class="border-b border-white/10 px-4 py-3">
-                                            <h2 class="text-lg font-bold text-white">{t("Donation history")}</h2>
-                                        </div>
-                                        <div class="p-4">
-                                            <DonationHistoryList items=donations.get() summary=ds />
-                                        </div>
-                                    </div>
-                                }
-                            })
-                        }}
                         <div class="rounded-xl border border-white/10 bg-surface-raised/60">
                             <div class="border-b border-white/10 px-4 py-3">
                                 <h2 class="text-lg font-bold text-white">{t("Evolution")}</h2>
@@ -820,46 +801,6 @@ fn LevelInfoCard(profile: RwSignal<Value>, compact: bool) -> impl IntoView {
             }.into_any()
         }}
     }
-}
-
-#[component]
-fn DonationHistoryList(items: Vec<Value>, summary: Value) -> impl IntoView {
-    if items.is_empty() {
-        return view! { <div/> }.into_any();
-    }
-    view! {
-        <div class="space-y-4">
-            <div class="grid grid-cols-3 gap-2">
-                <div class="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-center">
-                    <p class="text-lg font-bold text-white">
-                        {format!("{:.0} €", summary["total_cents"].as_f64().unwrap_or(0.0) / 100.0)}
-                    </p>
-                    <p class="text-[10px] uppercase tracking-wide text-white/50">{t("Total donated")}</p>
-                </div>
-                <div class="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-center">
-                    <p class="text-lg font-bold text-white">{summary["donation_count"].as_i64().unwrap_or(0)}</p>
-                    <p class="text-[10px] uppercase tracking-wide text-white/50">{t("Donations")}</p>
-                </div>
-                <div class="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-center">
-                    <p class="text-lg font-bold text-white">{summary["months_supported"].as_i64().unwrap_or(0)}</p>
-                    <p class="text-[10px] uppercase tracking-wide text-white/50">{t("Months supported")}</p>
-                </div>
-            </div>
-            <ul class="divide-y divide-white/10 rounded-lg border border-white/10 bg-white/5">
-                {items.into_iter().map(|d| {
-                    let date = d["donated_at"].as_str().unwrap_or("").chars().take(10).collect::<String>();
-                    view! {
-                        <li class="flex items-center justify-between gap-3 px-3 py-2.5">
-                            <span class="text-xs text-white/50">{date}</span>
-                            <span class="text-sm font-bold text-amber-300">
-                                {format!("{:.0} {}", d["amount_cents"].as_f64().unwrap_or(0.0) / 100.0, "€")}
-                            </span>
-                        </li>
-                    }
-                }).collect::<Vec<_>>()}
-            </ul>
-        </div>
-    }.into_any()
 }
 
 #[component]

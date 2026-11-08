@@ -790,7 +790,6 @@ impl RoomRepo {
         );
         let users: std::collections::HashMap<i64, serde_json::Value> = sqlx::query(&sql)
         .bind(&ids)
-        .bind(crate::donations::current_month_key())
         .fetch_all(&self.pool)
         .await?
         .iter()

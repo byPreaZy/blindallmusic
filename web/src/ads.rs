@@ -35,46 +35,29 @@ pub fn should_serve_ads(path: &str, ads_disabled: bool) -> bool {
     !ads_disabled && !excluded(path)
 }
 
-// (fetched_at_ms, ads_disabled, client, slot, goal) — refreshed every 60s so a
-// supporter flag granted mid-session actually turns ads off without a reload.
-fn ads_state_sig() -> ArcRwSignal<Option<(f64, bool, String, String, String)>> {
+// (fetched_at_ms, ads_disabled, client, slot) — refreshed every 60s so a
+// plan flag granted mid-session actually turns ads off without a reload.
+fn ads_state_sig() -> ArcRwSignal<Option<(f64, bool, String, String)>> {
     thread_local! {
-        static SIG: ArcRwSignal<Option<(f64, bool, String, String, String)>> = ArcRwSignal::new(None);
+        static SIG: ArcRwSignal<Option<(f64, bool, String, String)>> = ArcRwSignal::new(None);
     }
     SIG.with(|s| s.clone())
 }
 
-pub fn euros(cents: i64) -> String {
-    if cents % 100 == 0 {
-        format!("{}", cents / 100)
-    } else {
-        format!("{:.2}", cents as f64 / 100.0)
-    }
-}
-
-// :goal replacement for donation i18n — defaults to the historical 150 until loaded
-pub fn goal_or(goal: &str) -> String {
-    if goal.is_empty() {
-        "150".into()
-    } else {
-        goal.to_string()
-    }
-}
-
 const ADS_STATE_TTL_MS: f64 = 60_000.0;
 
-fn ads_state() -> (bool, String, String, String) {
+fn ads_state() -> (bool, String, String) {
     let s = ads_state_sig();
     let fetched_at = s.get_untracked().map(|v| v.0).unwrap_or(0.0);
     if js_sys::Date::now() - fetched_at > ADS_STATE_TTL_MS {
         // Stamp the attempt first so concurrent render passes don't double-fetch.
         s.update(|v| {
-            let entry = v.get_or_insert((0.0, false, String::new(), String::new(), String::new()));
+            let entry = v.get_or_insert((0.0, false, String::new(), String::new()));
             entry.0 = js_sys::Date::now();
         });
         let sig = s.clone();
         leptos::task::spawn_local(async move {
-            let v = crate::api::get::<serde_json::Value>("/api/v1/donations/progress")
+            let v = crate::api::get::<serde_json::Value>("/api/v1/billing/status")
                 .await
                 .unwrap_or_default();
             sig.set(Some((
@@ -82,12 +65,11 @@ fn ads_state() -> (bool, String, String, String) {
                 v["ads_disabled"].as_bool().unwrap_or(false),
                 v["adsense_client"].as_str().unwrap_or("").to_string(),
                 v["adsense_slot"].as_str().unwrap_or("").to_string(),
-                v["goal_cents"].as_i64().map(euros).unwrap_or_default(),
             )));
         });
     }
     s.get()
-        .map(|(_, d, c, sl, g)| (d, c, sl, g))
+        .map(|(_, d, c, sl)| (d, c, sl))
         .unwrap_or_default()
 }
 
@@ -168,16 +150,16 @@ pub fn Adsense(
     let pushed = RwSignal::new(false);
 
     let visible = move || {
-        let (disabled, client, _, _) = ads_state();
+        let (disabled, client, _) = ads_state();
         if client.is_empty() {
             return false;
         }
-        let donor_ad_free = auth
+        let plan_ad_free = auth
             .user
             .get()
             .map(|u| u.donor_perks.iter().any(|p| p == "ad_free"))
             .unwrap_or(false);
-        if disabled || donor_ad_free {
+        if disabled || plan_ad_free {
             return false;
         }
         if force_serve {
@@ -194,7 +176,7 @@ pub fn Adsense(
         }
         if !pushed.get_untracked() {
             pushed.set(true);
-            let (_, client, _, _) = ads_state();
+            let (_, client, _) = ads_state();
             ensure_adsense_script(&client);
             push_adsense_slot();
         }

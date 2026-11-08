@@ -20,7 +20,6 @@ pub fn SettingsPage() -> impl IntoView {
     let cur_pw = RwSignal::new(String::new());
     let new_pw = RwSignal::new(String::new());
     let new_pw2 = RwSignal::new(String::new());
-    let show_donations = RwSignal::new(true);
     let msg = RwSignal::new(Option::<String>::None);
     let err = RwSignal::new(Option::<String>::None);
     let confirm_delete = RwSignal::new(false);
@@ -33,11 +32,6 @@ pub fn SettingsPage() -> impl IntoView {
                     name.set(a["name"].as_str().unwrap_or("").to_string());
                     email.set(a["email"].as_str().unwrap_or("").to_string());
                     tag.set(a["custom_tag"].as_str().unwrap_or("").to_string());
-                    show_donations.set(
-                        a["show_donation_history_on_profile"]
-                            .as_bool()
-                            .unwrap_or(true),
-                    );
                     account.set(v);
                 }
                 Err(e) if e.status == 401 => {
@@ -144,17 +138,6 @@ pub fn SettingsPage() -> impl IntoView {
                 msg.set(Some(t("Photo removed").to_string()));
                 reload();
             }
-        });
-    };
-
-    let save_donation_pref = move |v: bool| {
-        show_donations.set(v);
-        leptos::task::spawn_local(async move {
-            let _ = api::patch::<Value, _>(
-                &format!("/api/v1/users/{}/donation-preferences", user_id()),
-                &json!({"show_donation_history_on_profile": v}),
-            )
-            .await;
         });
     };
 
@@ -276,9 +259,9 @@ pub fn SettingsPage() -> impl IntoView {
                                 } else {
                                     view! {
                                         <div class="w-full rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-sm text-white/50">
-                                            {t("Custom tag is a supporter perk — unlock it with a donation or Plus.")}
+                                            {t("Custom tag is a supporter perk — unlock it with Plus.")}
                                             " "
-                                            <A href="/donations" attr:class="text-amber-300 underline underline-offset-2">{t("See options")}</A>
+                                            <A href="/premium" attr:class="text-amber-300 underline underline-offset-2">{t("See options")}</A>
                                         </div>
                                     }.into_any()
                                 }
@@ -304,7 +287,7 @@ pub fn SettingsPage() -> impl IntoView {
                                     </div>
                                     {if portal.is_empty() {
                                         view! {
-                                            <A href="/donations" attr:class="btn-secondary !px-4 !py-1.5 text-sm">{t("Manage subscription")}</A>
+                                            <A href="/premium" attr:class="btn-secondary !px-4 !py-1.5 text-sm">{t("Manage subscription")}</A>
                                         }.into_any()
                                     } else {
                                         view! {
@@ -321,7 +304,7 @@ pub fn SettingsPage() -> impl IntoView {
                             view! {
                                 <div class="flex items-center justify-between gap-3">
                                     <p class="text-sm text-white/50">{t("No active subscription.")}</p>
-                                    <A href="/donations" attr:class="btn-primary !px-4 !py-1.5 text-sm">{t("See options")}</A>
+                                    <A href="/premium" attr:class="btn-primary !px-4 !py-1.5 text-sm">{t("See options")}</A>
                                 </div>
                             }.into_any()
                         }
@@ -393,32 +376,13 @@ pub fn SettingsPage() -> impl IntoView {
                 {move || {
                     let a = account.get()["account"].clone();
                     let is_supporter = a["is_supporter"].as_bool().unwrap_or(false);
-                    let ds = a["donation_summary"].clone();
-                    let donation_count = ds["donation_count"].as_i64().unwrap_or(0);
-                    (is_supporter || donation_count > 0).then(|| view! {
+                    is_supporter.then(|| view! {
                         <section class="mb-6 space-y-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
                             <div>
                                 <h2 class="text-sm font-bold uppercase tracking-wider text-amber-200/90">{t("Me supporter perks title")}</h2>
                                 <p class="mt-1 text-sm text-white/55">{t("Me supporter perks intro")}</p>
                             </div>
-                            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                                <div class="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-center">
-                                    <p class="text-lg font-bold text-white">
-                                        {format!("{:.2} €", ds["total_cents"].as_f64().unwrap_or(0.0) / 100.0)}
-                                    </p>
-                                    <p class="text-[10px] uppercase tracking-wide text-white/50">{t("Total donated")}</p>
-                                </div>
-                                <div class="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-center">
-                                    <p class="text-lg font-bold text-white">{ds["months_supported"].as_i64().unwrap_or(0)}</p>
-                                    <p class="text-[10px] uppercase tracking-wide text-white/50">{t("Months supported")}</p>
-                                </div>
-                                <div class="col-span-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-center sm:col-span-1">
-                                    <p class="text-lg font-bold text-white">{donation_count}</p>
-                                    <p class="text-[10px] uppercase tracking-wide text-white/50">{t("Donations")}</p>
-                                </div>
-                            </div>
-                            {is_supporter.then(|| view! {
-                                <ul class="space-y-2">
+                            <ul class="space-y-2">
                                     {[
                                         (
                                             "circle-slash",
@@ -451,25 +415,7 @@ pub fn SettingsPage() -> impl IntoView {
                                             </div>
                                         </li>
                                     }).collect::<Vec<_>>()}
-                                </ul>
-                            })}
-                            {(donation_count > 0).then(|| view! {
-                                <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-white/10 bg-white/5 p-3">
-                                    <input type="checkbox" class="mt-0.5 h-4 w-4 accent-amber-400"
-                                        prop:checked=move || show_donations.get()
-                                        on:change=move |ev| {
-                                            let checked = ev.target()
-                                                .and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok())
-                                                .map(|i| i.checked())
-                                                .unwrap_or(true);
-                                            save_donation_pref(checked);
-                                        }/>
-                                    <span class="min-w-0">
-                                        <span class="block text-sm font-semibold text-white">{t("Show donation history on profile")}</span>
-                                        <span class="mt-0.5 block text-xs leading-relaxed text-white/45">{t("Show donation history on profile hint")}</span>
-                                    </span>
-                                </label>
-                            })}
+                            </ul>
                         </section>
                     })
                 }}

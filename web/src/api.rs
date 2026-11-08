@@ -168,26 +168,6 @@ pub async fn put<T: DeserializeOwned, B: Serialize>(path: &str, body: &B) -> Res
     parse(resp).await
 }
 
-pub async fn patch<T: DeserializeOwned, B: Serialize>(path: &str, body: &B) -> Result<T, ApiError> {
-    let body = serde_json::to_string(body).map_err(|e| ApiError {
-        status: 0,
-        body: Value::Null,
-        message: e.to_string(),
-        errors: HashMap::new(),
-    })?;
-    let req = authed(RequestBuilder::new(path).method(Method::PATCH))
-        .header("Content-Type", "application/json")
-        .body(body)
-        .map_err(|e| ApiError {
-            status: 0,
-            body: Value::Null,
-            message: e.to_string(),
-            errors: HashMap::new(),
-        })?;
-    let resp = finish(req.send().await).await?;
-    parse(resp).await
-}
-
 pub async fn delete<T: DeserializeOwned>(path: &str) -> Result<T, ApiError> {
     let resp = send(RequestBuilder::new(path).method(Method::DELETE)).await?;
     parse(resp).await
