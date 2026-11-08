@@ -41,6 +41,7 @@ impl RankingsRepo {
     pub async fn official_rooms(&self) -> Result<Vec<Value>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT id, name FROM rooms WHERE is_public AND deleted_at IS NULL \
+             AND (visible_months IS NULL OR EXTRACT(MONTH FROM now())::int = ANY(visible_months)) \
              ORDER BY name",
         )
         .fetch_all(&self.pool)
