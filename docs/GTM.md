@@ -5,6 +5,12 @@ Stratégie de monétisation pour la France : transformer Blind'All de
 récurrent". Toutes les pièces techniques sont en place et vérifiées,
 le goulot est la distribution et la conversion, pas le code.
 
+> Les données de marché chiffrées et sourcées sont dans
+> `docs/MARKET_STUDY.md` : taille des marchés (jeu vidéo, musique,
+> bars), coût réel des animations en bar, dépenses abonnements des
+> Français, TikTok, concurrents (Mukiz, Junban, MeloClash...) et
+> fourchettes TAM/SAM/SOM.
+
 ## État des lieux (honnête)
 
 | Indicateur | Valeur prod (nov. 2026) |
@@ -42,7 +48,7 @@ téléphones des clients.
 payante. Chaque soirée dans un bar Pro expose le jeu à 20-50 joueurs
 qui deviennent utilisateurs (et potentiellement Plus) demain.
 
-## Pourquoi ça peut marcher en France
+## Pourquoi ça peut marcher en France (chiffré)
 
 1. **Le format est culturellement ancré** : le blind test en bar
    existe déjà, les gens connaissent la règle. Pas d'éducation marché.
@@ -50,14 +56,30 @@ qui deviennent utilisateurs (et potentiellement Plus) demain.
    joue dans le navigateur. Pas de download, pas de compte obligatoire
    (guest upgradeable). C'est l'argument anti-animateur parfait.
 3. **Le prix est dans l'impulsion** : 4,99 €/mois est sous le seuil
-   psychologique des 5 € en France. Un café par mois.
-4. **La concurrence bar est chère** : animateur 150-300 €/soir,
-   ou concepts clés en main (matériel + animation). Pro à 29 €/mois
-   coûte moins qu'une seule soirée animée.
-5. **Un calendrier marketing déjà construit** : les rooms
+   psychologique des 5 € et dans la fourchette observée des apps
+   payantes FR (3-5 €/mois en moyenne, 32 % des mobinautes ont déjà
+   payé une app). Un café par mois.
+4. **La concurrence bar est très chère** : les prestataires français
+   facturent **300-900 € TTC par soirée** de blind test animé
+   (QuizMania, L'Heure Bleue, MyAnimation, PeachProduction, Danomic).
+   Pro à 29 €/mois = **3-10 % d'une seule soirée**, illimité. C'est
+   l'argument de vente n°1.
+5. **Marchés porteurs** : 40 M de joueurs FR (76 % jouent chaque
+   semaine, âge moyen 40 ans), 18,7 M d'utilisateurs de streaming
+   musical (pénétration 27 %, non saturée), ~44 800 débits de
+   boissons majoritairement indépendants à décideur unique.
+6. **La France est le 1er marché TikTok d'Europe** (27,8 M
+   d'utilisateurs/mois) : canal d'acquisition B2C à coût nul pour
+   un format "son + suspense + compétition" natif.
+7. **Un calendrier marketing déjà construit** : les rooms
    saisonnières (Noël, Halloween, Eurovision, Saint-Patrick, été)
    pilotent automatiquement la visibilité. Chaque saison est un
    pic de communication clé en main.
+8. **La concurrence directe est contournable** : Mukiz (1M+
+   downloads) prouve le marché mais ne fait ni rooms persistantes,
+   ni daily, ni mini-jeux, ni duels async, ni saisonnalité, ni mode
+   bar/TV. Ne pas courir après ses features : occuper le terrain
+   "blind test de bar digital" qu'il ne couvre pas.
 
 ## Entonnoir de conversion
 
@@ -98,14 +120,22 @@ C'est le canal le plus rentable ET le plus fort en acquisition.
 - Événements : team building, soirées associatives, festivals
   locaux, soirées d'entreprise (via agences d'animation).
 
-**Proposition commerciale** :
+**Proposition commerciale** (appuyée par les tarifs observés) :
 - Offre de lancement : **3 premiers bars à 19 €/mois pendant 3 mois**
   (tarif d'entrée), ensuite 29 €/mois. Objectif : 5 bars sous 90 jours
   = ~95-145 €/mois de MRR B2B.
-- Argumentaire chiffré : "Une soirée animée vous coûte 150-300 €.
-  Blind'All Pro = 29 €/mois, illimité, sur l'écran que vous avez déjà."
+- Argumentaire chiffré : "Une soirée blind test animée vous coûte
+  300-900 € TTC (prestataires FR). Blind'All Pro = 29 €/mois,
+  illimité, sur l'écran et les téléphones que vous avez déjà."
+- Nuance honnête : les prestataires vendent aussi l'animateur et le
+  spectacle. Le pitch correct est "animez vos soirs creux sans
+  animateur", pas "remplacez votre animation".
 - Démo : créer une room publique de démo par ville, envoyer le lien.
   Le prospect voit le jeu en 30 secondes sans install.
+- Marché : ~44 800 débits de boissons, 95 % indépendants, 61 % sans
+  salarié : des commerçants qui décident seuls, avec un cycle de
+  vente court. Pas de comité, mais budget serré : la simplicité
+  de l'offre est un argument.
 
 **Canaux d'outreach concrets** :
 - Instagram/TikTok : DM aux pages de bars (recherche "bar quiz",
@@ -236,6 +266,9 @@ visible dans le sitemap.
   abonnements et ne générait rien (0 don en prod).
 - **Pas de plan annuel** pour l'instant : valider la rétention
   mensuelle d'abord. Réévaluer à 50+ abonnés (offre -20 % annuel).
+  Signal concurrent : Mukiz ne propose que annuel + hebdomadaire
+  après ses tests A/B (le mensuel a été retiré). Si notre rétention
+  mensuelle déçoit, ne pas hésiter à sauter l'étape intermédiaire.
 - **AdSense reste sur le gratuit** : monétisation indirecte des
   non-payants, et argument Plus concret ("zéro pub").
 - Le prix Pro à 29 € est volontairement sous le seuil "un repas"
@@ -268,6 +301,11 @@ visible dans le sitemap.
 Le **dashboard admin** (`/admin`) affiche maintenant les métriques
 en direct : users, rooms, subscriptions, activité 7j/30j, contenu,
 top rooms, plus l'historique (snapshots horaires) et l'export CSV.
+
+Fourchettes SOM de l'étude de marché (12 mois) : **~1 000-4 500 €/mois
+MRR** (5-15 bars Pro + 200-800 Plus). Le bas de fourchette est le
+scénario de référence à viser ; le haut suppose que le bouche-à-oreille
+joue.
 
 | Métrique | Cible 90 jours | Où |
 |---|---|---|
@@ -321,6 +359,11 @@ GROUP BY plan;
 - Si 0 bar après 60 contacts : revoir le ciblage (peut-être les
   animateurs de soirée plutôt que les bars, ou les événements
   associatifs d'abord).
+- Churn check : l'étude montre que 44 % des Français ont déjà
+  oublié de résilier un abo et que le produit doit donner une
+  raison de revenir chaque jour. Regarder la courbe d'activité
+  du dashboard : si les users payants ne jouent plus après 2
+  semaines, le problème est la valeur perçue, pas le prix.
 
 ## Ce qui n'est PAS dans le scope
 
