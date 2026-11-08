@@ -88,12 +88,31 @@ pub fn LoginPage() -> impl IntoView {
 #[component]
 pub fn SocialButtons() -> impl IntoView {
     let error = RwSignal::new(Option::<String>::None);
+    // Providers with credentials configured server-side — a button for a
+    // missing provider (e.g. Deezer without DEEZER_*) would 503 on click.
+    // `None` while loading or on fetch error → show all (graceful fallback).
+    let enabled = RwSignal::new(Option::<Vec<String>>::None);
+    leptos::task::spawn_local(async move {
+        if let Ok(v) = api::get::<Value>("/api/v1/auth/oauth/providers").await {
+            enabled.set(Some(
+                v["providers"]
+                    .as_array()
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|x| x.as_str().map(str::to_string))
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+            ));
+        }
+    });
     const PROVIDERS: &[(&str, &str)] = &[
         ("google", "Google"),
         ("discord", "Discord"),
         ("deezer", "Deezer"),
     ];
     view! {
+        <Show when=move || enabled.get().map(|l| !l.is_empty()).unwrap_or(true)>
         <div class="mt-4 rounded-xl border border-white/10 bg-surface-raised/60 p-6">
             <div class="mb-3 text-center text-xs uppercase tracking-wider text-white/40">
                 {t("Or continue with")}
@@ -102,7 +121,16 @@ pub fn SocialButtons() -> impl IntoView {
                 <p class="form-error mb-3 text-center">{e}</p>
             })}
             <div class="grid grid-cols-3 gap-2">
-                {PROVIDERS.iter().map(|(id, label)| {
+                {move || {
+                    let en = enabled.get();
+                    PROVIDERS
+                        .iter()
+                        .filter(|(id, _)| {
+                            en.as_ref()
+                                .map(|l| l.iter().any(|p| p == id))
+                                .unwrap_or(true)
+                        })
+                        .map(|(id, label)| {
                     let id = *id;
                     view! {
                         <button type="button"
@@ -129,9 +157,12 @@ pub fn SocialButtons() -> impl IntoView {
                             {*label}
                         </button>
                     }
-                }).collect::<Vec<_>>()}
+                        })
+                        .collect::<Vec<_>>()
+                }}
             </div>
         </div>
+        </Show>
     }
 }
 

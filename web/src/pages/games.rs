@@ -18,26 +18,30 @@ const WRONG_MESSAGES: &[&str] = &[
     "No worries!",
     "Close one!",
     "Not this time!",
-    "You'll get the next one!",
+    "You’ll get the next one!",
 ];
 
 fn game_meta(ty: &str) -> (&'static str, &'static str) {
+    // Keys are the canonical English i18n strings — callers wrap them in t().
     match ty {
-        "quiz" => ("Quiz à 4 choix", "Guess the track title from 4 choices."),
+        "quiz" => ("Minigame quiz label", "Guess the track title from 4 choices."),
         "who_sang" => (
-            "Qui a chanté ?",
+            "Who sang?",
             "Guess who sang this track from 4 choices.",
         ),
-        "album_cover" => ("Pochette d'album", "Find the artist from the album cover."),
+        "album_cover" => (
+            "Album cover",
+            "Find the artist from the album cover.",
+        ),
         "first_letter" => (
-            "Première lettre",
+            "First letter",
             "Listen and complete the title from the first letter of each word.",
         ),
         "anagram" => (
-            "Anagramme",
+            "Anagram",
             "Unscramble the letters to find the artist name.",
         ),
-        _ => ("Mini-jeu", ""),
+        _ => ("Mini-games", ""),
     }
 }
 

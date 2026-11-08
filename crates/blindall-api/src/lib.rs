@@ -97,6 +97,7 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/auth/email/verify/{id}/{hash}",
             get(auth_reset::verify_email),
         )
+        .route("/api/v1/auth/oauth/providers", get(oauth::providers))
         .route(
             "/api/v1/auth/oauth/{provider}/redirect",
             get(oauth::redirect),
