@@ -1,11 +1,11 @@
-# Publication sur les stores — Google Play & iOS
+# Publication sur les stores, Google Play & iOS
 
 Blind'All est une PWA complète (manifest, service worker, icônes maskable,
 mode standalone). Les deux stores se couvrent sans réécriture :
 
-- **Android** : TWA (Trusted Web Activity) — le site en plein écran dans
+- **Android** : TWA (Trusted Web Activity), le site en plein écran dans
   une coquille Android signée, zéro code natif à maintenir.
-- **iOS** : package PWABuilder (WKWebView) — nécessite Xcode sur Mac.
+- **iOS** : package PWABuilder (WKWebView), nécessite Xcode sur Mac.
 
 ## Prérequis
 
@@ -14,12 +14,12 @@ mode standalone). Les deux stores se couvrent sans réécriture :
 | Compte Google Play Console | 25 $ unique | https://play.google.com/console |
 | Compte Apple Developer | 99 $/an | https://developer.apple.com |
 | Node.js + JDK 17 + Android SDK | gratuit | pour Bubblewrap (Android) |
-| Mac avec Xcode | — | uniquement pour iOS |
+| Mac avec Xcode |, | uniquement pour iOS |
 
 Le package Android suggéré : `fr.clerely.blindall` (reverse-domain de
 `clerely.fr`, que tu possèdes).
 
-## Android — TWA via Bubblewrap
+## Android, TWA via Bubblewrap
 
 ```bash
 npm install -g @bubblewrap/cli
@@ -31,7 +31,7 @@ bubblewrap build    # produit app-release-signed.apk / .aab
 ```
 
 Bubblewrap génère un projet Android Studio complet (à garder hors du repo
-ou dans un repo dédié — il ne change qu'en cas de bump de version).
+ou dans un repo dédié, il ne change qu'en cas de bump de version).
 
 ### Lier le domaine (obligatoire, sinon barre d'URL visible)
 
@@ -62,7 +62,7 @@ d'upload (`keytool -list -v -keystore upload.keystore`) dans la même var.
 - Déclarer les pubs (AdSense) et les achats intégrés (Stripe s'ouvre dans
   le navigateur externe → pas de Play Billing requis).
 
-## iOS — PWABuilder
+## iOS, PWABuilder
 
 1. https://www.pwabuilder.com → entrer `https://blindallmusic.clerely.fr`
 2. Onglet **iOS** → télécharger le package Xcode généré
@@ -78,7 +78,7 @@ l'écran d'accueil" Safari fonctionne déjà comme fallback immédiat.
 
 ## Copy listing (FR)
 
-- **Titre** : Blind'All Music — Blind tests multijoueurs
+- **Titre** : Blind'All Music, Blind tests multijoueurs
 - **Description courte** : Le blind test géant entre amis, en direct.
 - **Description longue** : Crée une room en 10 secondes, partage le lien,
   et affronte tes amis sur des extraits musicaux : années 80, Disney, rap,

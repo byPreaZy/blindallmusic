@@ -8,7 +8,7 @@
  *  - External audio previews -> stale-while-revalidate into a bounded LRU cache
  *    so playback survives flaky metro connections.
  *
- * Every respondWith resolves a Response — a rejected promise surfaces to the
+ * Every respondWith resolves a Response, a rejected promise surfaces to the
  * page as an opaque "network error" even when the real network would have
  * worked (e.g. service-worker transient failure). Response.error() keeps the
  * semantics of a failed fetch without the rejection.

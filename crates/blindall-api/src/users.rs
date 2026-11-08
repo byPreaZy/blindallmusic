@@ -123,7 +123,7 @@ pub async fn update(
         })
         .filter(|t| !t.is_empty());
     // custom_tag is a paid perk: only entitled members (active
-    // subscription, admin) may write it. Others keep their stored tag —
+    // subscription, admin) may write it. Others keep their stored tag -
     // display-side gating hides it until they re-subscribe.
     let tag_entitled = user.is_administrator
         || state

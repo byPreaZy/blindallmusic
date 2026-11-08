@@ -357,7 +357,7 @@ pub async fn history(
 ) -> Response {
     // Password-protected and private rooms: chat history is only readable
     // by participants (granted after the password/join gate), room
-    // moderators, or admins — never by anonymous passers-by.
+    // moderators, or admins, never by anonymous passers-by.
     let restricted = match state.rooms.find(room_id).await {
         Ok(Some(r)) => {
             !r.is_public
@@ -462,7 +462,7 @@ pub async fn toggle_reaction(
     if user.is_guest {
         return StatusCode::FORBIDDEN.into_response();
     }
-    // "supporter_reactions" is a paid-plan perk — /me already advertises
+    // "supporter_reactions" is a paid-plan perk, /me already advertises
     // it to Plus/Pro members, so the check must match.
     let is_supporter = state
         .subscriptions

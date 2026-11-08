@@ -41,7 +41,7 @@ pub fn minigame_tile(ty: &str) -> &'static str {
     }
 }
 
-/// Per-game icon — real SVGs (OS emojis render inconsistently and looked
+/// Per-game icon, real SVGs (OS emojis render inconsistently and looked
 /// cheap).
 pub fn minigame_icon(ty: &str) -> impl IntoView {
     let d = match ty {
@@ -63,7 +63,7 @@ pub fn minigame_icon(ty: &str) -> impl IntoView {
 /// Two behaviors the bare `<audio autoplay>` lacked:
 ///  - volume persists across questions/games via the shared `volume`
 ///    localStorage key (same as the room player),
-///  - when the autoplay policy rejects playback (no user gesture yet —
+///  - when the autoplay policy rejects playback (no user gesture yet -
 ///    e.g. a match entered through a websocket push), a tap-to-play
 ///    overlay surfaces instead of silently staying paused.
 #[component]
@@ -76,7 +76,7 @@ pub fn MinigameAudio(
 
     // Fallback: whatever the block path (autoplay attr denied, deferred
     // metadata on iOS, play() Err), if nothing is audible ~1.2s after
-    // mount the gesture button must surface — silence is the bug.
+    // mount the gesture button must surface, silence is the bug.
     {
         let node = node.clone();
         // Held until cleanup: answering disposes the view <1.2s in, and a

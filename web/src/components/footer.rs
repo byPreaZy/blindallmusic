@@ -111,7 +111,7 @@ fn FooterPremiumCta() -> impl IntoView {
             <p class="text-sm font-bold text-white transition group-hover:text-amber-300">{"⭐ Blind'All Plus"}</p>
             <p class="mt-1 text-sm font-bold text-white transition group-hover:text-purple-300">{"🏢 Blind'All Pro"}</p>
             <p class="mt-2 text-xs text-white/50 transition group-hover:text-white/70">
-                {t("No ads, daily revive and venue branding — see plans & pricing.")}
+                {t("No ads, daily revive and venue branding, see plans & pricing.")}
             </p>
         </A>
     }

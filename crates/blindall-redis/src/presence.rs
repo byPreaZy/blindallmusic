@@ -73,7 +73,7 @@ impl RoomPresenceStore {
         // Sliding TTL: PHP keeps participation in the session (refreshed on
         // every request); without the refresh a long-running autostart room
         // evicts active players 2h after their last `joined` call.
-        // Sequential calls — a partially-awaited fred pipeline is ambiguous.
+        // Sequential calls, a partially-awaited fred pipeline is ambiguous.
         let key = keys::room_players(room_id);
         let ok: bool = self.client.sismember(&key, user_id).await?;
         if ok {

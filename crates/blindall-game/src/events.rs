@@ -171,7 +171,7 @@ pub fn resolve_photo_url(storage_prefix: &str, photo_path: Option<&str>, name: &
 }
 
 /// Public-channel (spectator/salon) payload for a starting track:
-/// audio + timing only — never the answer values.
+/// audio + timing only, never the answer values.
 pub fn salon_track_started(
     track: &GameTrack,
     started_at: DateTime<Utc>,

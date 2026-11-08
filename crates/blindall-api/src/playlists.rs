@@ -107,7 +107,7 @@ pub async fn show(
         .playlists
         .can_edit(&p, user.id(), user.0.is_administrator)
         .await;
-    // PHP `edit()` aborts 403 — this JSON feeds the edit page only, so a
+    // PHP `edit()` aborts 403, this JSON feeds the edit page only, so a
     // non-editor must not read private playlist metadata (room slugs…).
     if !can_edit {
         return err(StatusCode::FORBIDDEN, "unauthorized");
@@ -283,11 +283,11 @@ pub async fn destroy(
     }
 }
 
-/// Tracks-manager query params — Laravel `PlaylistController::edit`
+/// Tracks-manager query params, Laravel `PlaylistController::edit`
 /// (`Track::scopeFilter`). PHP reads `sortable[field]`/`sortable[direction]`
 /// as a nested array; the bracketed names are matched literally here.
 /// Value params stay strings so a junk value degrades to "no filter"
-/// instead of a 400 — PHP coerces rather than rejects too.
+/// instead of a 400, PHP coerces rather than rejects too.
 #[derive(Deserialize)]
 pub struct TracksParams {
     page: Option<i64>,
@@ -324,7 +324,7 @@ pub async fn tracks(
     }
     let page = q.page.unwrap_or(1).max(1);
     let per = q.paginate.or(q.per_page).unwrap_or(10).clamp(1, 100);
-    // PHP `when()` skips empty strings — treat blank params as absent.
+    // PHP `when()` skips empty strings, treat blank params as absent.
     let text = |v: Option<String>| v.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
     let num = |v: Option<String>| text(v).and_then(|s| s.parse::<i64>().ok());
     let filters = TrackFilters {
@@ -353,7 +353,7 @@ pub async fn tracks(
 }
 
 /// Remote URLs stored on tracks are probed server-side (`probe_audio`) and
-/// broadcast to every player — restrict to http(s) and refuse literal
+/// broadcast to every player, restrict to http(s) and refuse literal
 /// private/loopback IPs.
 fn valid_remote_url(u: &str) -> bool {
     let Ok(url) = url::Url::parse(u) else {
@@ -612,7 +612,7 @@ pub async fn search_tracks(
         .collect();
     let (mut results, errors) = state.providers.search(&term, &remote, is_mod).await;
     if providers.contains(&"local") {
-        // Uploaded Blinest tracks — same ProviderTrack shape so the UI
+        // Uploaded Blinest tracks, same ProviderTrack shape so the UI
         // treats them like any provider result.
         if let Ok(rows) = state.local_tracks.search(&term).await {
             let app_url = state.app_url.trim_end_matches('/');
@@ -859,7 +859,7 @@ pub async fn find_provider_playlist(
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric()))
     {
-        // PHP 'playlist_id' => alpha_num — keeps the id safe to interpolate
+        // PHP 'playlist_id' => alpha_num, keeps the id safe to interpolate
         // into provider API URLs.
         return err(StatusCode::UNPROCESSABLE_ENTITY, "invalid_playlist_id");
     }
@@ -954,7 +954,7 @@ pub async fn import_provider_playlist(
                 continue;
             }
             // PHP parity (ProcessImportTrack::doesntExist → skip): re-imports
-            // never overwrite answers fixed by hand — new tracks only.
+            // never overwrite answers fixed by hand, new tracks only.
             if state
                 .playlists
                 .track_exists(id, &t.provider, &t.provider_id)

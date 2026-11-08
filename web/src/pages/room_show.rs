@@ -519,7 +519,7 @@ pub fn RoomPage() -> impl IntoView {
     let rt = RwSignal::new_local(Option::<Realtime>::None);
     let shared_rt = use_context::<crate::app::SharedRealtime>();
     // Stale-callback guard: event listeners parked on the shared realtime
-    // socket (and the reconnect hook) outlive this component — without the
+    // socket (and the reconnect hook) outlive this component, without the
     // flag they touch disposed signals → reactive panic.
     let rt_alive = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     {
@@ -530,7 +530,7 @@ pub fn RoomPage() -> impl IntoView {
     // ---- hydrate + wire events once we have a token -----------------------
     let hydrate = Rc::new(move |room_id: i64| {
         leptos::task::spawn_local(async move {
-            // /joined 403s while presence isn't recorded — re-register and
+            // /joined 403s while presence isn't recorded, re-register and
             // retry once (first visit, or presence expired after a dropout).
             let mut data = None;
             for attempt in 0..2 {
@@ -575,7 +575,7 @@ pub fn RoomPage() -> impl IntoView {
                 }
             }
             joined.set(true);
-            // /party 404s when nothing is running — only fetch when the
+            // /party 404s when nothing is running, only fetch when the
             // server flagged an active party in the /joined payload.
             if data.party {
                 if let Ok(p) = api::get::<Value>(&format!("/api/v1/rooms/{room_id}/party")).await {
@@ -1118,7 +1118,7 @@ pub fn RoomPage() -> impl IntoView {
                                 </h1>
                                 <Show when=move || room.get().can_edit && !room.get().is_active>
                                     <span class="shrink-0 rounded-md border border-amber-400/40 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300"
-                                        title=t("Hidden from public lists — reactivate it in room options")>
+                                        title=t("Hidden from public lists, reactivate it in room options")>
                                         {t("Hidden")}
                                     </span>
                                 </Show>
@@ -1377,7 +1377,7 @@ fn RoomInfoCard(
                                 " "{t("Rounds played")}
                             </button>
                         </Show>
-                        // Mirrors the server gate — hides the
+                        // Mirrors the server gate, hides the
                         // button for accounts that would 429.
                         <Show when=move || auth.user.get().map(|u| u.can.send_suggestion).unwrap_or(false)>
                             <button type="button" class="btn-secondary btn-sm shrink-0 whitespace-nowrap"
@@ -1934,7 +1934,7 @@ fn PartyPanel(
     view! {
         {move || {
             let Some(p) = party.get() else {
-                // no party running — hosts see a start button
+                // no party running, hosts see a start button
                 return can_host.get().then(|| view! {
                     <div class="mb-4 rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-3">
                         <div class="flex items-center justify-between gap-3">
@@ -2003,7 +2003,7 @@ fn PartyPanel(
                         view! {
                             <div class="py-4 text-center">
                                 <p class="text-xl font-black text-white">{t("Party over!")}</p>
-                                <p class="text-sm text-white/50">{t("Final scores below — thanks for playing.")}</p>
+                                <p class="text-sm text-white/50">{t("Final scores below, thanks for playing.")}</p>
                             </div>
                         }.into_any()
                     } else if phase == "reveal" {
@@ -2053,7 +2053,7 @@ fn PartyPanel(
 // ---- pad (buzzer) view -------------------------------------------------------
 
 /// `?pad=1` layout: what the QR-code joiner gets on their phone in a bar.
-/// No audio element (the TV plays the extract for everyone) — just the
+/// No audio element (the TV plays the extract for everyone), just the
 /// answer input, the running score and a compact podium.
 #[component]
 fn RoomPadView(

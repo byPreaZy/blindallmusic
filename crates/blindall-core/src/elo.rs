@@ -260,7 +260,7 @@ mod tests {
         // Expected-score gap is symmetric (0.909 vs 0.091); the underdog's
         // bigger K (32 vs 24 at 1800) makes his win worth more in absolute
         // terms. The meaningful invariant: the favorite's downside dwarfs
-        // his upside — he can lose ~22 but only gain ~2.
+        // his upside, he can lose ~22 but only gain ~2.
         assert!(fav_lose.abs() > fav_win * 5);
     }
 

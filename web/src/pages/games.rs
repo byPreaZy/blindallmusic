@@ -22,7 +22,7 @@ const WRONG_MESSAGES: &[&str] = &[
 ];
 
 fn game_meta(ty: &str) -> (&'static str, &'static str) {
-    // Keys are the canonical English i18n strings — callers wrap them in t().
+    // Keys are the canonical English i18n strings, callers wrap them in t().
     match ty {
         "quiz" => ("Minigame quiz label", "Guess the track title from 4 choices."),
         "who_sang" => (
@@ -57,7 +57,7 @@ pub fn GamesIndexPage() -> impl IntoView {
     let posters = RwSignal::new(Vec::<String>::new());
     let loading = RwSignal::new(true);
 
-    // Public catalog — the game list renders for everyone (visitors land
+    // Public catalog, the game list renders for everyone (visitors land
     // here from the navbar; only actually *playing* requires an account).
     leptos::task::spawn_local(async move {
         match api::get::<Value>("/api/v1/minigames").await {
@@ -99,7 +99,7 @@ pub fn GamesIndexPage() -> impl IntoView {
 
             <div class="mb-4 rounded-2xl border-2 border-purple-500/30 bg-gradient-to-r from-purple-600/20 to-neutral-800/80 p-5 shadow-xl">
                 <p class="text-lg font-black uppercase tracking-wider text-purple-300">{t("Play online")}</p>
-                <p class="mb-4 text-sm text-neutral-400">{t("Live matchmaking — face real players right now.")}</p>
+                <p class="mb-4 text-sm text-neutral-400">{t("Live matchmaking, face real players right now.")}</p>
                 <div class="grid grid-cols-2 gap-2 sm:grid-cols-5">
                     {crate::components::minigame::MINIGAME_TYPES.into_iter().map(|ty| view! {
                         <A href=format!("/match/{}", ty.replace('_', "-"))
@@ -430,7 +430,7 @@ pub fn GamePlayPage() -> impl IntoView {
                                         {if r.correct { "✓" } else { "✗" }}
                                     </span>
                                     <span class="min-w-0 flex-1 truncate text-sm text-white/80">
-                                        {r.correct_value.clone().unwrap_or_else(|| "—".into())}
+                                        {r.correct_value.clone().unwrap_or_else(|| "-".into())}
                                     </span>
                                     {(!r.correct).then(|| view! {
                                         <span class="truncate text-xs text-white/40">
@@ -468,7 +468,7 @@ pub fn GamePlayPage() -> impl IntoView {
                                     view! {
                                         <div class="flex items-center gap-2 rounded-lg px-2 py-1 text-sm">
                                             <span class="w-6 text-center">{if medal.is_empty() { format!("{}", i + 1) } else { medal.to_string() }}</span>
-                                            <span class="min-w-0 flex-1 truncate text-white/80">{r["name"].as_str().unwrap_or("—").to_string()}</span>
+                                            <span class="min-w-0 flex-1 truncate text-white/80">{r["name"].as_str().unwrap_or("-").to_string()}</span>
                                             <span class="font-bold text-teal-400">{r["total"].as_i64().unwrap_or(0)} {t("pts")}</span>
                                         </div>
                                     }
@@ -502,7 +502,7 @@ pub fn GamePlayPage() -> impl IntoView {
                             view! {
                                 <div class="flex flex-col items-center gap-4">
                                     {(game() == "album_cover").then(|| {
-                                        // PHP parity: cover is the puzzle — blurred or
+                                        // PHP parity: cover is the puzzle, blurred or
                                         // zoomed until the answer, never readable.
                                         let cls = match index.get() % 3 {
                                             0 => "h-32 w-32 rounded-xl object-cover shadow-lg blur-md scale-110",

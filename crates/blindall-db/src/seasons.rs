@@ -54,7 +54,7 @@ impl SeasonRepo {
     }
 
     /// Returns the active season, finalizing expired ones and creating the next
-    /// weekly window when needed (lazy lifecycle — no scheduler required).
+    /// weekly window when needed (lazy lifecycle, no scheduler required).
     /// The second tuple item lists users who just received season rewards so
     /// the caller can refresh their computed level.
     pub async fn ensure_current(

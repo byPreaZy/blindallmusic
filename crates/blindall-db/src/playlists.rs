@@ -67,21 +67,21 @@ pub struct PlaylistTrack {
 /// `None` mirrors PHP `when()` skipping absent/empty params.
 #[derive(Debug, Clone, Default)]
 pub struct TrackFilters {
-    /// Matches `track_answers.value LIKE '%s%'` (case-insensitive — the
+    /// Matches `track_answers.value LIKE '%s%'` (case-insensitive, the
     /// column is CITEXT, same as MySQL's ci collation).
     pub search: Option<String>,
-    /// Exact match on `dificulty` (sic — the Laravel column typo).
+    /// Exact match on `dificulty` (sic, the Laravel column typo).
     pub difficulty: Option<i64>,
     /// Exact match on `provider`.
     pub provider: Option<String>,
-    /// `total_upvotes >= n` — sum of positive votes (each row is +1).
+    /// `total_upvotes >= n`, sum of positive votes (each row is +1).
     pub min_upvotes: Option<i64>,
-    /// `ABS(total_downvotes) >= n` — absolute sum of negative votes.
+    /// `ABS(total_downvotes) >= n`, absolute sum of negative votes.
     pub min_downvotes: Option<i64>,
     /// Track has at least one downvote carrying this reason.
     pub downvote_reason: Option<String>,
     /// Laravel `sortable[field]`: `votes` | `dificulty` | `created_at`.
-    /// Unwhitelisted values fall back to the default ordering — the
+    /// Unwhitelisted values fall back to the default ordering, the
     /// ORDER BY clause is never built from raw input.
     pub sort_field: Option<String>,
     /// Laravel `sortable[direction]`: `asc` | `desc`.
@@ -146,7 +146,7 @@ impl PlaylistRepo {
         .await?;
 
         let ids: Vec<i64> = rows.iter().map(|r| r.get("id")).collect();
-        // Batch the moderator lists — one query for all playlists instead
+        // Batch the moderator lists, one query for all playlists instead
         // of one per row (PHP eager-loads `moderators`).
         let mut mods_by_playlist: std::collections::HashMap<i64, Vec<ModeratorEntry>> =
             std::collections::HashMap::new();
@@ -241,7 +241,7 @@ impl PlaylistRepo {
         playlist_id: i64,
         user_id: i64,
     ) -> Result<(), sqlx::Error> {
-        // PHP syncWithoutDetaching semantics — no duplicate moderable rows.
+        // PHP syncWithoutDetaching semantics, no duplicate moderable rows.
         sqlx::query(
             "INSERT INTO moderables (user_id, moderable_type, moderable_id, \
              created_at, updated_at) \
@@ -453,7 +453,7 @@ impl PlaylistRepo {
                  AND vr.votable_type = 'App\\Models\\Track' \
                  AND vr.votes < 0 AND vr.downvote_reason = $7))";
 
-        // ORDER BY comes from a whitelist — never interpolate raw input.
+        // ORDER BY comes from a whitelist, never interpolate raw input.
         // PHP: field `votes` + `asc` → orderByDesc(total_upvotes) i.e. most
         // upvoted first; `votes` + any other direction →
         // orderBy(total_downvotes) on the negative sum, so most downvoted
@@ -532,7 +532,7 @@ impl PlaylistRepo {
             });
         }
 
-        // PHP TrackDownvoteBreakdownService::forTracks — one grouped query
+        // PHP TrackDownvoteBreakdownService::forTracks, one grouped query
         // for the page's tracks, reason => count per track.
         let ids: Vec<i64> = tracks.iter().map(|t| t.id).collect();
         if !ids.is_empty() {
@@ -669,7 +669,7 @@ impl PlaylistRepo {
     ) -> Result<i64, sqlx::Error> {
         let mut tx = self.pool.begin().await?;
         let now = Utc::now();
-        // Atomic upsert on the (playlist, provider, provider_id) natural key —
+        // Atomic upsert on the (playlist, provider, provider_id) natural key -
         // the old SELECT-then-INSERT raced under concurrent imports.
         let track_id = sqlx::query_scalar::<_, i64>(
             "INSERT INTO tracks (user_id, playlist_id, provider, provider_id, \

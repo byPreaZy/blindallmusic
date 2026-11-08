@@ -196,7 +196,7 @@ pub async fn scores(
         return Err(err(StatusCode::FORBIDDEN, "room_access_required"));
     }
     let scores = state.scores.all_scores(round_id).await.unwrap_or_default();
-    // PHP contract: {scores: {"<userId>": <float>}} — a map, not a list.
+    // PHP contract: {scores: {"<userId>": <float>}}, a map, not a list.
     let map: serde_json::Map<String, serde_json::Value> = scores
         .into_iter()
         .map(|(uid, s)| (uid.to_string(), json!(s)))

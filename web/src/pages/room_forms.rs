@@ -485,13 +485,13 @@ pub fn RoomEditPage() -> impl IntoView {
                                 }).unwrap_or(false);
                                 if pro {
                                     view! {
-                                        <input type="text" maxlength="80" placeholder=t("e.g. Le Comptoir — jeudi soir") class="w-full max-w-md rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white"
+                                        <input type="text" maxlength="80" placeholder=t("e.g. Le Comptoir, jeudi soir") class="w-full max-w-md rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white"
                                             prop:value=venue_name on:input=move |ev| venue_name.set(event_target_value(&ev))/>
                                     }.into_any()
                                 } else {
                                     view! {
                                         <div class="max-w-md rounded-lg border border-purple-500/25 bg-purple-500/5 px-3 py-2 text-sm text-white/50">
-                                            "🏢 " {t("Venue branding is a Pro feature — for bars & events.")}
+                                            "🏢 " {t("Venue branding is a Pro feature, for bars & events.")}
                                             " "
                                             <A href="/premium" attr:class="text-purple-300 underline underline-offset-2">{"Pro"}</A>
                                         </div>

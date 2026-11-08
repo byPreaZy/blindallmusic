@@ -187,7 +187,7 @@ impl SpotifyClient {
                 })?;
             let status = resp.status().as_u16();
             if status == 401 && !retried_401 {
-                // Cached token may be stale — refresh once and retry.
+                // Cached token may be stale, refresh once and retry.
                 retried_401 = true;
                 *self.token.lock().unwrap() = None;
                 token = self.access_token().await?;

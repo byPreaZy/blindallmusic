@@ -12,7 +12,7 @@ pub fn Notifications() -> impl IntoView {
         use_context::<crate::app::NotificationFeed>().unwrap_or_else(|| RwSignal::new(Vec::new()));
     let open = RwSignal::new(false);
     let busy = RwSignal::new(false);
-    // The portaled click-catcher can't cover the nav strip itself — close
+    // The portaled click-catcher can't cover the nav strip itself, close
     // on route change instead.
     let pathname = use_location().pathname;
     Effect::new(move |_| {
@@ -54,7 +54,7 @@ pub fn Notifications() -> impl IntoView {
         leptos::task::spawn_local(async move {
             let body = json!({"notification_id": notif_id});
             // Only dismiss the notification once the action actually went
-            // through — a failed accept/decline must stay visible.
+            // through, a failed accept/decline must stay visible.
             if api::post::<Value, _>(
                 &format!("/api/v1/teams/requests/{request_id}/{action}"),
                 &body,

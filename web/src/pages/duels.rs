@@ -59,7 +59,7 @@ pub fn QuestionView(
                 .collect()
         })
         .unwrap_or_default();
-    // Cover art only for the album_cover game (and it stays blurred/zoomed —
+    // Cover art only for the album_cover game (and it stays blurred/zoomed -
     // it IS the puzzle). Elsewhere it can spoil the artist/title printed on it.
     let artwork = (game_type == "album_cover")
         .then(|| q["track"]["artwork_url"].as_str().map(str::to_string))
@@ -146,7 +146,7 @@ pub fn DuelsPage() -> impl IntoView {
     let loading = RwSignal::new(true);
     let error = RwSignal::new(Option::<String>::None);
 
-    // create form — ?type= pre-selects the game (linked from each game page)
+    // create form, ?type= pre-selects the game (linked from each game page)
     let initial_type = use_query_map()
         .get_untracked()
         .get("type")
@@ -276,7 +276,7 @@ pub fn DuelsPage() -> impl IntoView {
                     <div class="relative flex-1">
                         <input type="text" list="duel-opponents"
                             class="w-full rounded-lg border border-white/10 bg-neutral-900 px-4 py-2.5 text-sm text-white"
-                            placeholder={t("Opponent (optional — leave empty for open challenge)")}
+                            placeholder={t("Opponent (optional, leave empty for open challenge)")}
                             prop:value=opponent_name
                             on:input=search_users/>
                         <datalist id="duel-opponents">
@@ -307,7 +307,7 @@ pub fn DuelsPage() -> impl IntoView {
                 <div class="py-12 text-center text-white/50">{t("Loading")}"…"</div>
             </Show>
             <Show when=move || !loading.get() && duels.get().is_empty()>
-                <p class="py-8 text-center text-white/50">{t("No duels yet — create the first one!")}</p>
+                <p class="py-8 text-center text-white/50">{t("No duels yet, create the first one!")}</p>
             </Show>
             <ul class="flex flex-col gap-3">
                 <For
@@ -544,7 +544,7 @@ pub fn DuelPlayPage() -> impl IntoView {
                                     }}
                                 </h2>
                                 <p class="mt-2 text-neutral-400">
-                                    {if finished { t("Final score").to_string() } else { t("Your side is done — check back later.").to_string() }}
+                                    {if finished { t("Final score").to_string() } else { t("Your side is done, check back later.").to_string() }}
                                 </p>
                                 <div class="mt-6 flex flex-wrap justify-center gap-3">
                                     <A href="/duels" attr:class="btn-primary">{t("Back to duels")}</A>
@@ -552,7 +552,7 @@ pub fn DuelPlayPage() -> impl IntoView {
                                         class="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80 transition hover:bg-white/10"
                                         on:click={
                                             let gt = d["game_type"].as_str().unwrap_or("quiz").to_string();
-                                            let line = format!("{} {} – {} {}",
+                                            let line = format!("{} {} - {} {}",
                                                 d["creator_name"].as_str().unwrap_or("?"),
                                                 d["creator_score"].as_i64().unwrap_or(0),
                                                 d["opponent_score"].as_i64().unwrap_or(0),
@@ -844,7 +844,7 @@ pub fn DailyPage() -> impl IntoView {
                                         class="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80 transition hover:bg-white/10"
                                         on:click=move |_| {
                                             copy_clipboard(
-                                                format!("Blind'All — {} {} {}\n{} {}\n{}\n{}/daily",
+                                                format!("Blind'All, {} {} {}\n{} {}\n{}\n{}/daily",
                                                     t("Daily challenge"), t(game_name(&gt)), date,
                                                     score.get_untracked(), t("pts"),
                                                     answers_grid(&marks.get_untracked()),

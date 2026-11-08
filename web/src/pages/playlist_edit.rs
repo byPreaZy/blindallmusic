@@ -334,7 +334,7 @@ fn TrackList(
     // Any filter change goes back to page 1 and refetches.
     let apply_filters = move || on_page(1);
 
-    // Search input is debounced 300ms — same stale-check idiom as
+    // Search input is debounced 300ms, same stale-check idiom as
     // UserSearchPicker.
     let search_gen = RwSignal::new(0u64);
     let on_search_input = move |v: String| {
@@ -446,7 +446,7 @@ fn TrackList(
                 </Show>
             </div>
 
-            // Search + filters — mirrors Laravel's TracksManager filter row.
+            // Search + filters, mirrors Laravel's TracksManager filter row.
             <div class="space-y-3 border-b border-white/10 px-5 py-3">
                 <div class="flex flex-wrap items-center gap-3">
                     <input type="text"
@@ -740,7 +740,7 @@ fn TrackEditor(
                         dificulty.set(d);
                         on_save_meta(tid, d, Some(hint.get_untracked()));
                     }>
-                    <option value="" selected=move || dificulty.get().is_none()>"—"</option>
+                    <option value="" selected=move || dificulty.get().is_none()>"-"</option>
                     {(0..=5).map(|d| {
                         view! { <option value=d selected=move || dificulty.get() == Some(d)>{d}</option> }
                     }).collect_view()}

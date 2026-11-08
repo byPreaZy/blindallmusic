@@ -151,7 +151,7 @@ pub fn is_member(auth: Auth) -> bool {
     auth.ready.get() && auth.user.get().map(|u| !u.is_guest).unwrap_or(false)
 }
 
-/// Run `f` as soon as the session is known — but only for registered
+/// Run `f` as soon as the session is known, but only for registered
 /// users. Pages behind a `MemberGate` use this to avoid firing doomed
 /// 401/403 requests for anonymous/guest visitors.
 pub fn on_member<F: Fn() + 'static>(auth: Auth, f: F) {
@@ -165,7 +165,7 @@ pub fn on_member<F: Fn() + 'static>(auth: Auth, f: F) {
         if auth.user.get().map(|u| !u.is_guest).unwrap_or(false) {
             (f)();
         }
-        // else: session known and not a member — it cannot change without
+        // else: session known and not a member, it cannot change without
         // a full page navigation (login/register routes remount anyway).
     });
 }

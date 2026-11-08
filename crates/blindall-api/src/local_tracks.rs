@@ -11,7 +11,7 @@ use blindall_game::store::GameStore;
 use serde::Deserialize;
 use serde_json::json;
 
-/// Cheap MP3 signature check — ID3v2 tag or MPEG frame sync. `mp3_duration`
+/// Cheap MP3 signature check, ID3v2 tag or MPEG frame sync. `mp3_duration`
 /// already requires decodable frames; this rejects polyglot junk earlier.
 fn looks_like_mp3(b: &[u8]) -> bool {
     b.starts_with(b"ID3") || (b.len() >= 2 && b[0] == 0xFF && (b[1] & 0xE0) == 0xE0)
@@ -204,7 +204,7 @@ pub async fn audio(
         Err(_) => return StatusCode::NOT_FOUND.into_response(),
     };
     let total = bytes.len() as u64;
-    // iOS/Safari <audio> refuses plain 200 responses — honour byte ranges.
+    // iOS/Safari <audio> refuses plain 200 responses, honour byte ranges.
     if let Some(range) = headers.get(header::RANGE).and_then(|v| v.to_str().ok()) {
         let Some((start, end)) = parse_range(range, total) else {
             return StatusCode::RANGE_NOT_SATISFIABLE.into_response();

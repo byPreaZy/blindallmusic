@@ -62,7 +62,7 @@ fn expired_question() -> Response {
 
 // ---- index -----------------------------------------------------------------
 
-/// Public catalog — anyone can see the game list (SEO-friendly landing
+/// Public catalog, anyone can see the game list (SEO-friendly landing
 /// page); `score` is just zeroed for anonymous/guest visitors. Actual
 /// gameplay endpoints stay member-only.
 pub async fn index(State(state): State<AppState>, OptionalUser(user): OptionalUser) -> Response {
@@ -353,7 +353,7 @@ fn duel_row_json(row: &Value, viewer_id: i64, with_questions: bool) -> Value {
     };
     out["my_answers"] = my_answers;
     out["question_count"] = json!(row["questions"].as_array().map(|q| q.len()).unwrap_or(0));
-    // Answer lists are internal state — only the viewer's own list is exposed.
+    // Answer lists are internal state, only the viewer's own list is exposed.
     out.as_object_mut().unwrap().remove("creator_answers");
     out.as_object_mut().unwrap().remove("opponent_answers");
     if with_questions {
@@ -496,7 +496,7 @@ pub async fn duel_show(
             if !participant {
                 return duel_err(StatusCode::FORBIDDEN, "Not a participant.");
             }
-            // Stored preview URLs expire ~15 min after duel creation —
+            // Stored preview URLs expire ~15 min after duel creation -
             // re-resolve before serving.
             if let Some(qs) = row["questions"].as_array_mut() {
                 state.minigames.refresh_question_media(qs).await;
@@ -690,7 +690,7 @@ pub async fn daily_show(
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
-    // Daily sets are generated once at midnight — their preview URLs are
+    // Daily sets are generated once at midnight, their preview URLs are
     // long expired by the time players answer. Re-resolve before serving.
     state.minigames.refresh_question_media(&mut questions).await;
     let (score, answered, my_answers) = state
@@ -701,7 +701,7 @@ pub async fn daily_show(
         .flatten()
         .unwrap_or((0, 0, json!([])));
     // A day counts toward the streak once every question in *that day's* set
-    // is answered — the set can be smaller than the nominal size.
+    // is answered, the set can be smaller than the nominal size.
     let streak = state
         .minigames
         .daily_streak(user.id, &game_type, questions.len() as i64, today)
@@ -853,7 +853,7 @@ pub async fn daily_revive(
             "Only a wrong answer can be revived.",
         );
     }
-    // Claim the (user, day, game) slot atomically — the unique index does the
+    // Claim the (user, day, game) slot atomically, the unique index does the
     // race protection.
     match state
         .subscriptions

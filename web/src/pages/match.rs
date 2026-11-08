@@ -1,6 +1,6 @@
 //! Online matchmaking for minigames: `/match/{type}` joins the game queue,
 //! waits for an opponent (status poll + MatchFound events), then plays a
-//! live match driven by the server on the `match.{id}` channel — same
+//! live match driven by the server on the `match.{id}` channel, same
 //! question for every player, scores race in real time.
 
 use crate::api;
@@ -42,7 +42,7 @@ pub fn MatchPage() -> impl IntoView {
 
     crate::i18n::set_title_key("Online match");
 
-    // Shared realtime socket — reuse the app-wide one (the user channel
+    // Shared realtime socket, reuse the app-wide one (the user channel
     // carries MatchFound), connect it on demand.
     let shared_rt = use_context::<crate::app::SharedRealtime>();
     let rt = StoredValue::new_local(None::<crate::ws::Realtime>);
@@ -75,7 +75,7 @@ pub fn MatchPage() -> impl IntoView {
         feedback.set(None);
         let channel = format!("match.{id}");
         if let Some(realtime) = rt.get_value() {
-            // Leaving the previous match channel drops its listeners —
+            // Leaving the previous match channel drops its listeners -
             // rematch must not keep handlers for a dead match id.
             if let Some(prev) = joined_channel.get_untracked() {
                 realtime.leave(&prev);
@@ -112,7 +112,7 @@ pub fn MatchPage() -> impl IntoView {
                     }
                 });
             });
-            // Re-fetch the snapshot after a reconnect — question events
+            // Re-fetch the snapshot after a reconnect, question events
             // fired while the socket was down are not replayed. The hook
             // outlives this component on the shared socket: bail out once
             // the page is disposed or its signals panic on access.
@@ -121,7 +121,7 @@ pub fn MatchPage() -> impl IntoView {
                 if !alive.load(std::sync::atomic::Ordering::Relaxed) {
                     return;
                 }
-                // Hooks persist on the shared socket across rematches —
+                // Hooks persist on the shared socket across rematches -
                 // only the hook bound to the *current* match may hydrate.
                 if match_id.get_untracked() != Some(id) {
                     return;
@@ -143,7 +143,7 @@ pub fn MatchPage() -> impl IntoView {
                     match_state.set(Some(v));
                 }
                 Err(_) => {
-                    // Match swept (finished >10min ago) — back to queue.
+                    // Match swept (finished >10min ago), back to queue.
                     match_id.set(None);
                     stage.set("queue");
                 }
@@ -202,7 +202,7 @@ pub fn MatchPage() -> impl IntoView {
                             position.set(v["position"].as_i64().unwrap_or(0));
                         }
                         _ => {
-                            // dropped from the queue (stale sweep) — rejoin
+                            // dropped from the queue (stale sweep), rejoin
                             let g = game_type();
                             let _ = api::post::<Value, _>(
                                 "/api/v1/matchmaking/join",
@@ -265,7 +265,7 @@ pub fn MatchPage() -> impl IntoView {
         });
     }
 
-    // countdown re-render every second — dropped on unmount: a forgotten
+    // countdown re-render every second, dropped on unmount: a forgotten
     // interval keeps updating a disposed signal → reactive panic.
     let tick_iv = SendWrapper::new(gloo_timers::callback::Interval::new(1_000, move || {
         let _ = tick.try_update(|t| *t += 1);

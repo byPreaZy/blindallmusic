@@ -259,7 +259,7 @@ pub fn SettingsPage() -> impl IntoView {
                                 } else {
                                     view! {
                                         <div class="w-full rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-sm text-white/50">
-                                            {t("Custom tag is a supporter perk — unlock it with Plus.")}
+                                            {t("Custom tag is a supporter perk, unlock it with Plus.")}
                                             " "
                                             <A href="/premium" attr:class="text-amber-300 underline underline-offset-2">{t("See options")}</A>
                                         </div>
@@ -283,7 +283,7 @@ pub fn SettingsPage() -> impl IntoView {
                                 <div class="flex items-center justify-between gap-3">
                                     <div>
                                         <p class="font-semibold text-amber-300">{name}</p>
-                                        <p class="text-sm text-white/50">{price}" — "{t("monthly, cancel anytime")}</p>
+                                        <p class="text-sm text-white/50">{price}", "{t("monthly, cancel anytime")}</p>
                                     </div>
                                     {if portal.is_empty() {
                                         view! {

@@ -295,7 +295,7 @@ impl AuthRepo {
         Ok(())
     }
 
-    /// Non-guest, non-deleted member id for an email — Stripe checkout
+    /// Non-guest, non-deleted member id for an email, Stripe checkout
     /// fallback when `client_reference_id` can't be resolved.
     pub async fn member_id_by_email(&self, email: &str) -> Result<Option<i64>, sqlx::Error> {
         sqlx::query_scalar::<_, i64>(

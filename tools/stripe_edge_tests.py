@@ -61,7 +61,7 @@ def checkout_session(uid, plan, session_id, sub_id, cus="cus_test", email=None):
             "client_reference_id": f"{uid}:{plan}",
             "customer": cus,
             "subscription": sub_id,
-            # subscription-mode sessions carry the first invoice id — the
+            # subscription-mode sessions carry the first invoice id, the
             # server stores it so charge.refunded can resolve the sub.
             "invoice": f"in_{session_id}",
             "customer_details": {"email": email or f"u{uid}@t.local"},
@@ -69,7 +69,7 @@ def checkout_session(uid, plan, session_id, sub_id, cus="cus_test", email=None):
     }
 
 def one_time_payment_session(uid, session_id, amount_cents, email=None):
-    """Legacy one-time payment (former donation flow) — must be ignored."""
+    """Legacy one-time payment (former donation flow), must be ignored."""
     return {
         "type": "checkout.session.completed",
         "data": {"object": {
@@ -99,7 +99,7 @@ def sub_event(kind, sub_id, status="active", cancel_at_period_end=False,
     }
 
 def invoice_paid_event(sub_id, invoice_id, cus="cus_test"):
-    """invoice.payment_succeeded — refreshes stripe_invoice_id on the row
+    """invoice.payment_succeeded, refreshes stripe_invoice_id on the row
     (each renewal issues a new invoice)."""
     return {
         "type": "invoice.payment_succeeded",
@@ -113,7 +113,7 @@ def invoice_paid_event(sub_id, invoice_id, cus="cus_test"):
     }
 
 def charge_refunded_event(invoice_id, cus="cus_test", full=True):
-    """charge.refunded — `refunded` is only true on a FULL refund; partial
+    """charge.refunded, `refunded` is only true on a FULL refund; partial
     refunds must not revoke the plan."""
     return {
         "type": "charge.refunded",
@@ -177,7 +177,7 @@ def main():
            f"/me plan={m['plan']!r} after pro checkout; subs={subs_db(uid)}")
 
     # extra edge: a renewal 'updated' event for the OLD plus sub bumps its
-    # updated_at — does plan stay pro? (ordering by updated_at vs plan prio)
+    # updated_at, does plan stay pro? (ordering by updated_at vs plan prio)
     sc, _ = webhook(sub_event("updated", sid("sub_plus_A"), status="active"))
     m2 = me(tok)
     print("me after plus renewal updated event:", m2["plan"])
@@ -277,7 +277,7 @@ def main():
            f"payment-mode rows={n_pay!r}; plan={m['plan']!r}; billing.plan={bill.get('plan')!r} is_supporter={m['is_supporter']}")
 
     # ------------------------------------------------------------------
-    # TEST 6: daily revive — wrong answer, revive ok, second revive 422
+    # TEST 6: daily revive, wrong answer, revive ok, second revive 422
     tok, u = register("t6")
     uid = u["id"]
     print("\n--- T6 setup: user", uid)
@@ -311,7 +311,7 @@ def main():
     g = requests.get(f"{BASE}/api/v1/daily-challenge",
                      headers={"Authorization": f"Bearer {gtok}"}, timeout=15)
     print("guest daily:", g.status_code, g.text[:150])
-    # guest can't create rooms anyway; try options on own room if any — guest can't create. Direct venue check:
+    # guest can't create rooms anyway; try options on own room if any, guest can't create. Direct venue check:
     g2 = requests.put(f"{BASE}/api/v1/rooms/{rid}/options",
                       headers={"Authorization": f"Bearer {gtok}"},
                       json={"tracks_by_round": 10, "track_duration": 20,

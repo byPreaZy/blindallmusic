@@ -4,7 +4,7 @@ fn document() -> Option<web_sys::Document> {
     web_sys::window()?.document()
 }
 
-// Site-wide default head values — identical to the static index.html shell.
+// Site-wide default head values, identical to the static index.html shell.
 // These are constants (not a DOM snapshot) because by the time a page has
 // called set_meta once, the live DOM no longer holds the defaults.
 const DEFAULT_META: &[(&str, &str, &str)] = &[

@@ -36,7 +36,7 @@ pub fn InstallPrompt() -> impl IntoView {
             }) as Box<dyn FnMut(_)>);
             let _ =
                 w.add_event_listener_with_callback("appinstalled", ok_cb.as_ref().unchecked_ref());
-            // iOS Safari: no beforeinstallprompt — show manual instructions
+            // iOS Safari: no beforeinstallprompt, show manual instructions
             // once, but only when not already running standalone.
             let ua = w.navigator().user_agent().unwrap_or_default();
             let is_ios = ua.contains("iPhone") || ua.contains("iPad") || ua.contains("iPod");

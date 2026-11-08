@@ -22,7 +22,7 @@ impl ItunesClient {
         if term.trim().is_empty() {
             return Ok(vec![]);
         }
-        // Let reqwest encode — a raw `&`/`#`/`=` in the term used to break
+        // Let reqwest encode, a raw `&`/`#`/`=` in the term used to break
         // or inject into the query string.
         let query = deunicode::deunicode(term.trim());
         let resp = self

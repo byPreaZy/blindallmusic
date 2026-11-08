@@ -88,7 +88,7 @@ pub fn LoginPage() -> impl IntoView {
 #[component]
 pub fn SocialButtons() -> impl IntoView {
     let error = RwSignal::new(Option::<String>::None);
-    // Providers with credentials configured server-side — a button for a
+    // Providers with credentials configured server-side, a button for a
     // missing provider (e.g. Deezer without DEEZER_*) would 503 on click.
     // `None` while loading or on fetch error → show all (graceful fallback).
     let enabled = RwSignal::new(Option::<Vec<String>>::None);

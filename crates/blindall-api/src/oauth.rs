@@ -90,7 +90,7 @@ fn provider_meta(name: &str) -> Option<ProviderMeta> {
 }
 
 /// Public list of OAuth providers that actually have credentials
-/// configured — login/register hide buttons for providers that would
+/// configured, login/register hide buttons for providers that would
 /// otherwise answer 503 `provider_not_configured`.
 pub async fn providers(State(state): State<AppState>) -> Response {
     let mut list: Vec<&str> = state.oauth.providers.keys().map(String::as_str).collect();

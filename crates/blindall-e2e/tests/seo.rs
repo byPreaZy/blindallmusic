@@ -3,7 +3,7 @@ use common::*;
 use reqwest::StatusCode;
 use serde_json::json;
 
-/// reqwest client that does NOT follow redirects — for 308 assertions.
+/// reqwest client that does NOT follow redirects, for 308 assertions.
 async fn raw_get(path: &str) -> (StatusCode, String, Option<String>) {
     let c = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())

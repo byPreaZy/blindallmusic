@@ -377,7 +377,7 @@ async fn room_state(state: &AppState, room_id: i64) -> Value {
         .unwrap_or_default();
 
     // PHP parity: the in-room user list comes from the presence channel
-    // membership (.here), not the Redis zset — the zset only feeds
+    // membership (.here), not the Redis zset, the zset only feeds
     // home/catalog counters. WS members are merged with zset joiners
     // (REST presence-joined posts land before the socket subscribes),
     // deduped by id, with live scores patched in.
@@ -737,7 +737,7 @@ pub async fn live_state(
     let round_any = snapshot.as_ref().and_then(|s| s.round.as_ref());
     let round = round_any.filter(|r| r.finished_at.is_none());
     // PHP parity: is_playing/current_index reflect an actively progressing
-    // round only — a stalled or paused round reports 0/idle instead of a
+    // round only, a stalled or paused round reports 0/idle instead of a
     // frozen counter.
     let playing = round.is_some() && snapshot.as_ref().map(|s| s.is_playing).unwrap_or(false);
 
@@ -820,13 +820,13 @@ pub async fn live_state(
     Ok(Json(out))
 }
 
-/// QR code SVG pointing at the room join URL — used by the salon/TV view.
+/// QR code SVG pointing at the room join URL, used by the salon/TV view.
 pub async fn qr_code(State(state): State<AppState>, Path(id): Path<i64>) -> Response {
     if state.store.room_config(id).await.is_err() {
         return StatusCode::NOT_FOUND.into_response();
     }
     // `/pad` opens the dedicated buzzer page on the phone: answers only,
-    // the extract is played by the TV — never on the scanning device.
+    // the extract is played by the TV, never on the scanning device.
     let url = format!(
         "{}/rooms/{}/pad",
         state.mail.app_url.trim_end_matches('/'),
@@ -1206,7 +1206,7 @@ pub async fn destroy(
             state.storage.delete(p).await;
         }
     }
-    // Kill the actor while the room config still loads — a deleted room must
+    // Kill the actor while the room config still loads, a deleted room must
     // not keep timers/broadcasts alive (Shutdown was dead code before this).
     let _ = state.manager.send(id, RoomCommand::Shutdown).await;
     match state.rooms.soft_delete(id).await {
@@ -1515,7 +1515,7 @@ pub async fn update_user_count(
     if let Some(r) = require_not_guest(&user) {
         return r;
     }
-    // The displayed audience count is a room field — only owner,
+    // The displayed audience count is a room field, only owner,
     // moderators or admins may write it (PHP left this open; that was a
     // spoof hole, not a feature).
     let room = match load_room(&state, id).await {
@@ -1747,7 +1747,7 @@ pub async fn alert(
     if message.chars().count() > 255 {
         return validation("message", "The message must not exceed 255 characters.");
     }
-    // Each alert fans out a notification to every public moderator —
+    // Each alert fans out a notification to every public moderator -
     // throttle per user so the feeds cannot be flooded.
     if let Some(secs) = state
         .suggestion_rate
@@ -2001,7 +2001,7 @@ pub async fn search_room_tracks(
         .unwrap_or_default();
     let mut out = Vec::with_capacity(ids.len());
     for tid in ids {
-        // PHP renders `answer.type.name : answer.value` — keep labeled answers.
+        // PHP renders `answer.type.name : answer.value`, keep labeled answers.
         let answers = state
             .playlists
             .track_answers_labeled(tid)
@@ -2061,7 +2061,7 @@ async fn track_mod_gate(
     track_in_room(state, room_id, track_id).await
 }
 
-/// GET /api/v1/rooms/{room}/tracks/{track}/answers — full answer rows incl. aliases
+/// GET /api/v1/rooms/{room}/tracks/{track}/answers, full answer rows incl. aliases
 /// and type ids, so the moderator form can edit without losing data.
 pub async fn mod_track_answers(
     State(state): State<AppState>,
@@ -2220,7 +2220,7 @@ pub async fn mod_track_delete_answer(
     }
 }
 
-/// DELETE /api/v1/rooms/{room}/tracks/{track} — removes the track from the room's
+/// DELETE /api/v1/rooms/{room}/tracks/{track}, removes the track from the room's
 /// playlist entirely (with the standard moderator/Discord notifications).
 pub async fn mod_track_destroy(
     State(state): State<AppState>,

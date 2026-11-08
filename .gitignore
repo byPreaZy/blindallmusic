@@ -24,7 +24,7 @@ web/.trunk/
 volumes/
 storage/app/
 
-# Dev leftovers (root-level only — do NOT ignore crates/*/tests/)
+# Dev leftovers (root-level only, do NOT ignore crates/*/tests/)
 /fixtures/
 /tests/
 __pycache__/

@@ -74,7 +74,7 @@ impl DeezerClient {
                     "Deezer : {}",
                     j["error"]["message"].as_str().unwrap_or("unknown error")
                 ),
-                // Deezer answers HTTP 200 with an {"error": …} body — never
+                // Deezer answers HTTP 200 with an {"error": …} body, never
                 // surface that as a successful status to the caller.
                 if status >= 400 { status } else { 404 },
             ));
@@ -97,7 +97,7 @@ impl DeezerClient {
             urlencoded(playlist_id.trim())
         );
         let mut out = Vec::new();
-        // PHP paginates until `next` is absent — generous cap plus a
+        // PHP paginates until `next` is absent, generous cap plus a
         // cycle guard on repeated URLs instead of truncating at ~2.6k tracks.
         let mut seen_urls = std::collections::HashSet::new();
         loop {

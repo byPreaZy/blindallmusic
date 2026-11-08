@@ -1,18 +1,18 @@
-# Go-to-market & MRR — Blind'All Music
+# Go-to-market & MRR, Blind'All Music
 
 Stratégie de monétisation : faire passer Blind'All de "projet avec un
 système de paiement" à "produit qui génère du MRR récurrent". Toutes les
-pièces techniques existent déjà — le goulot est la distribution et la
+pièces techniques existent déjà, le goulot est la distribution et la
 conversion, pas le code.
 
 ## Positionnement
 
 - **Produit** : blind test musical multijoueur (rooms publiques, duels
   async, daily challenge, mini-jeux). Gratuit pour tout le monde.
-- **Plus — 4,99 €/mois** ( joueurs solo ) : zéro pub, revive quotidien sur
+- **Plus, 4,99 €/mois** ( joueurs solo ) : zéro pub, revive quotidien sur
   le daily, tag personnalisé, tous les perks supporter (couronne,
   réactions chat).
-- **Pro — 29 €/mois** ( bars, pubs, événements ) : tout Plus + branding de
+- **Pro, 29 €/mois** ( bars, pubs, événements ) : tout Plus + branding de
   l'établissement sur l'écran TV (nom + photo de salle), QR code vers la
   room. Cible B2B : un seul bar abonné = ~6 joueurs Plus en MRR équivalent.
 
@@ -38,7 +38,7 @@ settings (bloc abonnement + CTA perks), bannière "Me support CTA".
 
 ## Canaux, par ordre de ROI attendu
 
-### 1. Bars & événements (Pro) — priorité absolue
+### 1. Bars & événements (Pro), priorité absolue
 
 - **Cible** : bars à quiz/trivia existants, bars de jeu, soirées team
   building, événements associatifs. Ils ont déjà l'habitude de payer pour
@@ -74,17 +74,17 @@ settings (bloc abonnement + CTA perks), bannière "Me support CTA".
 - Le produit est **visuellement partageable** : extraire des clips de
   parties folles (mauvaise réponse du groupe, победа en daily).
 - Format : "on a fait un blind test dans un bar, regarde ce qui s'est
-  passé" — boucle de partage native.
+  passé", boucle de partage native.
 - Objectif : 1 vidéo/semaine, pas de stratégie complexe. Mesurer via
   UTM `?utm_source=tiktok` sur les liens (à ajouter si absent).
 
 ### 5. Discord & communauté existante
 
 - Serveur Discord déjà lié (footer). Annoncer le lancement Premium aux
-  early adopters — les 7 users actuels sont les plus chauds.
+  early adopters, les 7 users actuels sont les plus chauds.
 - Système de parrainage éventuel plus tard (quand MRR > 0).
 
-## Pricing & packaging — décisions actées
+## Pricing & packaging, décisions actées
 
 | Plan | Prix | Cible | Rôle |
 |---|---|---|---|
@@ -92,17 +92,17 @@ settings (bloc abonnement + CTA perks), bannière "Me support CTA".
 | Plus | 4,99 €/mois | Joueurs engagés | MRR volume (long tail) |
 | Pro | 29 €/mois | Bars/événements | MRR qualité (peu de clients, gros panier) |
 
-- **Pas de don** : le système de dons mensuels a été retiré — il créait
+- **Pas de don** : le système de dons mensuels a été retiré, il créait
   une confusion avec les abonnements (les perks étaient déjà inclus dans
   Plus/Pro) et ne générait aucun revenu (0 don en prod).
 - Pas de plan annuel pour l'instant : valider la rétention mensuelle
   d'abord. Réévaluer à 50+ abonnés (offre -20 % annuel).
 - Les pubs AdSense restent sur le gratuit : c'est le coût acceptable de
-  la monétisation indirecte des non-payants — et un argument Plus concret.
+  la monétisation indirecte des non-payants, et un argument Plus concret.
 
 ## Remboursements & droit de rétractation (B2C)
 
-- **Base légale** : art. L221-18 C. conso — 14 jours de rétractation pour
+- **Base légale** : art. L221-18 C. conso, 14 jours de rétractation pour
   le consommateur. Pour du contenu numérique exécuté immédiatement, le
   droit peut être levé par une **renonciation expresse** (art. L221-28
   13°) : c'est la case à cocher des pages `/premium` et `/docs/support`,
@@ -114,7 +114,7 @@ settings (bloc abonnement + CTA perks), bannière "Me support CTA".
   l'utilisateur est notifié par e-mail. La résolution se fait par
   `stripe_invoice_id` (maintenu via `invoice.payment_succeeded`) avec
   fallback sur le customer Stripe si un seul abonnement est actif.
-- **Remboursement partiel** : ignoré volontairement — un geste commercial
+- **Remboursement partiel** : ignoré volontairement, un geste commercial
   ne doit pas couper l'abonnement.
 - **Procédure ops** : remboursement dans Stripe (Payments → la charge →
   Refund) **puis** résiliation de l'abonnement dans le dashboard (ou
@@ -129,7 +129,7 @@ settings (bloc abonnement + CTA perks), bannière "Me support CTA".
   Link de don one-time est désactivé.
 - **Reste à vérifier (dashboard, manuel)** : Settings → Public details →
   *Terms of service URL* doit pointer vers
-  `/pages/conditions-generales-vente` — c'est la cible du checkbox CGV
+  `/pages/conditions-generales-vente`, c'est la cible du checkbox CGV
   affiché par Stripe au paiement.
 
 ## KPIs à suivre (dashboard admin ou requêtes SQL)

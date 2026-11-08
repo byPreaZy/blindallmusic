@@ -238,7 +238,7 @@ async fn match_guards() {
 }
 
 /// A real full match: countdown → 10 questions → reveal → finished, all
-/// driven server-side. ~3.5 min wall clock — proves the whole cycle.
+/// driven server-side. ~3.5 min wall clock, proves the whole cycle.
 #[tokio::test]
 async fn match_completes_full_cycle() {
     let (p1, _) = Client::register("mmc").await;
@@ -268,7 +268,7 @@ async fn match_completes_full_cycle() {
     assert_eq!(fin["total"], 10, "{fin}");
     assert_eq!(fin["scores"].as_array().unwrap().len(), 2);
 
-    // Both players are free to queue again — finished matches don't
+    // Both players are free to queue again, finished matches don't
     // trap them (status must be idle/queued, not the stale match).
     let s = p2
         .get("/api/v1/matchmaking/status")

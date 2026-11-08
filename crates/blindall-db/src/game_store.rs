@@ -379,7 +379,7 @@ impl GameStore for DbGameStore {
             match self.http.get(audio_url).send().await {
                 Ok(r) if r.status().is_success() => return ProbeResult::Alive,
                 // Only a definitive miss kills the track. 403/429 happen
-                // when the provider rate-limits or blocks our IP — deleting
+                // when the provider rate-limits or blocks our IP, deleting
                 // the catalogue on a transient ban is a data-loss bug.
                 Ok(r) if matches!(r.status().as_u16(), 404 | 410) => {
                     return ProbeResult::Dead;

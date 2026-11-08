@@ -3,7 +3,7 @@
 //! The WASM app is CSR-only: without this, crawlers get a generic <head> and an
 //! empty <body>. For every public route we splice a route-specific <head>
 //! (title/description/robots/canonical/hreflang/OG/JSON-LD) plus a
-//! `#seo-landing` HTML block into index.html — the same contract the Laravel
+//! `#seo-landing` HTML block into index.html, the same contract the Laravel
 //! app had (`laravel/head` + `$seoLandingHtml`). The frontend removes
 //! `#seo-landing` once Leptos mounts.
 
@@ -178,7 +178,7 @@ fn render(state: &AppState, shell: &str, head: &Head, landing: Option<&str>) -> 
         );
     }
     for block in &head.json_ld {
-        // "</" inside a <script> would close the tag — escape it as <\/.
+        // "</" inside a <script> would close the tag, escape it as <\/.
         let json = serde_json::to_string(block)
             .unwrap_or_default()
             .replace("</", "<\\/");
@@ -260,7 +260,7 @@ fn not_found(state: &AppState, shell: &str) -> Response {
 }
 
 // ---------------------------------------------------------------------------
-// landing renderers (all FR — primary market)
+// landing renderers (all FR, primary market)
 // ---------------------------------------------------------------------------
 
 fn breadcrumb(items: &[(&str, Option<&str>)]) -> String {
@@ -559,7 +559,7 @@ async fn landing_room(state: &AppState, row: &blindall_db::RoomRow) -> String {
 }
 
 fn doc_head(path: &str) -> Option<(&'static str, &'static str, &'static str, &'static str)> {
-    // (title, description, h1, intro) — FR
+    // (title, description, h1, intro), FR
     let v = match path {
         "docs" => (
             "Niveau, score, ELO et XP : les systèmes de progression | Blind'All Music",
@@ -649,7 +649,7 @@ pub async fn spa_page(State(state): State<AppState>, uri: Uri) -> Response {
     let decision = decide(&state, inner, locale).await;
 
     match decision {
-        // Preserve the query on canonical redirects — functional params
+        // Preserve the query on canonical redirects, functional params
         // like ?pad=1 must survive the numeric→slug 301 (QR buzzer flow).
         Decision::Redirect(loc) => {
             let loc = if !loc.contains('?') {
@@ -731,7 +731,7 @@ async fn decide(state: &AppState, path: &str, _locale: &str) -> Decision {
 
     let segs: Vec<&str> = path.trim_matches('/').split('/').collect();
 
-    // Rooms — before the single-segment catch-all.
+    // Rooms, before the single-segment catch-all.
     if segs[0] == "rooms" && segs.len() >= 2 {
         let key = segs[1];
         if segs.len() == 2 {
@@ -819,7 +819,7 @@ async fn decide(state: &AppState, path: &str, _locale: &str) -> Decision {
         ),
         ("pages", 2) => static_page_decision(state, segs[1]).await,
         ("duels", 2) => {
-            // /duels/:id — member-gated play page.
+            // /duels/:id, member-gated play page.
             let (st, h, l) = noindex_head(state, path, "Duel | Blind'All Music");
             Decision::Page(st, h, l)
         }
@@ -1218,7 +1218,7 @@ async fn static_page_decision(state: &AppState, slug: &str) -> Decision {
             desc
         },
     );
-    // Page content is admin-authored HTML — inject raw (parity with the SPA's
+    // Page content is admin-authored HTML, inject raw (parity with the SPA's
     // inner_html rendering), wrapped so it stays readable before WASM mounts.
     let landing = format!(
         "<main class=\"prose prose-invert mx-auto max-w-3xl px-4 py-10\"><h1>{}</h1>{content}</main>",

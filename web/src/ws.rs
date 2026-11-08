@@ -25,7 +25,7 @@ struct Inner {
     ever_connected: Cell<bool>,
     attempts: Cell<u32>,
     stopped: Cell<bool>,
-    // Pending reconnect timer — dropping the handle cancels it, so
+    // Pending reconnect timer, dropping the handle cancels it, so
     // scheduling again replaces instead of stacking attempts.
     reconnect_timer: RefCell<Option<gloo_timers::callback::Timeout>>,
 }
@@ -206,7 +206,7 @@ impl Realtime {
         let delay = base.min(30_000) + jitter;
         let rt = self.clone();
         // Drop any previously scheduled attempt before installing the new
-        // one — multiple close/error bursts must not stack timers.
+        // one, multiple close/error bursts must not stack timers.
         self.0.reconnect_timer.borrow_mut().take();
         self.0.reconnect_timer.replace(Some(
             gloo_timers::callback::Timeout::new(delay as u32, move || {
@@ -277,7 +277,7 @@ impl Realtime {
     pub fn start_heartbeat(&self) -> gloo_timers::callback::Interval {
         let rt = self.clone();
         gloo_timers::callback::Interval::new(25_000, move || {
-            // Dead sockets don't always fire `close` — in a tunnel the TCP
+            // Dead sockets don't always fire `close`, in a tunnel the TCP
             // timeout can take minutes. No inbound traffic for ~2 missed
             // pongs → force-close, the close handler drives the reconnect.
             if rt.0.conn_state.get_untracked() == "connected"

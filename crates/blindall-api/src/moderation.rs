@@ -307,7 +307,7 @@ pub struct RematchSearchQuery {
 }
 
 /// GET /api/v1/moderation/tracks/{id}/rematch?q=
-/// Deezer candidates for a track — the default query is "Artist Title" built
+/// Deezer candidates for a track, the default query is "Artist Title" built
 /// from its stored answers; moderators can pass an explicit q.
 pub async fn track_rematch_candidates(
     State(state): State<AppState>,

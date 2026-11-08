@@ -1100,7 +1100,7 @@ pub fn DocsSupportPage() -> impl IntoView {
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div class=format!("rounded-2xl border p-5 {}", if plan == "plus" { "border-amber-400/50 bg-amber-500/10" } else { "border-amber-400/30 bg-amber-500/5" })>
                             <h2 class="text-xl font-bold text-amber-300">"⭐ Blind'All Plus"</h2>
-                            <p class="mt-1 text-sm font-semibold text-amber-200">{t("4.99 €/month — cancel anytime")}</p>
+                            <p class="mt-1 text-sm font-semibold text-amber-200">{t("4.99 €/month, cancel anytime")}</p>
                             <ul class=format!("mt-3 space-y-1.5 text-sm {}", TXT)>
                                 <li>"🚫 " {t("No ads, forever")}</li>
                                 <li>"💛 " {t("Daily-challenge revive")}</li>
@@ -1116,7 +1116,7 @@ pub fn DocsSupportPage() -> impl IntoView {
                         </div>
                         <div class=format!("rounded-2xl border p-5 {}", if plan == "pro" { "border-purple-400/50 bg-purple-500/10" } else { "border-purple-400/30 bg-purple-500/5" })>
                             <h2 class="text-xl font-bold text-purple-300">"🏢 Blind'All Pro"</h2>
-                            <p class="mt-1 text-sm font-semibold text-purple-200">{t("29.00 €/month — cancel anytime")}</p>
+                            <p class="mt-1 text-sm font-semibold text-purple-200">{t("29.00 €/month, cancel anytime")}</p>
                             <ul class=format!("mt-3 space-y-1.5 text-sm {}", TXT)>
                                 <li>"📍 " {t("Venue branding on the TV screen")}</li>
                                 <li>"📺 " {t("Room photo for your venue")}</li>

@@ -137,7 +137,7 @@ pub fn AnswerInput(
             _ => 1500,
         };
         gloo_timers::callback::Timeout::new(ms, move || {
-            // try_* — the timeout outlives the component when the track
+            // try_*, the timeout outlives the component when the track
             // ends or the page unmounts → plain set() panics on disposed.
             if flash.try_get().flatten().as_deref() == Some(kind.as_str()) {
                 let _ = flash.try_set(None);
@@ -439,7 +439,7 @@ pub fn AnswerInput(
                     </div>
                     {move || blurred.get().then(|| view! {
                         <p class="room-input-hint mt-1 flex items-center gap-1 text-xs text-red-400">
-                            {t("Answer locked — you left the tab. Next track will unlock it.")}
+                            {t("Answer locked, you left the tab. Next track will unlock it.")}
                         </p>
                     })}
                     {move || hint.get().map(|h| view! {

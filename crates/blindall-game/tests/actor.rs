@@ -427,7 +427,7 @@ async fn recover_survives_empty_presence_during_grace() {
 
 // Regression: presence member_count collapses to 0 on any Redis error. A
 // connected player (WS subscribed) must keep the round alive even when the
-// presence store reports nobody — a Redis blip must never kill a game.
+// presence store reports nobody, a Redis blip must never kill a game.
 #[tokio::test(start_paused = true)]
 async fn empty_presence_with_subscriber_keeps_playing() {
     let mut fx = spawn_fixture().await;
@@ -484,7 +484,7 @@ async fn transient_probe_stalls_without_deleting_track() {
 
     // Provider recovers -> the 5s stall retry resumes the round; the
     // transient track was *skipped* (advance already committed) but never
-    // deleted — it stays playable in later rounds.
+    // deleted, it stays playable in later rounds.
     *fx.store.probe_transient.lock().unwrap() = false;
     advance(Duration::from_secs(6)).await;
     let played = next_event(&mut fx.rx, "TrackPlayed").await;

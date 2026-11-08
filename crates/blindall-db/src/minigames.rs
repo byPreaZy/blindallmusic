@@ -7,7 +7,7 @@ use std::sync::Arc;
 pub const ANSWER_TYPE_ARTIST: i64 = 1;
 pub const ANSWER_TYPE_TITLE: i64 = 2;
 const MAX_RANDOM_RETRIES: usize = 5;
-/// How many candidate tracks a pick may resolve before giving up — each
+/// How many candidate tracks a pick may resolve before giving up, each
 /// candidate costs at most one provider API call (usually a cache hit).
 const MAX_RESOLVE_TRIES: usize = 4;
 
@@ -81,7 +81,7 @@ impl MinigameRepo {
             .wrong_choices(track.id, playlist_id, answer_type_id, &correct, 3)
             .await?;
         if choices.len() < 3 {
-            // Not enough distinct distractors — abort so the caller retries
+            // Not enough distinct distractors, abort so the caller retries
             // with another track instead of shipping a 2-choice question.
             return Ok(None);
         }
@@ -153,7 +153,7 @@ impl MinigameRepo {
         .await
     }
 
-    /// Decorative album covers for catalog card backgrounds — fresh
+    /// Decorative album covers for catalog card backgrounds, fresh
     /// validation is not required (a dead cover just renders as an empty
     /// cell behind the card gradient), only the http(s) shape matters.
     pub async fn random_artworks(&self, limit: i64) -> Vec<String> {
@@ -226,7 +226,7 @@ impl MinigameRepo {
     ) -> Result<Vec<serde_json::Value>, sqlx::Error> {
         sqlx::query(
             // Solo leaderboard only: duel, daily & party answers are scored in
-            // their own contexts and marked in metadata — counting them here
+            // their own contexts and marked in metadata, counting them here
             // would let an oracle/alt farm the solo board.
             "SELECT m.user_id, u.name, CAST(SUM(m.score) AS bigint) AS total FROM minigame_scores m \
              JOIN users u ON u.id = m.user_id WHERE m.game_type = $1 \
@@ -256,7 +256,7 @@ impl MinigameRepo {
     /// drawn first, then each is passed through the provider resolver until
     /// one yields a usable http(s) audio URL (and artwork when required).
     /// A pick that resolves to dead media is skipped instead of shipping a
-    /// silent question — that was the "question 9 has no music" bug.
+    /// silent question, that was the "question 9 has no music" bug.
     /// Returns the track plus its playlist id (used for distractor pools).
     async fn pick_random_track(
         &self,
@@ -414,7 +414,7 @@ impl MinigameRepo {
     /// Wrong answers drawn with decreasing specificity so they stay
     /// plausible: same playlist first, then the whole public catalog.
     /// When the correct title has a detectable language, distractors must
-    /// never be detected as the *other* language — a French title with
+    /// never be detected as the *other* language, a French title with
     /// English alternatives gives the answer away (neutral/proper-noun
     /// titles are fine, they betray nothing). If the filtered pools
     /// cannot fill `count`, the caller retries with another track rather
@@ -473,7 +473,7 @@ impl MinigameRepo {
         }
         // No unfiltered fallback pass: when the correct answer's language
         // is known, a cross-language distractor is worse than no question
-        // at all — the caller retries with a different track instead.
+        // at all, the caller retries with a different track instead.
         Ok(out)
     }
 
@@ -585,7 +585,7 @@ fn norm_choice(s: &str) -> String {
 
 /// SQL fragment excluding answer values that are never quiz material:
 /// generic OST/compilation filler titles ("Main Title", "End Credits") and
-/// cover-factory pseudo-artists ("Cartoon Theme Players") — the real answer
+/// cover-factory pseudo-artists ("Cartoon Theme Players"), the real answer
 /// is the work name, not the functional label.
 fn generic_filter(answer_type_id: i64) -> &'static str {
     match answer_type_id {
@@ -660,7 +660,7 @@ impl MinigameRepo {
         }
     }
 
-    /// Re-resolve audio/artwork URLs inside stored question sets — Deezer
+    /// Re-resolve audio/artwork URLs inside stored question sets, Deezer
     /// preview URLs are signed and expire ~15 min after generation, so a
     /// frozen duel/daily JSONB would otherwise ship dead links.
     pub async fn refresh_question_media(&self, questions: &mut [serde_json::Value]) {
@@ -730,7 +730,7 @@ impl MinigameRepo {
                 break;
             }
             // A None means "that draw couldn't build a full question" (too few
-            // distractors) — retry with another draw inside the same budget.
+            // distractors), retry with another draw inside the same budget.
             let Some(q) = self.gen_question(game_type).await else {
                 continue;
             };
@@ -761,7 +761,7 @@ impl MinigameRepo {
         .map(|v| v == 1)
     }
 
-    /// Pending duels created by this user (open or accepted, not finished) —
+    /// Pending duels created by this user (open or accepted, not finished) -
     /// used to cap challenge spam.
     pub async fn pending_duel_count(&self, user_id: i64) -> Result<i64, sqlx::Error> {
         sqlx::query_scalar(
@@ -980,7 +980,7 @@ impl MinigameRepo {
             return Ok(v.as_array().cloned().unwrap_or_default());
         }
         let qs = self.gen_question_set(game_type, n).await;
-        // On generation race, return the canonical stored set — not the
+        // On generation race, return the canonical stored set, not the
         // loser's unpersisted one (phantom-set bug).
         let stored = sqlx::query_scalar::<_, serde_json::Value>(
             "INSERT INTO minigame_daily (day, game_type, questions)
@@ -1111,7 +1111,7 @@ impl MinigameRepo {
     }
 
     /// Consecutive days (ending today or yesterday) with a completed daily
-    /// of this game type — classic date-island streak computation.
+    /// of this game type, classic date-island streak computation.
     pub async fn daily_streak(
         &self,
         user_id: i64,

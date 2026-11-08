@@ -103,7 +103,7 @@ pub fn clean_import_title(input: &str) -> (String, Vec<String>, Vec<String>) {
     let mut feats: Vec<String> = Vec::new();
 
     // extrait les featurings avant tout stripping de parentheses.
-    // la capture brute est rendue telle quelle — l'éclatement en artistes
+    // la capture brute est rendue telle quelle, l'éclatement en artistes
     // individuels se fait a l'import, la ou on peut verifier qu'une forme
     // jointe ("Earth, Wind & Fire") existe deja comme artiste.
     while let Some(c) = IMPORT_FEAT.captures(&title.clone()) {
@@ -163,7 +163,7 @@ pub fn split_feat_artists(raw: &str) -> Vec<String> {
     let basis = if stripped.len() > 1 {
         stripped
     } else if has_parens {
-        // le feat n'etait qu'une annotation parenthetique — rien d'exploitable
+        // le feat n'etait qu'une annotation parenthetique, rien d'exploitable
         return Vec::new();
     } else {
         raw.trim().to_string()

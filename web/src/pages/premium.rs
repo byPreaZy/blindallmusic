@@ -11,11 +11,11 @@ pub fn PremiumPage() -> impl IntoView {
     let status = RwSignal::new(Value::Null);
     let loading = RwSignal::new(true);
     // Art. L221-28 13° C. conso: the 14-day withdrawal right is waived only
-    // by an express request — the CGV wording ("en cochant la case")
+    // by an express request, the CGV wording ("en cochant la case")
     // requires a real checkbox gating the Stripe redirect.
     let consent = RwSignal::new(false);
     // Stripe Payment Link after_completion redirects here with
-    // ?subscribed=plus|pro — show a confirmation banner.
+    // ?subscribed=plus|pro, show a confirmation banner.
     let query = use_query_map();
     let just_subscribed = move || {
         matches!(
@@ -35,12 +35,12 @@ pub fn PremiumPage() -> impl IntoView {
         <div class="mx-auto max-w-4xl px-4 py-8">
             <h1 class="retro-title retro-title--white mb-2 text-2xl">"⭐ Blind'All Premium"</h1>
             <p class="mb-8 text-white/60">
-                {t("Go further: no ads, daily revive, custom tag — and venue branding for bars & events.")}
+                {t("Go further: no ads, daily revive, custom tag, and venue branding for bars & events.")}
             </p>
             {move || {
                 just_subscribed().then(|| view! {
                     <div class="mb-6 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-                        {t("Subscription activated — welcome aboard!")}
+                        {t("Subscription activated, welcome aboard!")}
                     </div>
                 })
             }}
@@ -58,7 +58,7 @@ pub fn PremiumPage() -> impl IntoView {
                     let pro_url = p["pro_url"].as_str().unwrap_or("").to_string();
                     let plan = p["plan"].as_str().unwrap_or("").to_string();
                     // Show the cards whenever Plus is offered or the
-                    // viewer is subscribed — even anonymous (CTA -> /login).
+                    // viewer is subscribed, even anonymous (CTA -> /login).
                     let offered = p["plus_offered"].as_bool().unwrap_or(false);
                     if !offered && plan.is_empty() {
                         return view! {
@@ -76,7 +76,7 @@ pub fn PremiumPage() -> impl IntoView {
                             }
                             .into_any();
                         }
-                        // Anonymous/guest gets /login — the
+                        // Anonymous/guest gets /login, the
                         // subscription needs a logged account
                         // to attach to.
                         let (href, external) = if url.is_empty() {
@@ -114,7 +114,7 @@ pub fn PremiumPage() -> impl IntoView {
                                         })}
                                     </h3>
                                     <p class="mt-1 text-sm font-semibold text-amber-200">
-                                        {t("4.99 €/month — cancel anytime")}
+                                        {t("4.99 €/month, cancel anytime")}
                                     </p>
                                     <ul class="mt-2 space-y-1 text-sm text-white/70">
                                         <li>"🚫 " {t("No ads, forever")}</li>
@@ -138,7 +138,7 @@ pub fn PremiumPage() -> impl IntoView {
                                         })}
                                     </h3>
                                     <p class="mt-1 text-sm font-semibold text-purple-200">
-                                        {t("29.00 €/month — cancel anytime")}
+                                        {t("29.00 €/month, cancel anytime")}
                                     </p>
                                     <ul class="mt-2 space-y-1 text-sm text-white/70">
                                         <li>"📍 " {t("Venue branding on the TV screen")}</li>
@@ -156,7 +156,7 @@ pub fn PremiumPage() -> impl IntoView {
                         </div>
                         // Art. L221-28 13° C. conso: immediate execution
                         // of digital content requires express waiver of
-                        // the 14-day withdrawal right — stated before the
+                        // the 14-day withdrawal right, stated before the
                         // Stripe redirect.
                         <p class="mt-3 text-xs leading-relaxed text-white/40">
                             {t("By subscribing you accept our")}

@@ -155,7 +155,7 @@ impl NotificationRepo {
             .and_then(|d| serde_json::from_str(&d).ok())
             .unwrap_or(json!({}));
         let message = data["message"].as_str().unwrap_or("").to_string();
-        // Single UPDATE matching the JSON message — replaces the
+        // Single UPDATE matching the JSON message, replaces the
         // fetch-all + per-row UPDATE loop.
         let res = sqlx::query(
             "UPDATE notifications SET read_at = NOW(), updated_at = NOW() \

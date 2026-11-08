@@ -126,7 +126,7 @@ pub async fn stripe_webhook(
         // async_payment_succeeded arrives when an async payment method (SEPA,
         // bank transfer) clears after checkout.session.completed=unpaid.
         Some("checkout.session.completed") | Some("checkout.session.async_payment_succeeded") => {
-            // Only subscription-mode checkouts are recorded — one-time
+            // Only subscription-mode checkouts are recorded, one-time
             // payments (the former donation flow) are ignored.
             if obj["mode"].as_str() == Some("subscription") {
                 if let Err(r) = record_subscription_session(&state, obj).await {
@@ -144,7 +144,7 @@ pub async fn stripe_webhook(
                 }
             }
         }
-        // Keep the latest invoice id on the subscription row — a later
+        // Keep the latest invoice id on the subscription row, a later
         // charge.refunded only carries the invoice id, not the sub id.
         // Newer Stripe API versions nest it under parent.subscription_details.
         Some("invoice.payment_succeeded") | Some("invoice.paid") => {
@@ -160,7 +160,7 @@ pub async fn stripe_webhook(
             }
         }
         // Full refund of a subscription charge (droit de rétractation,
-        // duplicate charge, chargeback) revokes the plan — Stripe does not
+        // duplicate charge, chargeback) revokes the plan, Stripe does not
         // cancel the subscription itself on refund.
         Some("charge.refunded") => {
             handle_charge_refunded(&state, obj).await;
@@ -230,7 +230,7 @@ async fn record_subscription_session(state: &AppState, session: &Value) -> Resul
                     &format!(
                         "<p>Merci pour votre abonnement Blind'All {} !</p>\
                          <p>Vos avantages sont actifs : {}</p>\
-                         <p><small>Abonnement mensuel sans engagement — résiliable à \
+                         <p><small>Abonnement mensuel sans engagement, résiliable à \
                          tout moment depuis vos paramètres ou par e-mail. Voir nos \
                          <a href=\"https://blindallmusic.clerely.fr/pages/conditions-generales-vente\">CGV</a>.</small></p>",
                         if plan == "pro" { "Pro" } else { "Plus" },
@@ -282,7 +282,7 @@ async fn sync_subscription(state: &AppState, obj: &Value) {
 
 /// charge.refunded: only a FULL refund revokes the plan (partial refunds
 /// are goodwill adjustments, not a withdrawal). Resolution order:
-/// invoice id -> subscription row; failing that, the Stripe customer — but
+/// invoice id -> subscription row; failing that, the Stripe customer, but
 /// only when it maps to exactly one entitled subscription. Charges with no
 /// invoice at all (one-time payments) never reach the fallback: they are
 /// not subscription-backed.
@@ -345,7 +345,7 @@ async fn handle_charge_refunded(state: &AppState, charge: &Value) {
 /// Venue branding is a Pro perk: strip it only when the user's remaining
 /// active plan is not `pro`. A user holding several subscriptions (e.g. an
 /// old plus sub beside an upgraded pro one) keeps the venue while any pro
-/// row stays entitled — and loses it when downgraded to plain plus.
+/// row stays entitled, and loses it when downgraded to plain plus.
 async fn strip_venue_perks_unless_pro(state: &AppState, user_id: i64) {
     let still_pro = state
         .subscriptions
@@ -360,7 +360,7 @@ async fn strip_venue_perks_unless_pro(state: &AppState, user_id: i64) {
     }
 }
 
-/// Payment Link for a subscription plan — `client_reference_id` carries
+/// Payment Link for a subscription plan, `client_reference_id` carries
 /// "<user_id>:<plan>" so the webhook can attach the subscription.
 pub fn plan_payment_url_for_user(
     cfg: &PaymentsConfig,
@@ -376,7 +376,7 @@ pub fn plan_payment_url_for_user(
     if base.is_empty() {
         return String::new();
     }
-    // Anonymous/guest checkout can't carry client_reference_id — the
+    // Anonymous/guest checkout can't carry client_reference_id, the
     // subscription couldn't be attached. Only members get a link; the UI
     // falls back to /login.
     let Some(u) = user.filter(|u| !u.is_guest) else {
@@ -467,7 +467,7 @@ pub async fn billing_status(
     .into_response()
 }
 
-/// Batch-enrich chat message authors with their plan perks — `donor_perks`
+/// Batch-enrich chat message authors with their plan perks, `donor_perks`
 /// /`is_supporter` now reflect the active subscription (the one-time
 /// donation flow was removed).
 pub async fn enrich_messages(state: &AppState, messages: &mut [Value]) {
@@ -541,7 +541,7 @@ mod tests {
         assert!(url.contains("client_reference_id=7%3Aplus"));
         assert!(url.contains("locked_prefilled_email=u%40e.fr"));
         assert!(url.ends_with("#frag"));
-        // Guests get no link — the subscription couldn't be attached.
+        // Guests get no link, the subscription couldn't be attached.
         let guest = blindall_db::entities::User {
             is_guest: true,
             ..user

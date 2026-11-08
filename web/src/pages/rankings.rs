@@ -446,15 +446,15 @@ fn PlayersBoard(
                                                 </div>
                                                 <div class=stat_box("avg_time")>
                                                     <dt><MetricTip label=t("Avg. response time") tip=t("Average time to complete an excerpt (all answers found), in seconds. Lower is faster.")/></dt>
-                                                    <dd class="font-semibold text-white">{stats["avg_response_time"].as_f64().map(|v| format!("{v:.1}s")).unwrap_or_else(|| "—".into())}</dd>
+                                                    <dd class="font-semibold text-white">{stats["avg_response_time"].as_f64().map(|v| format!("{v:.1}s")).unwrap_or_else(|| "-".into())}</dd>
                                                 </div>
                                                 <div class=stat_box("best_round")>
                                                     <dt><MetricTip label=t("Best round") tip=t("Your highest score achieved in a single round.")/></dt>
-                                                    <dd class="font-semibold text-white">{stats["best_round_score"].as_f64().map(|v| format!("{v:.1}")).unwrap_or_else(|| "—".into())}</dd>
+                                                    <dd class="font-semibold text-white">{stats["best_round_score"].as_f64().map(|v| format!("{v:.1}")).unwrap_or_else(|| "-".into())}</dd>
                                                 </div>
                                                 <div class=stat_box("")>
                                                     <dt><MetricTip label=t("Best streak") tip=t("Your longest streak of consecutive round wins in the same room.")/></dt>
-                                                    <dd class="font-semibold text-white">{stats["best_win_streak"].as_i64().map(|v| v.to_string()).unwrap_or_else(|| "—".into())}</dd>
+                                                    <dd class="font-semibold text-white">{stats["best_win_streak"].as_i64().map(|v| v.to_string()).unwrap_or_else(|| "-".into())}</dd>
                                                 </div>
                                                 <div class=stat_box("")>
                                                     <dt><MetricTip label=t("Rounds played") tip=t("Number of complete rounds played in official rooms.")/></dt>

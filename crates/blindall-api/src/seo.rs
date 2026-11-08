@@ -52,7 +52,7 @@ pub async fn robots(State(state): State<AppState>) -> Response {
     ))
 }
 
-// ads.txt — required by AdSense site verification. Served only when an
+// ads.txt, required by AdSense site verification. Served only when an
 // ADSENSE_CLIENT_ID (ca-pub-…) is configured; 404 otherwise.
 pub async fn ads_txt(State(state): State<AppState>) -> Response {
     let pub_id = state
@@ -68,7 +68,7 @@ pub async fn ads_txt(State(state): State<AppState>) -> Response {
     ))
 }
 
-// assetlinks.json — Digital Asset Links statement required by the Android
+// assetlinks.json, Digital Asset Links statement required by the Android
 // TWA (Play Store package). Served only when ANDROID_PACKAGE_NAME and
 // ANDROID_SHA256_FINGERPRINT are configured; 404 otherwise so a missing
 // config can never silently break domain verification.
@@ -116,7 +116,7 @@ pub async fn llms(State(state): State<AppState>) -> Response {
          - [ELO system]({base}/docs/elo): Competitive ranking explained.\n\
          - [Create rooms & playlists]({base}/docs/create-content): Guide for hosts and playlist creators.\n\n\
          ## Optional\n\n\
-         - [Mini-games]({base}/minigames): Five free music mini-games — quiz, who sang, anagram, first letter, album cover.\n\
+         - [Mini-games]({base}/minigames): Five free music mini-games, quiz, who sang, anagram, first letter, album cover.\n\
          - [Contact]({base}/contact): Contact the Blind'All Music team.\n\
          - [Legal notice]({base}/pages/mentions-legales): Legal information (French).\n"
     ))

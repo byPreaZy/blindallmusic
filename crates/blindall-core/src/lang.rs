@@ -1,7 +1,7 @@
 //! Cheap heuristic language detection for answer strings.
 //!
 //! Used by the minigame picker to keep distractors in the same language as
-//! the correct answer — a French title with three English alternatives (or
+//! the correct answer, a French title with three English alternatives (or
 //! the reverse) gives the answer away for free.
 //!
 //! Detection scores distinctive stopwords/word-forms per language, plus a
@@ -633,7 +633,7 @@ fn has_diacritics(s: &str) -> bool {
     })
 }
 
-/// Any character outside Latin/ASCII-digits/punctuation — CJK, kana,
+/// Any character outside Latin/ASCII-digits/punctuation, CJK, kana,
 /// hangul, cyrillic, arabic, hebrew, greek…
 fn has_non_latin(s: &str) -> bool {
     s.chars().any(|c| {
@@ -650,7 +650,7 @@ fn has_non_latin(s: &str) -> bool {
     })
 }
 
-/// Tokenize on anything that isn't a letter — apostrophes split, so
+/// Tokenize on anything that isn't a letter, apostrophes split, so
 /// "don't" → ["don","t"], "j'aime" → ["j","aime"], "c'est" → ["c","est"].
 fn tokens(s: &str) -> impl Iterator<Item = String> + '_ {
     s.split(|c: char| !c.is_alphabetic())
@@ -685,7 +685,7 @@ pub fn detect(s: &str) -> Lang {
 }
 
 /// Can `candidate` serve as a distractor for `correct`? A known language
-/// rejects candidates detected as the *other* language — that is the
+/// rejects candidates detected as the *other* language, that is the
 /// tell that gives the answer away. `Other` candidates (proper nouns,
 /// no signal words) betray nothing and are always acceptable.
 pub fn compatible(correct: Lang, candidate: &str) -> bool {
@@ -711,7 +711,7 @@ mod tests {
             "Ne me quitte pas",
             "Les feuilles mortes",
             "Comme d'habitude",
-            "Pour que tu m'aimes encore", // "encore" excluded (EN too) — still FR
+            "Pour que tu m'aimes encore", // "encore" excluded (EN too), still FR
             "Et si tu n'existais pas",
             "Je vole",
             "Tout doucement",
@@ -735,7 +735,7 @@ mod tests {
             "We Are the Champions",
             "Born in the U.S.A.",
             "Stairway to Heaven",
-            "Sweet Child o' Mine", // "o" skipped, sweet+child EN… wait child not in set — sweet is
+            "Sweet Child o' Mine", // "o" skipped, sweet+child EN… wait child not in set, sweet is
             "Every Breath You Take",
             "With or Without You",
             "She Loves You",
@@ -771,7 +771,7 @@ mod tests {
     fn distractor_compat() {
         assert!(compatible(Lang::En, "The Final Countdown"));
         assert!(!compatible(Lang::En, "La vie en rose"));
-        assert!(compatible(Lang::Fr, "Hotel California")); // neutral — no tell
+        assert!(compatible(Lang::Fr, "Hotel California")); // neutral, no tell
         assert!(compatible(Lang::Fr, "Je t'aime"));
         assert!(!compatible(Lang::Fr, "The Final Countdown"));
         assert!(compatible(Lang::Other, "anything at all"));

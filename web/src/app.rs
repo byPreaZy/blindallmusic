@@ -55,7 +55,7 @@ fn ParamRemount(children: ChildrenFn) -> impl IntoView {
 }
 
 // Chromeless surfaces: room TV view (/rooms/{id}/live) and the pad buzzer
-// (?pad=1) render full-screen — no site navbar/footer, they're displays.
+// (?pad=1) render full-screen, no site navbar/footer, they're displays.
 fn chromeless(location: &Location) -> bool {
     let path = location.pathname.get();
     if path.starts_with("/rooms/") && (path.ends_with("/live") || path.ends_with("/pad")) {

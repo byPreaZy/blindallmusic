@@ -131,7 +131,7 @@ impl Client {
         self.req(Method::POST, path, None).await
     }
 
-    /// Raw-body POST with an extra header — used by the signed Stripe webhook.
+    /// Raw-body POST with an extra header, used by the signed Stripe webhook.
     pub async fn post_raw(&self, path: &str, header: (&str, &str), body: String) -> Resp {
         let url = format!("{}{}", base(), path);
         let res = self

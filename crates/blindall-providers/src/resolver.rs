@@ -106,7 +106,7 @@ impl ProviderResolver {
             }
             if fetched {
                 if !audio_cached {
-                    // Cache the outcome — including the dead sentinel — so a
+                    // Cache the outcome, including the dead sentinel, so a
                     // removed track is skipped on future picks instead of
                     // re-probed (and served audioless) every time.
                     let to_cache = preview.clone().unwrap_or_default();

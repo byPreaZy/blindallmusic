@@ -154,7 +154,7 @@ pub(crate) async fn enriched_user_json(
         .map(|s| s["level_metrics"].clone())
         .unwrap_or(Value::Null);
     // An active paid plan grants the supporter perks plus its own
-    // (PLUS_PERKS) — a Plus member is at least a supporter.
+    // (PLUS_PERKS), a Plus member is at least a supporter.
     let plan = if u.is_guest {
         None
     } else {
@@ -170,13 +170,13 @@ pub(crate) async fn enriched_user_json(
     base["donor_perks"] = json!(perks);
     base["is_supporter"] = json!(plan.is_some());
     // Stripe Customer Portal self-service link (dashboard "share a link" URL).
-    // Exposed only to subscribers — it's useless (and confusing) otherwise.
+    // Exposed only to subscribers, it's useless (and confusing) otherwise.
     base["portal_url"] = if plan.is_some() {
         json!(std::env::var("STRIPE_PORTAL_URL").unwrap_or_default())
     } else {
         json!("")
     };
-    // custom_tag is a paid perk — only surface the stored tag while the
+    // custom_tag is a paid perk, only surface the stored tag while the
     // user is entitled (it stays in the DB and returns on re-subscribe).
     if plan.is_none() {
         base["custom_tag"] = json!("");
@@ -302,7 +302,7 @@ pub async fn register(
         return validation_error("name", msg);
     }
     // Guest → member conversion: a bearer token belonging to a guest
-    // upgrades that account instead of creating a fresh one — the UI
+    // upgrades that account instead of creating a fresh one, the UI
     // promises stats/XP are kept when registering from the gate.
     let guest_upgrade = match bearer_token_str(&headers) {
         Some(t) => state
@@ -353,7 +353,7 @@ pub async fn register(
         Some(u) => match state.auth.upgrade_guest(u.id, name, email, &hash).await {
             Ok(true) => u.id,
             Ok(false) | Err(_) => {
-                // Fallback: the row changed under us — plain create keeps
+                // Fallback: the row changed under us, plain create keeps
                 // registration working (the guest simply isn't converted).
                 match state.auth.create_user(name, email, &hash, Some(&ip)).await {
                     Ok(id) => id,
@@ -596,7 +596,7 @@ pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Respon
 }
 
 /// Short-lived one-time tickets for the WebSocket upgrade (keeps bearer
-/// tokens out of URLs — and therefore out of any URL log/history).
+/// tokens out of URLs, and therefore out of any URL log/history).
 #[derive(Default)]
 pub struct WsTickets {
     issued: std::sync::Mutex<std::collections::HashMap<String, (i64, Instant)>>,

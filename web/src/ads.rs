@@ -35,7 +35,7 @@ pub fn should_serve_ads(path: &str, ads_disabled: bool) -> bool {
     !ads_disabled && !excluded(path)
 }
 
-// (fetched_at_ms, ads_disabled, client, slot) — refreshed every 60s so a
+// (fetched_at_ms, ads_disabled, client, slot), refreshed every 60s so a
 // plan flag granted mid-session actually turns ads off without a reload.
 fn ads_state_sig() -> ArcRwSignal<Option<(f64, bool, String, String)>> {
     thread_local! {

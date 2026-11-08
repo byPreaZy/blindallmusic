@@ -47,7 +47,7 @@ pub use votes::VoteRepo;
 /// Single source of truth for the paid-perk `custom_tag` gate: the tag is
 /// only served when the user is an administrator or holds an
 /// active/trialing/past_due subscription. Stored tags survive subscription
-/// loss — reads mask them. Every SELECT that exposes `u.custom_tag` must
+/// loss, reads mask them. Every SELECT that exposes `u.custom_tag` must
 /// embed this fragment or the gates drift.
 pub const CUSTOM_TAG_CASE: &str = "CASE WHEN u.is_administrator \
     OR EXISTS(SELECT 1 FROM user_subscriptions s WHERE s.user_id = u.id \
@@ -350,6 +350,13 @@ fn migrations() -> sqlx::migrate::Migrator {
             "admin_metric_snapshots".into(),
             sqlx::migrate::MigrationType::Simple,
             include_str!("../../../migrations/0042_admin_metric_snapshots.sql").into(),
+            false,
+        ),
+        sqlx::migrate::Migration::new(
+            43,
+            "purge_dashes".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0043_purge_dashes.sql").into(),
             false,
         ),
     ];

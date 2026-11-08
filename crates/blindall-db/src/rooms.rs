@@ -93,7 +93,7 @@ impl RoomRepo {
         user_count, deleted_at";
 
     /// True when the room has a seasonal window that excludes the current
-    /// month. Direct access stays allowed — callers use this for SEO
+    /// month. Direct access stays allowed, callers use this for SEO
     /// noindex only, never to block the room itself.
     pub async fn is_out_of_season(&self, id: i64) -> Result<bool, sqlx::Error> {
         sqlx::query_scalar::<_, bool>(
@@ -254,7 +254,7 @@ impl RoomRepo {
                 .execute(&self.pool)
                 .await?;
         }
-        // Stocké hashé (bcrypt coût 10) — le secret partagé de room ne dort pas en clair.
+        // Stocké hashé (bcrypt coût 10), le secret partagé de room ne dort pas en clair.
         let password: Option<String> = if o.has_password {
             o.password
                 .as_deref()
@@ -429,7 +429,7 @@ impl RoomRepo {
         })
     }
 
-    /// Active rooms owned by the user — Plus perk "unlimited private rooms".
+    /// Active rooms owned by the user, Plus perk "unlimited private rooms".
     pub async fn owned_active_count(&self, user_id: i64) -> Result<i64, sqlx::Error> {
         sqlx::query_scalar("SELECT COUNT(*) FROM rooms WHERE user_id = $1 AND deleted_at IS NULL")
             .bind(user_id)

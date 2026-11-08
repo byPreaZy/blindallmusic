@@ -156,7 +156,7 @@ async fn duel_lifecycle_frozen_questions_and_result() {
     assert_eq!(fin.json("/creator_score"), 0);
     assert_eq!(fin.json("/opponent_score"), 3);
 
-    // p2 appears on the wins leaderboard — the route serves a fixed top-N
+    // p2 appears on the wins leaderboard, the route serves a fixed top-N
     // window and the test DB persists across runs, so p2 must strictly out-win
     // the current board maximum (1 win already secured above).
     let lb = p1
@@ -363,7 +363,7 @@ async fn daily_challenge_shared_questions_and_leaderboard() {
     }
 
     // p1's own progress came back in the show payload (score 0, all 10
-    // answered) — its row exists even though a 0-score entry can
+    // answered), its row exists even though a 0-score entry can
     // legitimately fall outside the top-20 on a populated day.
     let lb = p1
         .get("/api/v1/daily-challenge?type=quiz")
@@ -446,7 +446,7 @@ async fn party_lifecycle_and_guards() {
     );
     let idx = s.json("/idx").as_i64().unwrap();
 
-    // guest answers (wrong is fine — determinism not needed for guards)
+    // guest answers (wrong is fine, determinism not needed for guards)
     let a = guest
         .post(
             &format!("/api/v1/rooms/{room_id}/party/answer"),
@@ -633,7 +633,7 @@ fn norm_choice(s: &str) -> String {
     blindall_core::sanitize::str_slug(&out, ' ')
 }
 
-/// Choices must be 4 distinct, normalized-different values — no
+/// Choices must be 4 distinct, normalized-different values, no
 /// "Imagine"/"Imagine (Remastered)" ambiguity.
 #[tokio::test]
 async fn quiz_choices_are_distinct() {

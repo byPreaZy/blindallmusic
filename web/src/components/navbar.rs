@@ -180,7 +180,7 @@ fn user_icon(cls: &'static str) -> impl IntoView {
 #[component]
 fn HelpDropdown() -> impl IntoView {
     let open = RwSignal::new(false);
-    // The portaled click-catcher can't cover the nav strip itself — close
+    // The portaled click-catcher can't cover the nav strip itself, close
     // on route change instead.
     let pathname = use_location().pathname;
     Effect::new(move |_| {
@@ -432,7 +432,7 @@ pub fn Navbar() -> impl IntoView {
                             attr:class="retro-icon-btn text-brand-secondary hover:text-brand-secondary">
                             {trophy_icon("h-5 w-5 drop-shadow-[0_0_8px_rgb(242_201_76/0.5)]")}
                         </A>
-                        // Plus/Pro discovery — visible to everyone, amber glow.
+                        // Plus/Pro discovery, visible to everyone, amber glow.
                         <A href="/premium" attr:title=t("Plus & Pro")
                             attr:class="retro-icon-btn text-amber-400 hover:text-amber-300">
                             {crown_icon("h-5 w-5 drop-shadow-[0_0_8px_rgb(251_191_36/0.6)]")}

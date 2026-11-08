@@ -69,7 +69,7 @@ services:
       BACKUP_KEEP_MONTHS: ${BACKUP_KEEP_MONTHS:-6}
       HEALTHCHECK_PORT: 8081
 
-  # Static site for the root domain (${ROOT_DOMAIN}) — AdSense/Search Console
+  # Static site for the root domain (${ROOT_DOMAIN}), AdSense/Search Console
   # verification requires the parent domain to serve the site markers.
   # `docker compose --env-file .env.production -f docker-compose.traefik.yml --profile rootverify up -d`
   rootverify:

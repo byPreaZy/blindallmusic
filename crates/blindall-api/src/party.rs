@@ -1,5 +1,5 @@
 //! Realtime "party" quiz inside a room: the server drives a shared
-//! question sequence on the room channel — every participant sees the same
+//! question sequence on the room channel, every participant sees the same
 //! question at the same time and scores race live. In-memory per process
 //! (a party is ephemeral by design; nothing needs to survive a restart).
 
@@ -45,7 +45,7 @@ impl PartyStore {
         Some(party_json(room_id, p, viewer_id))
     }
 
-    /// Any party occupying the store for this room — same reachability as
+    /// Any party occupying the store for this room, same reachability as
     /// `snapshot` (a finished party counts until it is reaped).
     pub fn has_active(&self, room_id: i64) -> bool {
         self.map.lock().unwrap_or_else(|e| e.into_inner()).contains_key(&room_id)
@@ -138,7 +138,7 @@ async fn can_host(state: &AppState, room_id: i64, user: &blindall_db::entities::
 
 /// Server-side driver: emits PartyQuestion → PartyReveal per question on the
 /// room channel, then PartyFinished. Mirrors the authoritative-timing rule
-/// used for rounds — clients only display.
+/// used for rounds, clients only display.
 fn spawn_driver(state: AppState, room_id: i64) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let total = {

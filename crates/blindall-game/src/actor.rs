@@ -74,7 +74,7 @@ pub struct RoomActor {
     room: RoomConfig,
     round: Option<RoundRow>,
     phase: Phase,
-    /// A transient store failure parked the chain — the timer is re-armed
+    /// A transient store failure parked the chain, the timer is re-armed
     /// for a retry instead of leaving the round stuck is_playing forever.
     stalled: bool,
     current_track: Option<GameTrack>,
@@ -389,7 +389,7 @@ impl RoomActor {
                             ProbeResult::Dead
                         }
                         ProbeResult::Transient => {
-                            // Provider outage / rate-limit / blocked IP —
+                            // Provider outage / rate-limit / blocked IP -
                             // retry in 5s WITHOUT deleting the track (a
                             // transient ban must not vacuum the catalogue).
                             tracing::warn!(track_id, "audio probe transient failure : retrying later");
@@ -530,7 +530,7 @@ impl RoomActor {
         round.finished_at = Some(now);
         let round_id = round.id;
         let mut payload = events::round_payload(round);
-        // PHP emits {round_id} — keep the alias alongside the full payload.
+        // PHP emits {round_id}, keep the alias alongside the full payload.
         payload["round_id"] = json!(round_id);
         let _ = self.store.finish_round(round_id, now).await;
         let _ = self.store.set_room_playing(self.room.id, false).await;
@@ -564,7 +564,7 @@ impl RoomActor {
                 }
             }
             Phase::InterTrack { .. } => {
-                // PHP parity: playNextTrack chains unconditionally — a round
+                // PHP parity: playNextTrack chains unconditionally, a round
                 // always plays its full track list. Audience only gates the
                 // post-round autostart restart (subscriptions > 0), so a
                 // REST-only poller or a player whose WS dropped in a tunnel
@@ -586,7 +586,7 @@ impl RoomActor {
                     self.arm_timer();
                 }
             }
-            // Idle / Paused: nothing to do, but RE-ARM the timer — a fired
+            // Idle / Paused: nothing to do, but RE-ARM the timer, a fired
             // Sleep stays Ready forever, so returning without re-arming
             // would busy-loop the actor at 100% CPU.
             _ => self.arm_timer(),

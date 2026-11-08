@@ -69,7 +69,7 @@ impl ChannelAuthorizer for RoomChannelAuthorizer {
                 _ => deny("room_not_found"),
             };
         }
-        // Live minigame match — only its players may subscribe.
+        // Live minigame match, only its players may subscribe.
         if let Some(rest) = channel.strip_prefix("match.") {
             return match rest.parse::<i64>() {
                 Ok(match_id) if self.app.matchmaking.is_participant(match_id, user_id) => {

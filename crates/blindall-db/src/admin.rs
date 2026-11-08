@@ -1024,7 +1024,7 @@ impl AdminRepo {
 
     /// Coverage of "screen" answer types (Movie/Show/Anime/Cartoon/Video
     /// game/Musical) per room. A type is reported as the room's expected type
-    /// when at least half of its tracks carry it — no manual mapping needed.
+    /// when at least half of its tracks carry it, no manual mapping needed.
     pub async fn data_quality_rooms(&self) -> Result<Vec<Value>, sqlx::Error> {
         let rows = sqlx::query(
             "WITH per_type AS (
@@ -1215,7 +1215,7 @@ impl AdminRepo {
         Ok(())
     }
 
-    /// Undo a dismissal — the candidate re-enters the queue.
+    /// Undo a dismissal, the candidate re-enters the queue.
     pub async fn restore_candidate(&self, action_id: i64) -> Result<bool, sqlx::Error> {
         sqlx::query("DELETE FROM data_quality_actions WHERE id = $1 AND action = 'dismiss'")
             .bind(action_id)
@@ -1533,7 +1533,7 @@ impl AdminRepo {
     }
 
     /// Aggregate metrics for the admin dashboard. All counts are cheap
-    /// indexed COUNT/SUM queries — no event pipeline required.
+    /// indexed COUNT/SUM queries, no event pipeline required.
     pub async fn metrics(&self) -> Result<Value, sqlx::Error> {
         let one = |sql: &'static str| {
             let pool = self.pool.clone();
@@ -1663,7 +1663,7 @@ const COMPILATION_ARTIST_RE: &str = r"\m(soundtrack|ensemble|tribute|karaoke|var
 const FEATURING_RE: &str = r"\m(feat\.?|ft\.?|featuring)\M";
 
 impl AdminRepo {
-    /// Tracks whose Artist answer looks like a compilation/album name —
+    /// Tracks whose Artist answer looks like a compilation/album name -
     /// unguessable in game, needs a re-artist review.
     pub async fn compilation_artist_candidates(
         &self,
@@ -1912,7 +1912,7 @@ impl AdminRepo {
 }
 
 /// Extract the featured-artist part: "A feat. B" → "B" (artist first,
-/// then title — the marker can sit in either).
+/// then title, the marker can sit in either).
 fn featuring_suggestion(artist: &str, title: &str) -> Option<String> {
     for source in [artist, title] {
         let lower = source.to_lowercase();

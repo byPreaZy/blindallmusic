@@ -286,7 +286,7 @@ async fn round_scores_endpoint_lists_scorers() {
     let (round, track) = wait_round(&owner, room_id).await;
     answer(&owner, round, track, "E2E Song").await;
 
-    // Scores settle asynchronously (the room actor pipes the Redis write) —
+    // Scores settle asynchronously (the room actor pipes the Redis write) -
     // poll briefly instead of assuming the write landed before the GET.
     let mut map = serde_json::Map::new();
     for _ in 0..20 {

@@ -727,7 +727,7 @@ fn urlencoding(s: &str) -> String {
         .collect()
 }
 
-// Compact Plus/Pro pitch — keeps subscriptions discoverable from the home
+// Compact Plus/Pro pitch, keeps subscriptions discoverable from the home
 // page without an extra tab. Hidden when the viewer already has a plan
 // (settings covers management).
 #[component]
@@ -746,7 +746,7 @@ fn PlusPitchCard() -> impl IntoView {
                 <p class="game-section-kicker">{t("Go further")}</p>
                 <p class="mt-1 font-bold text-amber-300">"⭐ Blind'All Plus"</p>
                 <p class="text-sm text-white/70">
-                    {t("No ads, daily revive, custom tag — 4.99 €/month.")}
+                    {t("No ads, daily revive, custom tag, 4.99 €/month.")}
                 </p>
                 <p class="mt-1 text-xs text-white/45">
                     {t("Pro 29 €/month for bars & events: your venue name on the TV screen.")}
@@ -949,7 +949,7 @@ pub fn HomePage() -> impl IntoView {
     };
 
     // Deep-link: /?tab=… while the page is already mounted (navbar link)
-    // or on a fresh load — select the matching catalog tab reactively.
+    // or on a fresh load, select the matching catalog tab reactively.
     Effect::new(move |_| {
         let wanted = query.get().get("tab").unwrap_or_default();
         let id: &'static str = match wanted.as_str() {

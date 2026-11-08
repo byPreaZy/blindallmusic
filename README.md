@@ -27,7 +27,7 @@ titre ou l'artiste avant les autres, grimpe au classement ELO.
   e-mails transactionnels SMTP, admin back-office
 - **Monétisation** : abonnements Stripe **Plus** (4,99 €/mois : zéro pub,
   revive quotidien, tag personnalisé, avantages supporter) et **Pro**
-  (29 €/mois : branding d'établissement sur l'écran TV — bars & événements),
+  (29 €/mois : branding d'établissement sur l'écran TV, bars & événements),
   cycle de vie complet via webhooks signés (souscription, renouvellement,
   échec de paiement avec grâce, résiliation)
 
@@ -40,7 +40,7 @@ titre ou l'artiste avant les autres, grimpe au classement ELO.
 | Données | PostgreSQL (image `supabase/postgres`) · Redis |
 | E-mails | SMTP générique via `lettre` (`MAIL_*`, n'importe quel provider) |
 | Dons | Stripe |
-| Déploiement | Docker Compose + Traefik — TLS Let's Encrypt auto |
+| Déploiement | Docker Compose + Traefik, TLS Let's Encrypt auto |
 
 ## Arborescence
 

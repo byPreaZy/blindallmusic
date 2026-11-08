@@ -9,7 +9,7 @@ ARG TRUNK_VERSION=0.21.14
 ARG BUILD_VERSION=dev
 
 # wasm32 target + node (tailwind hook) + trunk binary.
-# TARGETARCH: amd64 (x64) ou arm64 (aarch64) — Oracle Always Free = ARM.
+# TARGETARCH: amd64 (x64) ou arm64 (aarch64), Oracle Always Free = ARM.
 ARG TARGETARCH
 RUN rustup target add wasm32-unknown-unknown \
  && case "$TARGETARCH" in \

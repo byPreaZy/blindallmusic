@@ -149,7 +149,7 @@ fn mv(m: &Value, section: &str, key: &str) -> String {
     m[section][key]
         .as_i64()
         .map(|n| n.to_string())
-        .unwrap_or_else(|| "—".to_string())
+        .unwrap_or_else(|| "-".to_string())
 }
 
 #[component]
@@ -179,7 +179,7 @@ fn top_rooms_table(m: &Value) -> AnyView {
                 <tbody>
                     {rooms.iter().map(|r| view! {
                         <tr class="border-b border-white/5">
-                            <td class="py-2 pr-4 text-white/80">{r["name"].as_str().unwrap_or("—").to_string()}</td>
+                            <td class="py-2 pr-4 text-white/80">{r["name"].as_str().unwrap_or("-").to_string()}</td>
                             <td class="py-2 text-right text-white/80">{r["plays"].as_i64().unwrap_or(0)}</td>
                         </tr>
                     }).collect::<Vec<_>>()}
@@ -310,7 +310,7 @@ fn MetricsHistory() -> impl IntoView {
                 if h.len() < 2 {
                     return view! {
                         <p class="text-sm text-white/50">
-                            {t("Snapshots are recorded hourly — check back later.")}
+                            {t("Snapshots are recorded hourly, check back later.")}
                         </p>
                     }.into_any();
                 }
@@ -558,8 +558,8 @@ pub fn AdminUsers() -> impl IntoView {
                                 .into_iter().map(|u| {
                                     let uid = u["id"].as_i64().unwrap_or(0);
                                     let name = u["name"].as_str().unwrap_or("").to_string();
-                                    let email = u["email"].as_str().unwrap_or("—").to_string();
-                                    let team = u["team"]["name"].as_str().unwrap_or("—").to_string();
+                                    let email = u["email"].as_str().unwrap_or("-").to_string();
+                                    let team = u["team"]["name"].as_str().unwrap_or("-").to_string();
                                     let role_v = u["role"].as_str().unwrap_or("").to_string();
                                     let provider = u["provider"].as_str().unwrap_or("blindall").to_string();
                                     let deleted = !u["deleted_at"].is_null();
@@ -777,7 +777,7 @@ pub fn AdminTeams() -> impl IntoView {
                                 .into_iter().map(|tm| {
                                     let tid = tm["id"].as_i64().unwrap_or(0);
                                     let name = tm["name"].as_str().unwrap_or("").to_string();
-                                    let owner = tm["owner"]["name"].as_str().unwrap_or("—").to_string();
+                                    let owner = tm["owner"]["name"].as_str().unwrap_or("-").to_string();
                                     let count = tm["members_count"].as_i64().unwrap_or(0);
                                     let deleted = !tm["deleted_at"].is_null();
                                     let edit_tm = tm.clone();
@@ -918,10 +918,10 @@ pub fn AdminRooms() -> impl IntoView {
                                     let rid = r["id"].as_i64().unwrap_or(0);
                                     let name = r["name"].as_str().unwrap_or("").to_string();
                                     let slug = r["slug"].as_str().unwrap_or("").to_string();
-                                    let owner = r["owner"]["name"].as_str().unwrap_or("—").to_string();
+                                    let owner = r["owner"]["name"].as_str().unwrap_or("-").to_string();
                                     let playlists = r["playlists"].as_array().map(|p| p.iter()
                                         .filter_map(|x| x["name"].as_str()).collect::<Vec<_>>().join(", "))
-                                        .unwrap_or_else(|| "—".to_string());
+                                        .unwrap_or_else(|| "-".to_string());
                                     let is_public = r["is_public"].as_bool().unwrap_or(false);
                                     let deleted = !r["deleted_at"].is_null();
                                     let edit_r = r.clone();
@@ -1133,7 +1133,7 @@ pub fn AdminPlaylists() -> impl IntoView {
                                 .into_iter().map(|p| {
                                     let pid = p["id"].as_i64().unwrap_or(0);
                                     let name = p["name"].as_str().unwrap_or("").to_string();
-                                    let owner = p["owner"]["name"].as_str().unwrap_or("—").to_string();
+                                    let owner = p["owner"]["name"].as_str().unwrap_or("-").to_string();
                                     let count = p["tracks_count"].as_i64().unwrap_or(0);
                                     let is_public = p["is_public"].as_bool().unwrap_or(false);
                                     let edit_p = p.clone();
@@ -1584,7 +1584,7 @@ pub fn AdminDataQuality() -> impl IntoView {
     }
 }
 
-/// Shared queue body — rendered under AdminShell or ModShell.
+/// Shared queue body, rendered under AdminShell or ModShell.
 #[component]
 pub fn DataQualityBody() -> impl IntoView {
     let auth = use_auth();
@@ -2173,7 +2173,7 @@ fn ArtistQueue() -> impl IntoView {
     view! {
         <ErrorLine error=error/>
         <p class="mb-4 max-w-2xl text-sm text-white/60">
-            {t("Tracks whose artist is a compilation/album label — unguessable in game. Type the real artist, or dismiss.")}
+            {t("Tracks whose artist is a compilation/album label, unguessable in game. Type the real artist, or dismiss.")}
         </p>
         {filter_bar(search, None, load)}
         <Show when=move || loading.get()>
@@ -2402,7 +2402,7 @@ fn DuplicatesReport() -> impl IntoView {
     view! {
         <ErrorLine error=error/>
         <p class="mb-4 max-w-2xl text-sm text-white/60">
-            {t("Provider ids present on more than one track — stats and votes are split across copies. Read-only report.")}
+            {t("Provider ids present on more than one track, stats and votes are split across copies. Read-only report.")}
         </p>
         <div class="mb-4 flex gap-2">
             <input
@@ -2440,7 +2440,7 @@ fn DuplicatesReport() -> impl IntoView {
                                 view! {
                                     <div class="flex items-center gap-3 border-b border-white/5 px-4 py-2 text-sm last:border-0">
                                         <span class="font-mono text-xs text-white/30">#{tid}</span>
-                                        <span class="min-w-0 flex-1 truncate text-white">{title}" — "<span class="text-white/50">{artist}</span></span>
+                                        <span class="min-w-0 flex-1 truncate text-white">{title}", "<span class="text-white/50">{artist}</span></span>
                                         <span class="text-xs text-white/40">{playlist}</span>
                                         <span class="text-xs text-white/40">{scores}" "{t("scores")}</span>
                                     </div>

@@ -22,7 +22,7 @@ impl SubscriptionRepo {
     pub async fn active_plan(&self, user_id: i64) -> Result<Option<String>, sqlx::Error> {
         sqlx::query_scalar::<_, String>(
             // 'past_due' keeps entitlement: Stripe retries the charge for a few
-            // days — cutting perks instantly on a failed renewal is hostile.
+            // days, cutting perks instantly on a failed renewal is hostile.
             // 'pro' outranks 'plus': an entitled pro row must win even when an
             // older plus row was touched more recently (e.g. a routine
             // customer.subscription.updated on the legacy sub would otherwise
@@ -41,7 +41,7 @@ impl SubscriptionRepo {
 
     /// checkout.session.completed with mode=subscription. Idempotent on
     /// stripe_checkout_session_id (unique index). `invoice_id` is the first
-    /// invoice (in_...) — kept so a later charge.refunded can be mapped
+    /// invoice (in_...), kept so a later charge.refunded can be mapped
     /// back to this subscription.
     pub async fn record_checkout(
         &self,
@@ -75,7 +75,7 @@ impl SubscriptionRepo {
         Ok(rows.rows_affected() == 1)
     }
 
-    /// invoice.payment_succeeded — refresh the latest invoice id on the
+    /// invoice.payment_succeeded, refresh the latest invoice id on the
     /// subscription row so charge.refunded resolves to the right sub even
     /// after renewals (each cycle issues a new invoice).
     pub async fn set_invoice(
@@ -95,7 +95,7 @@ impl SubscriptionRepo {
         Ok(())
     }
 
-    /// charge.refunded — cancel the subscription behind a refunded invoice.
+    /// charge.refunded, cancel the subscription behind a refunded invoice.
     /// Returns the user_id ONLY on an entitled -> canceled transition, so a
     /// replayed refund event neither re-emails nor falls through to the
     /// customer fallback.
@@ -119,7 +119,7 @@ impl SubscriptionRepo {
     /// don't know (e.g. issued before invoice tracking): every subscription
     /// row of the Stripe customer as (stripe_subscription_id, user_id,
     /// status). The caller revokes only when the customer has exactly ONE
-    /// row and it is still entitled — several rows mean the refund likely
+    /// row and it is still entitled, several rows mean the refund likely
     /// targets an old subscription and a blind cancel would over-revoke.
     pub async fn subs_by_customer(
         &self,
@@ -171,7 +171,7 @@ impl SubscriptionRepo {
         Ok(())
     }
 
-    /// customer.subscription.updated — sync status / period / cancellation.
+    /// customer.subscription.updated, sync status / period / cancellation.
     /// Stripe keeps `status='active'` while `cancel_at_period_end` is set, so
     /// the row stays entitled until the `deleted` event or period end.
     pub async fn sync(
@@ -200,7 +200,7 @@ impl SubscriptionRepo {
         .map(|r| r.map(|r| r.get::<i64, _>("user_id")))
     }
 
-    /// customer.subscription.deleted — hard-cancel now. Returns user_id.
+    /// customer.subscription.deleted, hard-cancel now. Returns user_id.
     pub async fn cancel(&self, subscription_id: &str) -> Result<Option<i64>, sqlx::Error> {
         let now = chrono::Utc::now();
         sqlx::query(
@@ -280,7 +280,7 @@ impl SubscriptionRepo {
     }
 
     /// Records the revive. Returns false when the (user, day, game) slot is
-    /// already taken — rely on the unique constraint for the race.
+    /// already taken, rely on the unique constraint for the race.
     pub async fn record_revive(&self, user_id: i64, game_type: &str) -> Result<bool, sqlx::Error> {
         let rows = sqlx::query(
             "INSERT INTO user_plus_revives (user_id, day, game_type, created_at) \

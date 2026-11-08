@@ -253,7 +253,7 @@ pub fn LevelDisplay() -> impl IntoView {
                             view! {
                                 // Portal: the header's backdrop-blur creates a
                                 // containing block that would trap position:fixed
-                                // inside the nav — teleport to <body> instead.
+                                // inside the nav, teleport to <body> instead.
                                 <Portal>
                                 <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4"
                                     on:click=move |_| show_modal.set(false)>

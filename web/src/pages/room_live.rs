@@ -10,7 +10,7 @@ use std::rc::Rc;
 use web_sys::HtmlAudioElement;
 
 /// Salon / TV view of a room: full-screen live scoreboard that plays the
-/// current extract and reveals answers between tracks. Read-only — joining
+/// current extract and reveals answers between tracks. Read-only, joining
 /// happens on the phone via the QR code / link. Pure polling (no account,
 /// no websocket needed) so it works on any browser left unattended.
 #[component]
@@ -44,7 +44,7 @@ pub fn RoomLivePage() -> impl IntoView {
         }
     }
 
-    // Poll the live state — the whole view is driven by it.
+    // Poll the live state, the whole view is driven by it.
     {
         let audio = audio.clone();
         let tick = move || {
@@ -349,7 +349,7 @@ pub fn RoomLivePage() -> impl IntoView {
                                         }}
                                     </div>
 
-                                    // join card : QR + link — bar CTA
+                                    // join card : QR + link, bar CTA
                                     <div class="rounded-2xl border border-white/10 bg-neutral-900/80 p-6 text-center">
                                         <h2 class="mb-4 text-sm font-bold uppercase tracking-widest text-white/50">{t("Scan to buzz!")}</h2>
                                         <div class="mx-auto w-fit rounded-xl bg-white p-3">

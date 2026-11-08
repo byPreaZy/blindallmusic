@@ -43,7 +43,7 @@ pub fn ModShell(active: &'static str, children: ChildrenFn) -> impl IntoView {
                 <h1 class="retro-title retro-title--white mb-6 text-3xl">{t("Moderation")}</h1>
                 <nav class="mb-8 flex flex-wrap gap-2">
                     {SECTIONS.iter().filter(|(href, _)| {
-                        // /moderation/moderators is admin-only server-side —
+                        // /moderation/moderators is admin-only server-side -
                         // hide it from public moderators instead of a silent 403.
                         *href != "/moderation/moderators"
                             || auth.user.get().map(|u| u.is_administrator).unwrap_or(false)
@@ -118,7 +118,7 @@ fn ErrLine(error: RwSignal<Option<String>>) -> impl IntoView {
 fn fmt_date(v: &Value) -> String {
     v.as_str()
         .map(|s| s.chars().take(10).collect())
-        .unwrap_or_else(|| "—".to_string())
+        .unwrap_or_else(|| "-".to_string())
 }
 
 // ---- dashboard ---------------------------------------------------------------
@@ -203,7 +203,7 @@ pub fn ModTrashedMessages() -> impl IntoView {
                             let body = m["body"].as_str().unwrap_or("").to_string();
                             let uname = m["user_name"].as_str().or(m["user"]["name"].as_str()).unwrap_or("?").to_string();
                             let uid = m["user_id"].as_i64().or(m["user"]["id"].as_i64()).unwrap_or(0);
-                            let room = m["room_name"].as_str().or(m["room"]["name"].as_str()).unwrap_or("—").to_string();
+                            let room = m["room_name"].as_str().or(m["room"]["name"].as_str()).unwrap_or("-").to_string();
                             let deleted = fmt_date(&m["deleted_at"]);
                             view! {
                                 <div class="border-b border-white/5 px-4 py-3 last:border-0">
@@ -283,8 +283,8 @@ pub fn ModBannedUsers() -> impl IntoView {
                         .into_iter().map(|u| {
                             let uid = u["id"].as_i64().unwrap_or(0);
                             let name = u["name"].as_str().unwrap_or("").to_string();
-                            let email = u["email"].as_str().unwrap_or("—").to_string();
-                            let ip = u["ip"].as_str().unwrap_or("—").to_string();
+                            let email = u["email"].as_str().unwrap_or("-").to_string();
+                            let ip = u["ip"].as_str().unwrap_or("-").to_string();
                             let bans = u["bans_count"].as_i64().unwrap_or(0);
                             view! {
                                 <div class="flex items-center justify-between border-b border-white/5 px-4 py-3 last:border-0">
@@ -350,7 +350,7 @@ pub fn ModSuggestions() -> impl IntoView {
                             let d = s["data"].clone();
                             let room_id = d["room"]["id"].as_i64().unwrap_or(0);
                             let room_name = d["room"]["name"].as_str().unwrap_or("").to_string();
-                            let user_name = d["user"]["name"].as_str().unwrap_or("—").to_string();
+                            let user_name = d["user"]["name"].as_str().unwrap_or("-").to_string();
                             let message = d["message"].as_str().unwrap_or("").to_string();
                             let date = fmt_date(&s["created_at"]);
                             let playlists: Vec<Value> = d["room"]["playlist_list"]
@@ -425,7 +425,7 @@ pub fn ModSuggestions() -> impl IntoView {
 
 // ---- deezer rematch ------------------------------------------------------------
 
-/// Lets a moderator re-point a track at a correct Deezer version — for wrong
+/// Lets a moderator re-point a track at a correct Deezer version, for wrong
 /// audio reports (foreign-language covers, bad rips) raised by suggestions.
 #[component]
 fn RematchPanel(track_id: i64) -> impl IntoView {
@@ -474,7 +474,7 @@ fn RematchPanel(track_id: i64) -> impl IntoView {
                                 <input type="text" class="input flex-1 !py-1 text-xs"
                                     prop:value=move || term.get()
                                     on:input=move |e| term.set(event_target_value(&e))
-                                    placeholder="Artiste — titre…"/>
+                                    placeholder="Artiste, titre…"/>
                                 <button type="button" class="rounded border border-white/15 px-2 py-1 text-xs text-brand-accent-light hover:bg-white/5"
                                     disabled=move || searching.get()
                                     on:click=move |_| search()>
@@ -490,7 +490,7 @@ fn RematchPanel(track_id: i64) -> impl IntoView {
                                 let art = c["artwork_url"].as_str().unwrap_or("").to_string();
                                 let purl = c["provider_url"].as_str().map(str::to_string);
                                 let preview = c["preview_url"].as_str().unwrap_or("").to_string();
-                                let label = format!("{artist} — {name}");
+                                let label = format!("{artist}, {name}");
                                 let use_label = label.clone();
                                 let use_art = art.clone();
                                 view! {
@@ -739,8 +739,8 @@ pub fn ModUserShow() -> impl IntoView {
                     let created = fmt_date(&u["created_at"]);
                     let banned = u["is_banned"].as_bool().unwrap_or(false);
                     let sensitive = d["canViewSensitiveData"].as_bool().unwrap_or(false);
-                    let email = u["email"].as_str().unwrap_or("—").to_string();
-                    let ip = u["ip"].as_str().unwrap_or("—").to_string();
+                    let email = u["email"].as_str().unwrap_or("-").to_string();
+                    let ip = u["ip"].as_str().unwrap_or("-").to_string();
                     let elo = u["elo"].as_i64().unwrap_or(0);
                     let history = u["ban_history"].as_array().cloned().unwrap_or_default();
                     view! {
@@ -780,7 +780,7 @@ pub fn ModUserShow() -> impl IntoView {
                                 }.into_any() } else { view! {
                                     <div class="space-y-2">
                                         {history.into_iter().map(|b| {
-                                            let comment = b["comment"].as_str().unwrap_or("—").to_string();
+                                            let comment = b["comment"].as_str().unwrap_or("-").to_string();
                                             let expired = b["expired_at"].as_str().unwrap_or("permanent").to_string();
                                             let at = fmt_date(&b["created_at"]);
                                             view! {

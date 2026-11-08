@@ -5,7 +5,7 @@ use leptos_router::components::A;
 use leptos_router::hooks::use_params_map;
 use serde_json::Value;
 
-/// Cross-links shown under every static page — mirrors the footer "Legal" list.
+/// Cross-links shown under every static page, mirrors the footer "Legal" list.
 const RELATED: &[(&str, &str)] = &[
     ("/pages/conditions-generales", "Terms and Conditions"),
     ("/pages/conditions-generales-vente", "Terms of Sale"),

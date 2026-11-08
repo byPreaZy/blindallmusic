@@ -1,6 +1,6 @@
 //! Realtime matchmaking for the minigames: players queue per game type,
 //! the server forms a match as soon as 2 players are waiting (up to 6),
-//! then drives a shared question sequence on the `match.{id}` channel —
+//! then drives a shared question sequence on the `match.{id}` channel -
 //! same engine as the room party (MatchQuestion → MatchReveal →
 //! MatchFinished), scores race live. In-memory: a match is ephemeral.
 
@@ -78,7 +78,7 @@ impl MatchStore {
     }
 
     /// The user's latest *unfinished* match, if any. Finished matches are
-    /// only reachable via `show` (results screen) — join/status never
+    /// only reachable via `show` (results screen), join/status never
     /// route back to them, or rematch would loop into the stale game.
     fn active_match(&self, user_id: i64) -> Option<i64> {
         self.matches
@@ -191,7 +191,7 @@ async fn try_form(state: &AppState, game_type: &str) {
     };
 
     // Stale queue entries can name a player already inside an active
-    // match (tiny race between their queue drain and the match insert) —
+    // match (tiny race between their queue drain and the match insert) -
     // never double-match someone.
     let players: Vec<Queued> = players
         .into_iter()
@@ -211,7 +211,7 @@ async fn try_form(state: &AppState, game_type: &str) {
         .gen_question_set(game_type, MATCH_QUESTIONS)
         .await;
     if questions.len() < 3 {
-        // Can't build a set right now — requeue everyone at the front so
+        // Can't build a set right now, requeue everyone at the front so
         // a later join retries the formation.
         let mut queues = state.matchmaking.queues.lock().unwrap_or_else(|e| e.into_inner());
         let list = queues.entry(game_type.to_string()).or_default();

@@ -38,7 +38,7 @@ impl GameTrack {
 
 /// Tri-state preview probe: only a definitive 404/410 marks a track dead.
 /// 403/429/5xx/timeouts are transient (provider rate-limit, blocked IP,
-/// network blip) — the track must NOT be deleted, only skipped for now.
+/// network blip), the track must NOT be deleted, only skipped for now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProbeResult {
     Alive,
@@ -184,7 +184,7 @@ impl PresenceStore for blindall_redis::RoomPresenceStore {
 }
 
 /// Freshly resolved media for a track: a playable audio URL plus (when the
-/// provider exposes it) a cover image URL. Both are validated http(s) —
+/// provider exposes it) a cover image URL. Both are validated http(s) -
 /// a `None` means the source could not produce a usable URL right now
 /// (dead/upstream-removed track, API failure).
 #[derive(Debug, Clone, Default)]

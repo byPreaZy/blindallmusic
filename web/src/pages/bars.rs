@@ -74,7 +74,7 @@ fn qr_mock(cls: &'static str) -> impl IntoView {
 }
 
 // Fake TV-mode screen shown in the hero: live status, QR join panel and a
-// mini scoreboard — what customers actually see on the bar's TV.
+// mini scoreboard, what customers actually see on the bar's TV.
 fn tv_mock() -> impl IntoView {
     view! {
         <div class="retro-panel p-3">
@@ -94,7 +94,7 @@ fn tv_mock() -> impl IntoView {
                     <div class="min-w-0">
                         <p class="text-sm font-bold text-white sm:text-lg">{t("Scannez pour buzzer")}</p>
                         <p class="mt-1 text-[11px] leading-snug text-white/55 sm:text-sm">
-                            {t("Chacun joue depuis son téléphone — aucune application à installer.")}
+                            {t("Chacun joue depuis son téléphone, aucune application à installer.")}
                         </p>
                     </div>
                 </div>
@@ -247,7 +247,7 @@ pub fn BarsPage() -> impl IntoView {
                                 <span class="text-4xl font-black text-white">{t("29 €")}</span>
                                 <span class="text-sm font-semibold text-purple-200">{t("/mois TTC")}</span>
                             </p>
-                            <p class="mt-1 text-sm text-white/60">{t("Sans engagement — résiliable à tout moment.")}</p>
+                            <p class="mt-1 text-sm text-white/60">{t("Sans engagement, résiliable à tout moment.")}</p>
                             <ul class="mt-5 space-y-2 text-sm text-white/70">
                                 <li>"📍 " {t("Image de votre établissement sur l'écran TV")}</li>
                                 <li>"📺 " {t("Mode TV grand écran avec QR code de participation")}</li>
@@ -307,7 +307,7 @@ pub fn BarsPage() -> impl IntoView {
                 <div class="rounded-2xl border border-white/10 bg-gradient-to-br from-brand-deep to-brand-midnight p-8 text-center sm:p-10">
                     <h2 class="text-2xl font-black text-white sm:text-3xl">{t("Prêt à remplir vos soirées creuses ?")}</h2>
                     <p class="mx-auto mt-3 max-w-xl text-white/60">
-                        {t("Lancez votre premier blind test dès ce soir — c'est gratuit, et ça ne prend que quelques minutes.")}
+                        {t("Lancez votre premier blind test dès ce soir, c'est gratuit, et ça ne prend que quelques minutes.")}
                     </p>
                     <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
                         <A href="/rooms/create" attr:class="game-btn-secondary !min-h-[46px] !px-8">
