@@ -243,6 +243,93 @@ impl SubscriptionRepo {
             .collect())
     }
 
+    // ---- admin comp grants -------------------------------------------------
+    //
+    // A "manual" row has every Stripe id NULL: webhook paths resolve rows
+    // by stripe ids only, so comp grants are never touched by Stripe
+    // events. The partial unique index user_subscriptions_manual_uidx
+    // guarantees at most one manual row per user.
+
+    const MANUAL_PREDICATE: &'static str = "stripe_subscription_id IS NULL \
+        AND stripe_checkout_session_id IS NULL \
+        AND stripe_customer_id IS NULL";
+
+    /// All subscription rows of a user for the admin panel, manual grants
+    /// first, each flagged `manual` / `entitled`.
+    pub async fn list_for_user(&self, user_id: i64) -> Result<Vec<serde_json::Value>, sqlx::Error> {
+        let sql = format!(
+            "SELECT plan::text AS plan, status::text AS status, \
+             current_period_end, created_at, updated_at, \
+             (status IN ('active','trialing','past_due') \
+              AND (current_period_end IS NULL OR current_period_end > now())) AS entitled, \
+             ({}) AS manual \
+             FROM user_subscriptions WHERE user_id = $1 \
+             ORDER BY entitled DESC, (plan = 'pro') DESC, manual DESC, \
+                      updated_at DESC NULLS LAST, id DESC",
+            Self::MANUAL_PREDICATE
+        );
+        let rows = sqlx::query(&sql).bind(user_id).fetch_all(&self.pool).await?;
+        Ok(rows
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "plan": r.get::<String, _>("plan"),
+                    "status": r.get::<String, _>("status"),
+                    "current_period_end": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("current_period_end"),
+                    "created_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("created_at"),
+                    "updated_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("updated_at"),
+                    "entitled": r.get::<bool, _>("entitled"),
+                    "manual": r.get::<bool, _>("manual"),
+                })
+            })
+            .collect())
+    }
+
+    /// Grant (or extend/replace) the admin comp plan: upserts the single
+    /// manual row, `current_period_end` = now + `months` months.
+    pub async fn grant(
+        &self,
+        user_id: i64,
+        plan: &str,
+        months: i32,
+    ) -> Result<(), sqlx::Error> {
+        let sql = format!(
+            "INSERT INTO user_subscriptions \
+             (user_id, plan, status, current_period_end, created_at, updated_at) \
+             VALUES ($1, $2, 'active', \
+                     now() + make_interval(months => $3), now(), now()) \
+             ON CONFLICT (user_id) WHERE {} \
+             DO UPDATE SET plan = EXCLUDED.plan, status = 'active', \
+                 current_period_end = EXCLUDED.current_period_end, \
+                 canceled_at = NULL, updated_at = now()",
+            Self::MANUAL_PREDICATE
+        );
+        sqlx::query(&sql)
+        .bind(user_id)
+        .bind(plan)
+        .bind(months)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Revoke the admin comp plan (if still entitled). Stripe-backed rows
+    /// are untouched: they keep billing through Stripe as usual.
+    pub async fn revoke_manual(&self, user_id: i64) -> Result<bool, sqlx::Error> {
+        let sql = format!(
+            "UPDATE user_subscriptions SET status = 'canceled', \
+             canceled_at = COALESCE(canceled_at, now()), updated_at = now() \
+             WHERE user_id = $1 AND {} \
+               AND status IN ('active','trialing','past_due')",
+            Self::MANUAL_PREDICATE
+        );
+        let rows = sqlx::query(&sql)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(rows.rows_affected() > 0)
+    }
+
     /// A status that keeps paid perks (past_due = Stripe dunning retry window).
     pub fn entitled_status(status: &str) -> bool {
         matches!(status, "active" | "trialing" | "past_due")

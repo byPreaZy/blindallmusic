@@ -309,6 +309,12 @@ pub fn router(state: AppState) -> Router {
             axum::routing::put(admin::restore_user),
         )
         .route(
+            "/api/v1/admin/users/{user}/subscription",
+            get(admin::user_subscriptions)
+                .put(admin::grant_subscription)
+                .delete(admin::revoke_subscription),
+        )
+        .route(
             "/api/v1/admin/force-clear-rounds",
             post(admin::force_clear_rounds),
         )

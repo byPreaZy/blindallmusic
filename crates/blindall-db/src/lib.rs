@@ -359,6 +359,13 @@ fn migrations() -> sqlx::migrate::Migrator {
             include_str!("../../../migrations/0043_purge_dashes.sql").into(),
             false,
         ),
+        sqlx::migrate::Migration::new(
+            44,
+            "admin_comp_subscriptions".into(),
+            sqlx::migrate::MigrationType::Simple,
+            include_str!("../../../migrations/0044_admin_comp_subscriptions.sql").into(),
+            false,
+        ),
     ];
 
     sqlx::migrate::Migrator {

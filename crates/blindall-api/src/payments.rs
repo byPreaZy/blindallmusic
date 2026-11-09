@@ -350,7 +350,7 @@ async fn handle_charge_refunded(state: &AppState, charge: &Value) {
 /// active plan is not `pro`. A user holding several subscriptions (e.g. an
 /// old plus sub beside an upgraded pro one) keeps the venue while any pro
 /// row stays entitled, and loses it when downgraded to plain plus.
-async fn strip_venue_perks_unless_pro(state: &AppState, user_id: i64) {
+pub(crate) async fn strip_venue_perks_unless_pro(state: &AppState, user_id: i64) {
     let still_pro = state
         .subscriptions
         .active_plan(user_id)

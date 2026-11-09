@@ -162,7 +162,15 @@ fn plan_badge(sub: &Value) -> impl IntoView {
     } else {
         "rounded bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-300"
     };
-    view! { <span class=cls>{label}</span> }.into_any()
+    let manual = sub["manual"].as_bool().unwrap_or(false);
+    view! {
+        <span class="inline-flex items-center gap-1">
+            <span class=cls>{label}</span>
+            {manual.then(|| view! {
+                <span class="text-[10px] font-semibold uppercase text-sky-300/70">{t("comp")}</span>
+            })}
+        </span>
+    }.into_any()
 }
 
 // ---- dashboard -----------------------------------------------------------------
@@ -341,6 +349,7 @@ fn MetricsHistory() -> impl IntoView {
                         <TrendRow label_key="Total users" values=series(&h, "users", "total") color="#f59e0b"/>
                         <TrendRow label_key="Plus subscribers" values=series(&h, "subscriptions", "plus") color="#34d399"/>
                         <TrendRow label_key="Pro subscribers" values=series(&h, "subscriptions", "pro") color="#60a5fa"/>
+                        <TrendRow label_key="Comp grants" values=series(&h, "subscriptions", "manual") color="#38bdf8"/>
                     </div>
                 }.into_any()
             }}
@@ -391,6 +400,7 @@ fn MetricsGrid(data: RwSignal<Value>) -> impl IntoView {
                             <Stat label_key="Plus" value=mv(m, "subscriptions", "plus")/>
                             <Stat label_key="Pro" value=mv(m, "subscriptions", "pro")/>
                             <Stat label_key="Past due" value=mv(m, "subscriptions", "past_due")/>
+                            <Stat label_key="Comp grants" value=mv(m, "subscriptions", "manual")/>
                         </div>
                     </div>
                     <div class="card p-5">
@@ -505,6 +515,21 @@ pub fn AdminUsers() -> impl IntoView {
         json!({"name":"","email":"","team_id":null,"is_administrator":false,"password":""}),
     );
     let creating = RwSignal::new(false);
+    // Comp subscription management, only meaningful while editing an
+    // existing user (creating has no id to attach a plan to yet).
+    let subs_data = RwSignal::new(Value::Null);
+    let grant_plan = RwSignal::new("pro".to_string());
+    let grant_months = RwSignal::new("1".to_string());
+    let subs_busy = RwSignal::new(false);
+
+    let load_subs = move |uid: i64| {
+        leptos::task::spawn_local(async move {
+            match api::get::<Value>(&format!("/api/v1/admin/users/{uid}/subscription")).await {
+                Ok(v) => subs_data.set(v["subscriptions"].clone()),
+                Err(_) => subs_data.set(json!([])),
+            }
+        });
+    };
 
     let load = move || {
         let s = search.get_untracked();
@@ -617,6 +642,7 @@ pub fn AdminUsers() -> impl IntoView {
                                                                     "password": "",
                                                                 }));
                                                                 editing.set(Some(uid)); creating.set(false);
+                                                                load_subs(uid);
                                                             }>{t("Edit")}</button>
                                                     })}
                                                     {if deleted { view! {
@@ -740,6 +766,119 @@ pub fn AdminUsers() -> impl IntoView {
                             <option value="admin">{t("Admin")}</option>
                         </select>
                     </label>
+                    <Show when=move || editing.get().is_some()>
+                        <div class="border-t border-white/10 pt-3 md:col-span-2">
+                            <div class="mb-2 text-sm font-medium text-white/80">{t("Subscription")}</div>
+                            <div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                {move || {
+                                    let rows = subs_data.get();
+                                    let rows = rows.as_array().cloned().unwrap_or_default();
+                                    if rows.is_empty() {
+                                        return view! {
+                                            <span class="text-xs text-white/40">{t("No subscription")}</span>
+                                        }.into_any();
+                                    }
+                                    view! {
+                                        <span class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                            {rows.iter().map(|s| {
+                                                let status = s["status"].as_str().unwrap_or("").to_string();
+                                                let entitled = s["entitled"].as_bool().unwrap_or(false);
+                                                let end = s["current_period_end"].as_str()
+                                                    .unwrap_or("").chars().take(10).collect::<String>();
+                                                view! {
+                                                    <span class="inline-flex items-center gap-1 text-xs">
+                                                        {plan_badge(s)}
+                                                        <span class="text-white/40">{status}</span>
+                                                        {(entitled && !end.is_empty()).then(|| view! {
+                                                            <span class="text-white/30">{format!("{} {}", t("until"), end)}</span>
+                                                        })}
+                                                    </span>
+                                                }
+                                            }).collect::<Vec<_>>()}
+                                        </span>
+                                    }.into_any()
+                                }}
+                            </div>
+                            {move || {
+                                let has_stripe = subs_data.get().as_array()
+                                    .map(|a| a.iter().any(|s| {
+                                        s["entitled"].as_bool().unwrap_or(false)
+                                            && !s["manual"].as_bool().unwrap_or(false)
+                                    }))
+                                    .unwrap_or(false);
+                                has_stripe.then(|| view! {
+                                    <p class="mb-2 text-xs text-amber-300/80">
+                                        {t("This user also has an active Stripe subscription: revoking the comp plan does not cancel Stripe billing.")}
+                                    </p>
+                                })
+                            }}
+                            <div class="flex flex-wrap items-end gap-2">
+                                <label class="text-xs text-white/60">{t("Plan")}
+                                    <select class="ml-1 rounded-lg border border-white/10 bg-surface-base px-2 py-1.5 text-xs text-white"
+                                        prop:value=move || grant_plan.get()
+                                        on:change=move |ev| grant_plan.set(event_target_value(&ev))>
+                                        <option value="pro">Pro</option>
+                                        <option value="plus">Plus</option>
+                                    </select>
+                                </label>
+                                <label class="text-xs text-white/60">{t("Duration")}
+                                    <select class="ml-1 rounded-lg border border-white/10 bg-surface-base px-2 py-1.5 text-xs text-white"
+                                        prop:value=move || grant_months.get()
+                                        on:change=move |ev| grant_months.set(event_target_value(&ev))>
+                                        <option value="1">{t("1 month")}</option>
+                                        <option value="3">{t("3 months")}</option>
+                                        <option value="6">{t("6 months")}</option>
+                                        <option value="12">{t("12 months")}</option>
+                                    </select>
+                                </label>
+                                <button type="button" class="rounded-lg border border-sky-500/30 px-3 py-1.5 text-xs text-sky-300 hover:bg-sky-500/10"
+                                    disabled=move || subs_busy.get()
+                                    on:click=move |_| {
+                                        let Some(uid) = editing.get_untracked() else { return };
+                                        let plan = grant_plan.get_untracked();
+                                        let months: i64 = grant_months.get_untracked().parse().unwrap_or(1);
+                                        subs_busy.set(true);
+                                        leptos::task::spawn_local(async move {
+                                            let r = api::put::<Value,_>(
+                                                &format!("/api/v1/admin/users/{uid}/subscription"),
+                                                &json!({"plan": plan, "months": months}),
+                                            ).await;
+                                            subs_busy.set(false);
+                                            match r {
+                                                Ok(_) => { load_subs(uid); load(); }
+                                                Err(e) => error.set(Some(e.message)),
+                                            }
+                                        });
+                                    }>{t("Grant")}</button>
+                                {move || {
+                                    let has_manual = subs_data.get().as_array()
+                                        .map(|a| a.iter().any(|s| {
+                                            s["entitled"].as_bool().unwrap_or(false)
+                                                && s["manual"].as_bool().unwrap_or(false)
+                                        }))
+                                        .unwrap_or(false);
+                                    has_manual.then(|| view! {
+                                        <button type="button" class="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs text-red-300 hover:bg-red-500/10"
+                                            disabled=move || subs_busy.get()
+                                            on:click=move |_| {
+                                                let Some(uid) = editing.get_untracked() else { return };
+                                                subs_busy.set(true);
+                                                leptos::task::spawn_local(async move {
+                                                    let r = api::delete::<Value>(
+                                                        &format!("/api/v1/admin/users/{uid}/subscription"),
+                                                    ).await;
+                                                    subs_busy.set(false);
+                                                    match r {
+                                                        Ok(_) => { load_subs(uid); load(); }
+                                                        Err(e) => error.set(Some(e.message)),
+                                                    }
+                                                });
+                                            }>{t("Revoke comp plan")}</button>
+                                    })
+                                }}
+                            </div>
+                        </div>
+                    </Show>
                     <div class="flex gap-2 md:col-span-2">
                         <button type="submit" class="btn-primary !px-4 !py-2 text-sm">{t("Save")}</button>
                         <button type="button" class="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/70"

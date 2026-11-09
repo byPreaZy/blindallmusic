@@ -202,6 +202,80 @@ pub async fn restore_user(
     }
 }
 
+// ---- comp subscriptions (admin-granted plans, no Stripe involved) -----------
+
+/// Every subscription row of a user, Stripe-backed and manual grants, for
+/// the admin edit form.
+pub async fn user_subscriptions(
+    State(state): State<AppState>,
+    Path(user_id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
+    if !user.is_administrator {
+        return forbidden();
+    }
+    match state.subscriptions.list_for_user(user_id).await {
+        Ok(subs) => Json(json!({"subscriptions": subs})).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct GrantSubscriptionBody {
+    plan: String,
+    months: Option<i64>,
+}
+
+/// Grant or extend the admin comp plan. The manual row has no Stripe ids,
+/// so Stripe webhooks never touch it and no billing happens.
+pub async fn grant_subscription(
+    State(state): State<AppState>,
+    Path(user_id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+    Json(body): Json<GrantSubscriptionBody>,
+) -> Response {
+    if !user.is_administrator {
+        return forbidden();
+    }
+    if !matches!(body.plan.as_str(), "plus" | "pro") {
+        return err("plan", "validation");
+    }
+    let months = body.months.unwrap_or(1).clamp(1, 36) as i32;
+    if !state
+        .admin
+        .user_exists(user_id)
+        .await
+        .unwrap_or(false)
+    {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    match state.subscriptions.grant(user_id, &body.plan, months).await {
+        Ok(()) => Json(json!({"ok": true})).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// Revoke the admin comp plan. Stripe-backed subscriptions keep billing
+/// through Stripe and are not affected.
+pub async fn revoke_subscription(
+    State(state): State<AppState>,
+    Path(user_id): Path<i64>,
+    CurrentUser(user): CurrentUser,
+) -> Response {
+    if !user.is_administrator {
+        return forbidden();
+    }
+    match state.subscriptions.revoke_manual(user_id).await {
+        Ok(_) => {
+            // Same rule as the Stripe webhook paths: venue branding is a
+            // Pro perk, strip it when no entitled pro row remains.
+            crate::payments::strip_venue_perks_unless_pro(&state, user_id).await;
+            Json(json!({"ok": true})).into_response()
+        }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
 // ---- maintenance -----------------------------------------------------------
 
 pub async fn force_clear_rounds(

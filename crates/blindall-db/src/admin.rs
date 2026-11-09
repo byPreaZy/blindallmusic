@@ -45,13 +45,16 @@ impl AdminRepo {
              {mod_exists} AS is_moderator, \
              t.name AS team_name, \
              us.plan AS sub_plan, us.status AS sub_status, \
-             us.entitled AS sub_entitled FROM users u \
+             us.entitled AS sub_entitled, us.manual AS sub_manual FROM users u \
              LEFT JOIN teams t ON t.id = u.team_id \
              LEFT JOIN LATERAL ( \
                  SELECT s.plan::text AS plan, s.status::text AS status, \
                         (s.status IN ('active','trialing','past_due') \
                          AND (s.current_period_end IS NULL \
-                              OR s.current_period_end > now())) AS entitled \
+                              OR s.current_period_end > now())) AS entitled, \
+                        (s.stripe_subscription_id IS NULL \
+                         AND s.stripe_checkout_session_id IS NULL \
+                         AND s.stripe_customer_id IS NULL) AS manual \
                  FROM user_subscriptions s WHERE s.user_id = u.id \
                  ORDER BY CASE WHEN s.status IN ('active','trialing','past_due') \
                                 AND (s.current_period_end IS NULL \
@@ -112,6 +115,8 @@ impl AdminRepo {
                             "plan": p,
                             "status": r.get::<Option<String>, _>("sub_status"),
                             "entitled": r.get::<Option<bool>, _>("sub_entitled")
+                                .unwrap_or(false),
+                            "manual": r.get::<Option<bool>, _>("sub_manual")
                                 .unwrap_or(false),
                         })),
                     "created_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("created_at"),
@@ -235,6 +240,15 @@ impl AdminRepo {
         }
         tx.commit().await?;
         Ok(true)
+    }
+
+    pub async fn user_exists(&self, user_id: i64) -> Result<bool, sqlx::Error> {
+        sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND deleted_at IS NULL)",
+        )
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await
     }
 
     pub async fn delete_user(&self, user_id: i64) -> Result<bool, sqlx::Error> {
@@ -1611,18 +1625,36 @@ impl AdminRepo {
         // not count, a missed webhook would otherwise inflate the numbers.
         let subs_entitled = "status IN ('active','trialing','past_due') \
              AND (current_period_end IS NULL OR current_period_end > now())";
+        // Manual rows (every Stripe id NULL) are admin comp grants, not
+        // paying subscribers: excluded from the plan counts and reported
+        // separately so MRR-facing numbers stay honest.
+        let subs_manual = "stripe_subscription_id IS NULL \
+             AND stripe_checkout_session_id IS NULL \
+             AND stripe_customer_id IS NULL";
         let count_subs = |plan: &str| {
             let pool = self.pool.clone();
             let sql = format!(
                 "SELECT COUNT(DISTINCT user_id) FROM user_subscriptions \
-                 WHERE plan = '{plan}' AND {subs_entitled}"
+                 WHERE plan = '{plan}' AND {subs_entitled} \
+                   AND NOT ({subs_manual})"
             );
+            async move { sqlx::query_scalar::<_, i64>(&sql).fetch_one(&pool).await.unwrap_or(0) }
+        };
+        let count_sql = |sql: String| {
+            let pool = self.pool.clone();
             async move { sqlx::query_scalar::<_, i64>(&sql).fetch_one(&pool).await.unwrap_or(0) }
         };
         let subscriptions = json!({
             "plus": count_subs("plus").await,
             "pro": count_subs("pro").await,
-            "past_due": one("SELECT COUNT(*) FROM user_subscriptions WHERE status = 'past_due'").await,
+            "past_due": count_sql(format!(
+                "SELECT COUNT(*) FROM user_subscriptions WHERE status = 'past_due' \
+                 AND NOT ({subs_manual})"
+            )).await,
+            "manual": count_sql(format!(
+                "SELECT COUNT(DISTINCT user_id) FROM user_subscriptions \
+                 WHERE {subs_entitled} AND ({subs_manual})"
+            )).await,
         });
         let minigames = json!({
             "plays_total": one("SELECT COUNT(*) FROM minigame_scores").await,
