@@ -88,7 +88,20 @@ services:
       - traefik.http.routers.blindall-rootverify.entrypoints=websecure
       - traefik.http.routers.blindall-rootverify.tls=true
       - traefik.http.routers.blindall-rootverify.tls.certresolver=customresolver
+      - traefik.http.routers.blindall-rootverify.service=blindall-rootverify
       - traefik.http.services.blindall-rootverify.loadbalancer.server.port=80
+      # www.${ROOT_DOMAIN} -> apex, permanent redirect. The apex cert does not
+      # cover the www SAN, so without this router https://www.* fails TLS.
+      - traefik.http.routers.blindall-www.rule=Host(`www.${ROOT_DOMAIN:-clerely.fr}`)
+      - traefik.http.routers.blindall-www.entrypoints=websecure
+      - traefik.http.routers.blindall-www.tls=true
+      - traefik.http.routers.blindall-www.tls.certresolver=customresolver
+      - traefik.http.routers.blindall-www.service=blindall-www
+      - traefik.http.routers.blindall-www.middlewares=blindall-www-redirect@docker
+      - traefik.http.services.blindall-www.loadbalancer.server.port=80
+      - traefik.http.middlewares.blindall-www-redirect.redirectregex.regex=^https?://www\.${ROOT_DOMAIN:-clerely.fr}
+      - traefik.http.middlewares.blindall-www-redirect.redirectregex.replacement=https://${ROOT_DOMAIN:-clerely.fr}
+      - traefik.http.middlewares.blindall-www-redirect.redirectregex.permanent=true
 
 networks:
   traefik:
