@@ -49,6 +49,9 @@ pub fn AnswerInput(
     track: RwSignal<Option<Track>>,
     current_time: ReadSignal<f64>,
     volume: RwSignal<f64>,
+    /// Pad/buzzer mode: the phone is a silent buzzer, the TV plays the
+    /// sound. Feedback tones would leak answers to neighbours in a bar.
+    silent: bool,
 ) -> impl IntoView {
     let text = RwSignal::new(String::new());
     let words = RwSignal::new(Vec::<String>::new());
@@ -61,7 +64,7 @@ pub fn AnswerInput(
     let input_ref = NodeRef::<Input>::new();
     let settings_open = RwSignal::new(false);
     let auto_focus = RwSignal::new(stored_flag("autoFocus", true));
-    let answer_sounds = RwSignal::new(stored_flag("answerSounds", true));
+    let answer_sounds = RwSignal::new(!silent && stored_flag("answerSounds", true));
     let found_ids = Memo::new(move |_| found.get().iter().map(|a| a.id).collect::<HashSet<i64>>());
 
     let blurred = RwSignal::new(false);
@@ -385,36 +388,38 @@ pub fn AnswerInput(
                                                     )></span>
                                                 </button>
                                             </div>
-                                            <div class="flex items-center justify-between">
-                                                <label class="text-sm text-white/70">{t("Answer sounds")}</label>
-                                                <button type="button" aria-pressed=move || answer_sounds.get()
-                                                    class=move || format!(
-                                                        "relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 {}",
-                                                        if answer_sounds.get() { "bg-brand-accent-dark" } else { "bg-brand-midnight" }
-                                                    )
-                                                    on:click=move |_| {
-                                                        answer_sounds.update(|v| *v = !*v);
-                                                        store_flag("answerSounds", answer_sounds.get_untracked());
-                                                        if answer_sounds.get_untracked() {
-                                                            play_feedback("bad", true, volume.get_untracked());
-                                                        }
-                                                    }>
-                                                    <span class=move || format!(
-                                                        "inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 {}",
-                                                        if answer_sounds.get() { "translate-x-6" } else { "translate-x-1" }
-                                                    )></span>
-                                                </button>
-                                            </div>
-                                            <div>
-                                                <label class="mb-1 block text-sm text-white/70">{t("Volume")}</label>
-                                                <input type="range" min="0" max="1" step="0.05"
-                                                    class="w-full cursor-pointer accent-brand-accent"
-                                                    prop:value=move || volume.get().to_string()
-                                                    on:input=move |ev| {
-                                                        let v: f64 = event_target_value(&ev).parse().unwrap_or(1.0);
-                                                        volume.set(v);
-                                                    }/>
-                                            </div>
+                                            <Show when=move || !silent>
+                                                <div class="flex items-center justify-between">
+                                                    <label class="text-sm text-white/70">{t("Answer sounds")}</label>
+                                                    <button type="button" aria-pressed=move || answer_sounds.get()
+                                                        class=move || format!(
+                                                            "relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 {}",
+                                                            if answer_sounds.get() { "bg-brand-accent-dark" } else { "bg-brand-midnight" }
+                                                        )
+                                                        on:click=move |_| {
+                                                            answer_sounds.update(|v| *v = !*v);
+                                                            store_flag("answerSounds", answer_sounds.get_untracked());
+                                                            if answer_sounds.get_untracked() {
+                                                                play_feedback("bad", true, volume.get_untracked());
+                                                            }
+                                                        }>
+                                                        <span class=move || format!(
+                                                            "inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 {}",
+                                                            if answer_sounds.get() { "translate-x-6" } else { "translate-x-1" }
+                                                        )></span>
+                                                    </button>
+                                                </div>
+                                                <div>
+                                                    <label class="mb-1 block text-sm text-white/70">{t("Volume")}</label>
+                                                    <input type="range" min="0" max="1" step="0.05"
+                                                        class="w-full cursor-pointer accent-brand-accent"
+                                                        prop:value=move || volume.get().to_string()
+                                                        on:input=move |ev| {
+                                                            let v: f64 = event_target_value(&ev).parse().unwrap_or(1.0);
+                                                            volume.set(v);
+                                                        }/>
+                                                </div>
+                                            </Show>
                                         </div>
                                     </div>
                                 </Show>
