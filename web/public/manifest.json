@@ -9,7 +9,6 @@
   "display_override": ["standalone", "browser"],
   "background_color": "#161220",
   "theme_color": "#161220",
-  "orientation": "portrait-primary",
   "icons": [
     {
       "src": "/favicon.svg",
