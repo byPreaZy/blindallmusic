@@ -490,10 +490,13 @@ impl GuestThrottle {
     }
 
     pub fn retry_after(&self, key: &str) -> Option<u64> {
+        // Bar scenario: 20-40 guests scan the room QR within minutes, all
+        // sharing the venue WiFi IP (or a carrier-grade NAT IP). Limits must
+        // absorb a full bar night per IP while still bounding abuse.
         const LIMITS: &[(usize, Duration)] = &[
-            (3, Duration::from_secs(60)),
-            (20, Duration::from_secs(3600)),
-            (50, Duration::from_secs(86400)),
+            (20, Duration::from_secs(60)),
+            (120, Duration::from_secs(3600)),
+            (500, Duration::from_secs(86400)),
         ];
         let mut wait = 0u64;
         for (max, window) in LIMITS {
