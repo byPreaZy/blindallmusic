@@ -317,11 +317,11 @@ async fn round_scores_endpoint_lists_scorers() {
 #[tokio::test]
 async fn upvote_downvote_toggle_and_reasons() {
     let (owner, _) = Client::register("gv").await;
-    let (_room_id, _pl, track_id) = game_fixture(&owner, &[]).await;
+    let (room_id, _pl, track_id) = game_fixture(&owner, &[]).await;
 
     let up = owner
         .post(
-            &format!("/api/v1/rooms/6/tracks/{track_id}/upvote"),
+            &format!("/api/v1/rooms/{room_id}/tracks/{track_id}/upvote"),
             json!({}),
         )
         .await;
@@ -331,7 +331,7 @@ async fn upvote_downvote_toggle_and_reasons() {
 
     let off = owner
         .post(
-            &format!("/api/v1/rooms/6/tracks/{track_id}/upvote"),
+            &format!("/api/v1/rooms/{room_id}/tracks/{track_id}/upvote"),
             json!({}),
         )
         .await;
@@ -340,7 +340,7 @@ async fn upvote_downvote_toggle_and_reasons() {
 
     let no_reason = owner
         .post(
-            &format!("/api/v1/rooms/6/tracks/{track_id}/downvote"),
+            &format!("/api/v1/rooms/{room_id}/tracks/{track_id}/downvote"),
             json!({}),
         )
         .await;
@@ -348,7 +348,7 @@ async fn upvote_downvote_toggle_and_reasons() {
 
     let invalid = owner
         .post(
-            &format!("/api/v1/rooms/6/tracks/{track_id}/downvote"),
+            &format!("/api/v1/rooms/{room_id}/tracks/{track_id}/downvote"),
             json!({"reason": "bogus"}),
         )
         .await;
@@ -356,7 +356,7 @@ async fn upvote_downvote_toggle_and_reasons() {
 
     let ok = owner
         .post(
-            &format!("/api/v1/rooms/6/tracks/{track_id}/downvote"),
+            &format!("/api/v1/rooms/{room_id}/tracks/{track_id}/downvote"),
             json!({"reason": "personal_taste"}),
         )
         .await;
@@ -365,7 +365,7 @@ async fn upvote_downvote_toggle_and_reasons() {
 
     let cancel = owner
         .post(
-            &format!("/api/v1/rooms/6/tracks/{track_id}/downvote"),
+            &format!("/api/v1/rooms/{room_id}/tracks/{track_id}/downvote"),
             json!({}),
         )
         .await;

@@ -29,6 +29,17 @@ async fn home_payload_shape() {
     }
 }
 
+// The seeded demo room (slug "demo") is the stable public fixture; numeric
+// endpoints (live-state, qr.svg) need its id, resolved via the slug route.
+async fn demo_room_id() -> i64 {
+    let c = Client::anon();
+    let r = c
+        .get("/api/v1/rooms/demo")
+        .await
+        .expect_ok("demo room show");
+    r.json("/room/id").as_i64().expect("demo room id")
+}
+
 async fn searchable_room(owner: &Client) -> (i64, String, String) {
     let pl = owner
         .post("/api/v1/playlists", json!({"name": uniq_name("pl")}))
@@ -295,8 +306,9 @@ async fn public_state_returns_game_snapshot() {
 #[tokio::test]
 async fn live_state_public_room_anonymous_ok() {
     let c = Client::anon();
+    let id = demo_room_id().await;
     let r = c
-        .get("/api/v1/rooms/6/live-state")
+        .get(&format!("/api/v1/rooms/{id}/live-state"))
         .await
         .expect_ok("live-state anon");
     assert!(r.body["name"].is_string(), "room name: {}", r.text);
