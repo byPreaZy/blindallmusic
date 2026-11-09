@@ -43,8 +43,17 @@ impl AdminRepo {
             "SELECT u.id, u.name, u.provider, u.is_administrator, u.email, \
              u.photo_path, u.created_at, u.deleted_at, u.team_id, \
              {mod_exists} AS is_moderator, \
-             t.name AS team_name FROM users u \
+             t.name AS team_name, \
+             us.plan AS sub_plan, us.status AS sub_status FROM users u \
              LEFT JOIN teams t ON t.id = u.team_id \
+             LEFT JOIN LATERAL ( \
+                 SELECT s.plan::text AS plan, s.status::text AS status \
+                 FROM user_subscriptions s WHERE s.user_id = u.id \
+                 ORDER BY CASE WHEN s.status IN ('active','trialing','past_due') THEN 0 ELSE 1 END, \
+                          (s.plan = 'pro') DESC, \
+                          s.updated_at DESC NULLS LAST, s.id DESC \
+                 LIMIT 1 \
+             ) us ON true \
              WHERE 1=1 {trashed} \
              AND ($1 IS NULL OR u.name LIKE $2 OR u.email LIKE $3) \
              {role} \
@@ -91,6 +100,12 @@ impl AdminRepo {
                     "team": r.get::<Option<String>, _>("team_name")
                         .map(|n| json!({"id": r.get::<Option<i64>, _>("team_id"), "name": n})),
                     "photo": r.get::<Option<String>, _>("photo_path"),
+                    "subscription": r
+                        .get::<Option<String>, _>("sub_plan")
+                        .map(|p| json!({
+                            "plan": p,
+                            "status": r.get::<Option<String>, _>("sub_status"),
+                        })),
                     "created_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("created_at"),
                     "deleted_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("deleted_at"),
                 })

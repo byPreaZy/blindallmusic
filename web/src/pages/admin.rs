@@ -143,6 +143,25 @@ fn role_badge(role: &str) -> impl IntoView {
     view! { <span class=cls>{t(label)}</span> }
 }
 
+fn plan_badge(sub: &Value) -> impl IntoView {
+    let plan = sub["plan"].as_str().unwrap_or("");
+    if plan.is_empty() {
+        return view! { <span class="text-xs text-white/30">{t("Free")}</span> }.into_any();
+    }
+    let status = sub["status"].as_str().unwrap_or("");
+    let entitled = matches!(status, "active" | "trialing" | "past_due");
+    let label = if plan == "pro" { "Pro" } else { "Plus" };
+    let cls = match status {
+        "past_due" => "rounded bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300",
+        _ if entitled && plan == "pro" => {
+            "rounded bg-violet-500/20 px-2 py-0.5 text-xs text-violet-300"
+        }
+        _ if entitled => "rounded bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-300",
+        _ => "rounded bg-white/10 px-2 py-0.5 text-xs text-white/40",
+    };
+    view! { <span class=cls>{label}</span> }.into_any()
+}
+
 // ---- dashboard -----------------------------------------------------------------
 
 fn mv(m: &Value, section: &str, key: &str) -> String {
@@ -548,6 +567,7 @@ pub fn AdminUsers() -> impl IntoView {
                                 <th class="px-4 py-3">{t("User")}</th>
                                 <th class="px-4 py-3">{t("Email")}</th>
                                 <th class="px-4 py-3">{t("Team")}</th>
+                                <th class="px-4 py-3">{t("Plan")}</th>
                                 <th class="px-4 py-3">{t("Role")}</th>
                                 <th class="px-4 py-3">{t("Created")}</th>
                                 <th class="px-4 py-3 text-right">{t("Actions")}</th>
@@ -575,6 +595,7 @@ pub fn AdminUsers() -> impl IntoView {
                                             </td>
                                             <td class="px-4 py-2 text-white/70">{email}</td>
                                             <td class="px-4 py-2 text-white/70">{team}</td>
+                                            <td class="px-4 py-2">{plan_badge(&u["subscription"])}</td>
                                             <td class="px-4 py-2">{role_badge(&role_v)}</td>
                                             <td class="px-4 py-2 text-white/50">{created}</td>
                                             <td class="px-4 py-2 text-right">
