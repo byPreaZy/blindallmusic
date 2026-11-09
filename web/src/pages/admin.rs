@@ -148,16 +148,19 @@ fn plan_badge(sub: &Value) -> impl IntoView {
     if plan.is_empty() {
         return view! { <span class="text-xs text-white/30">{t("Free")}</span> }.into_any();
     }
+    // `entitled` mirrors SubscriptionRepo::active_plan (status + period
+    // end), a stale 'active' row must not glow like a paying member.
+    let entitled = sub["entitled"].as_bool().unwrap_or(false);
     let status = sub["status"].as_str().unwrap_or("");
-    let entitled = matches!(status, "active" | "trialing" | "past_due");
     let label = if plan == "pro" { "Pro" } else { "Plus" };
-    let cls = match status {
-        "past_due" => "rounded bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300",
-        _ if entitled && plan == "pro" => {
-            "rounded bg-violet-500/20 px-2 py-0.5 text-xs text-violet-300"
-        }
-        _ if entitled => "rounded bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-300",
-        _ => "rounded bg-white/10 px-2 py-0.5 text-xs text-white/40",
+    let cls = if !entitled {
+        "rounded bg-white/10 px-2 py-0.5 text-xs text-white/40"
+    } else if status == "past_due" {
+        "rounded bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300"
+    } else if plan == "pro" {
+        "rounded bg-violet-500/20 px-2 py-0.5 text-xs text-violet-300"
+    } else {
+        "rounded bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-300"
     };
     view! { <span class=cls>{label}</span> }.into_any()
 }
@@ -585,6 +588,8 @@ pub fn AdminUsers() -> impl IntoView {
                                     let deleted = !u["deleted_at"].is_null();
                                     let created = u["created_at"].as_str().unwrap_or("").chars().take(10).collect::<String>();
                                     let edit_u = u.clone();
+                                    let sub_entitled = u["subscription"]["entitled"].as_bool().unwrap_or(false);
+                                    let del_name = name.clone();
                                     view! {
                                         <tr class="border-b border-white/5 last:border-0">
                                             <td class="px-4 py-2">
@@ -625,6 +630,15 @@ pub fn AdminUsers() -> impl IntoView {
                                                     }.into_any() } else { view! {
                                                         <button type="button" class="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-500/10"
                                                             on:click=move |_| {
+                                                                let msg = if sub_entitled {
+                                                                    format!("{del_name} has an active paid subscription: Stripe keeps billing until it is canceled in the Stripe dashboard. Delete anyway?")
+                                                                } else {
+                                                                    format!("Delete {del_name}?")
+                                                                };
+                                                                let ok = web_sys::window()
+                                                                    .and_then(|w| w.confirm_with_message(&msg).ok())
+                                                                    .unwrap_or(false);
+                                                                if !ok { return; }
                                                                 leptos::task::spawn_local(async move {
                                                                     let _ = api::delete::<Value>(&format!("/api/v1/admin/users/{uid}")).await;
                                                                     load();
@@ -944,6 +958,7 @@ pub fn AdminRooms() -> impl IntoView {
                                         .filter_map(|x| x["name"].as_str()).collect::<Vec<_>>().join(", "))
                                         .unwrap_or_else(|| "-".to_string());
                                     let is_public = r["is_public"].as_bool().unwrap_or(false);
+                                    let is_pro = r["is_pro"].as_bool().unwrap_or(false);
                                     let deleted = !r["deleted_at"].is_null();
                                     let edit_r = r.clone();
                                     view! {
@@ -953,7 +968,14 @@ pub fn AdminRooms() -> impl IntoView {
                                             </td>
                                             <td class="px-4 py-2 text-white/70">{owner}</td>
                                             <td class="px-4 py-2 text-xs text-white/60">{playlists}</td>
-                                            <td class="px-4 py-2">{badge(is_public, "Public", "Private")}</td>
+                                            <td class="px-4 py-2">
+                                                <div class="flex items-center gap-1">
+                                                    {badge(is_public, "Public", "Private")}
+                                                    {is_pro.then(|| view! {
+                                                        <span class="rounded bg-violet-500/20 px-2 py-0.5 text-xs text-violet-300">"Pro"</span>
+                                                    })}
+                                                </div>
+                                            </td>
                                             <td class="px-4 py-2 text-right">
                                                 <div class="flex justify-end gap-1">
                                                     {(!deleted).then(|| view! {

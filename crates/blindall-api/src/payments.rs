@@ -222,18 +222,18 @@ async fn record_subscription_session(state: &AppState, session: &Value) -> Resul
     {
         Ok(true) => {
             if let Ok(Some(email)) = state.auth.email_of(uid).await {
+                let plan_name = if plan == "pro" { "Pro" } else { "Plus" };
                 let _ = crate::mail::send(
                     &state.mail,
                     &email,
                     "",
-                    "Bienvenue dans Blind'All Plus",
+                    &format!("Bienvenue dans Blind'All {plan_name}"),
                     &format!(
-                        "<p>Merci pour votre abonnement Blind'All {} !</p>\
+                        "<p>Merci pour votre abonnement Blind'All {plan_name} !</p>\
                          <p>Vos avantages sont actifs : {}</p>\
                          <p><small>Abonnement mensuel sans engagement, résiliable à \
                          tout moment depuis vos paramètres ou par e-mail. Voir nos \
                          <a href=\"https://blindallmusic.clerely.fr/pages/conditions-generales-vente\">CGV</a>.</small></p>",
-                        if plan == "pro" { "Pro" } else { "Plus" },
                         if plan == "pro" {
                             "branding de salle (nom d'établissement sur l'écran TV) \
                              pour vos soirées, plus tous les avantages supporter."
@@ -258,8 +258,12 @@ async fn record_subscription_session(state: &AppState, session: &Value) -> Resul
 async fn sync_subscription(state: &AppState, obj: &Value) {
     let Some(sid) = obj["id"].as_str() else { return };
     let status = obj["status"].as_str().unwrap_or("active");
+    // Newer Stripe API versions moved current_period_end from the
+    // subscription object to its items, read both so the entitlement
+    // window never silently stays NULL.
     let period_end = obj["current_period_end"]
         .as_i64()
+        .or_else(|| obj["items"]["data"][0]["current_period_end"].as_i64())
         .and_then(|t| chrono::DateTime::from_timestamp(t, 0));
     let cancel_at_period_end = obj["cancel_at_period_end"].as_bool().unwrap_or(false)
         || !obj["canceled_at"].is_null();

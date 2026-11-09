@@ -346,6 +346,24 @@ pub fn SettingsPage() -> impl IntoView {
                     <p class="mb-4 text-sm text-white/50">
                         {t("Deleting your account is permanent: rooms, playlists and scores will be anonymized.")}
                     </p>
+                    {move || {
+                        // Account deletion cascades away subscription rows while
+                        // Stripe keeps billing: subscribers must cancel first.
+                        let subscribed = account
+                            .get()["account"]["plan"]
+                            .as_str()
+                            .map(|p| !p.is_empty())
+                            .unwrap_or(false);
+                        if subscribed {
+                            return view! {
+                                <p class="text-sm text-white/60">
+                                    {t("You have an active subscription: cancel it first, then delete your account.")}
+                                    " "
+                                    <A href="/premium" attr:class="text-amber-300 underline underline-offset-2">{t("Manage subscription")}</A>
+                                </p>
+                            }.into_any();
+                        }
+                        view! {
                     <Show
                         when=move || confirm_delete.get()
                         fallback=move || view! {
@@ -369,6 +387,8 @@ pub fn SettingsPage() -> impl IntoView {
                             </button>
                         </div>
                     </Show>
+                        }.into_any()
+                    }}
                 </section>
                 </div>
                 <aside class="space-y-6 lg:col-span-5">

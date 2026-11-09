@@ -44,12 +44,18 @@ impl AdminRepo {
              u.photo_path, u.created_at, u.deleted_at, u.team_id, \
              {mod_exists} AS is_moderator, \
              t.name AS team_name, \
-             us.plan AS sub_plan, us.status AS sub_status FROM users u \
+             us.plan AS sub_plan, us.status AS sub_status, \
+             us.entitled AS sub_entitled FROM users u \
              LEFT JOIN teams t ON t.id = u.team_id \
              LEFT JOIN LATERAL ( \
-                 SELECT s.plan::text AS plan, s.status::text AS status \
+                 SELECT s.plan::text AS plan, s.status::text AS status, \
+                        (s.status IN ('active','trialing','past_due') \
+                         AND (s.current_period_end IS NULL \
+                              OR s.current_period_end > now())) AS entitled \
                  FROM user_subscriptions s WHERE s.user_id = u.id \
-                 ORDER BY CASE WHEN s.status IN ('active','trialing','past_due') THEN 0 ELSE 1 END, \
+                 ORDER BY CASE WHEN s.status IN ('active','trialing','past_due') \
+                                AND (s.current_period_end IS NULL \
+                                     OR s.current_period_end > now()) THEN 0 ELSE 1 END, \
                           (s.plan = 'pro') DESC, \
                           s.updated_at DESC NULLS LAST, s.id DESC \
                  LIMIT 1 \
@@ -105,6 +111,8 @@ impl AdminRepo {
                         .map(|p| json!({
                             "plan": p,
                             "status": r.get::<Option<String>, _>("sub_status"),
+                            "entitled": r.get::<Option<bool>, _>("sub_entitled")
+                                .unwrap_or(false),
                         })),
                     "created_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("created_at"),
                     "deleted_at": r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("deleted_at"),
@@ -1598,9 +1606,22 @@ impl AdminRepo {
             "messages_total": one("SELECT COUNT(*) FROM messages WHERE deleted_at IS NULL").await,
             "messages_7d": one("SELECT COUNT(*) FROM messages WHERE deleted_at IS NULL AND created_at > NOW() - INTERVAL '7 days'").await,
         });
+        // Same entitlement rule as SubscriptionRepo::active_plan /
+        // CUSTOM_TAG_CASE: an 'active' row whose period already ended must
+        // not count, a missed webhook would otherwise inflate the numbers.
+        let subs_entitled = "status IN ('active','trialing','past_due') \
+             AND (current_period_end IS NULL OR current_period_end > now())";
+        let count_subs = |plan: &str| {
+            let pool = self.pool.clone();
+            let sql = format!(
+                "SELECT COUNT(DISTINCT user_id) FROM user_subscriptions \
+                 WHERE plan = '{plan}' AND {subs_entitled}"
+            );
+            async move { sqlx::query_scalar::<_, i64>(&sql).fetch_one(&pool).await.unwrap_or(0) }
+        };
         let subscriptions = json!({
-            "plus": one("SELECT COUNT(DISTINCT user_id) FROM user_subscriptions WHERE plan = 'plus' AND status IN ('active','trialing','past_due')").await,
-            "pro": one("SELECT COUNT(DISTINCT user_id) FROM user_subscriptions WHERE plan = 'pro' AND status IN ('active','trialing','past_due')").await,
+            "plus": count_subs("plus").await,
+            "pro": count_subs("pro").await,
             "past_due": one("SELECT COUNT(*) FROM user_subscriptions WHERE status = 'past_due'").await,
         });
         let minigames = json!({

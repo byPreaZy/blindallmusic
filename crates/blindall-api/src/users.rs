@@ -410,6 +410,22 @@ pub async fn destroy(
     if !self_or_admin(&user, id) {
         return forbidden();
     }
+    // Deleting the account cascades away user_subscriptions while Stripe
+    // keeps billing the customer with no way left to cancel. Force the
+    // member to end the subscription first (portal or support).
+    if state
+        .subscriptions
+        .active_plan(id)
+        .await
+        .ok()
+        .flatten()
+        .is_some()
+    {
+        return err(
+            "account",
+            "Cancel your subscription before deleting your account.",
+        );
+    }
     if let Ok(Some(path)) = state.auth.photo_path(id).await {
         state.storage.delete(&path).await;
     }

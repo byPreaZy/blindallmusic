@@ -154,6 +154,11 @@ pub fn PremiumPage() -> impl IntoView {
                                 </div>
                             </div>
                         </div>
+                        {(!plan.is_empty()).then(|| view! {
+                            <p class="mt-4 text-xs text-white/40">
+                                {t("To switch between Plus and Pro, cancel your current subscription first, then subscribe to the other plan once the current period ends.")}
+                            </p>
+                        })}
                         // Art. L221-28 13° C. conso: immediate execution
                         // of digital content requires express waiver of
                         // the 14-day withdrawal right, stated before the
