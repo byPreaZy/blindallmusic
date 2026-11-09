@@ -6331,6 +6331,9 @@ video {
 .max-w-6xl{
   max-width: 72rem;
 }
+.max-w-\[10rem\]{
+  max-width: 10rem;
+}
 .max-w-\[12rem\]{
   max-width: 12rem;
 }
@@ -6372,9 +6375,6 @@ video {
 }
 .max-w-xl{
   max-width: 36rem;
-}
-.max-w-xs{
-  max-width: 20rem;
 }
 .flex-1{
   flex: 1 1 0%;
@@ -9642,65 +9642,22 @@ body {
   }
 }
 
-/* Pad (buzzer) view: on touch devices held in portrait, force the landscape
-   layout by rotating the stage 90deg. The phone stays in portrait so the
-   soft keyboard keeps docking at the physical bottom edge, which maps to the
-   left (info) column; the answer input and score stay clear. Rotating the
-   device flips the orientation media query and the normal landscape layout
-   takes over seamlessly. Fine pointers (desktop) are untouched. */
-.pad-stage,
-.pad-stage-inner {
-  display: contents;
+/* Pad (buzzer) view: single-column layout tuned for phones. touch-action
+   manipulation kills double-tap zoom and tap delay inside the pad only.
+   The answer field is deliberately oversized so it stays the dominant
+   element; 20px font also stays above the 16px iOS focus-zoom threshold. */
+.pad-root {
+  touch-action: manipulation;
 }
 
-@media (orientation: portrait) and (pointer: coarse) {
-  .pad-stage {
-    display: block;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    height: 100dvh;
-    overflow: hidden;
-  }
+.pad-root .room-input {
+  height: 4rem;
+  font-size: 1.25rem;
+}
 
-  .pad-stage-inner {
-    display: block;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 100vh;
-    width: 100dvh;
-    height: 100vw;
-    transform: translate(-50%, -50%) rotate(-90deg);
-    transform-origin: center center;
-    overflow: hidden;
-  }
-
-  .pad-stage-inner > .pad-root {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: minmax(0, 1fr);
-    gap: 1.5rem;
-    align-items: stretch;
-    height: 100%;
-    max-width: none;
-    min-height: 0;
-    margin: 0;
-    padding: 1rem 1.5rem;
-    overflow: hidden;
-  }
-
-  .pad-stage-inner > .pad-root > div {
-    min-width: 0;
-    min-height: 0;
-    overflow-y: auto;
-    scrollbar-width: none;
-  }
-
-  .pad-stage-inner > .pad-root > div::-webkit-scrollbar {
-    display: none;
+@media (orientation: landscape) {
+  .pad-root .room-input {
+    height: 3.5rem;
   }
 }
 
@@ -10826,6 +10783,9 @@ body {
   .sm\:max-w-\[14rem\]{
     max-width: 14rem;
   }
+  .sm\:max-w-lg{
+    max-width: 32rem;
+  }
   .sm\:max-w-none{
     max-width: none;
   }
@@ -11316,39 +11276,34 @@ body {
 }
 
 @media (orientation: landscape){
-  .landscape\:grid{
-    display: grid;
-  }
   .landscape\:h-dvh{
     height: 100dvh;
   }
-  .landscape\:min-h-0{
-    min-height: 0px;
+  .landscape\:max-w-2xl{
+    max-width: 42rem;
   }
-  .landscape\:max-w-5xl{
-    max-width: 64rem;
+  .landscape\:flex-none{
+    flex: none;
   }
-  .landscape\:grid-cols-2{
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .landscape\:gap-6{
-    gap: 1.5rem;
-  }
-  .landscape\:overflow-hidden{
-    overflow: hidden;
+  .landscape\:gap-2{
+    gap: 0.5rem;
   }
   .landscape\:overflow-y-auto{
     overflow-y: auto;
   }
-  .landscape\:p-4{
-    padding: 1rem;
+  .landscape\:p-3{
+    padding: 0.75rem;
   }
-  .landscape\:px-6{
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
+  .landscape\:px-5{
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
   }
-  .landscape\:py-4{
-    padding-top: 1rem;
-    padding-bottom: 1rem;
+  .landscape\:py-2{
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+  .landscape\:py-3{
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
   }
 }

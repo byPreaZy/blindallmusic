@@ -2098,108 +2098,103 @@ fn RoomPadView(
     });
 
     view! {
-        <div class="pad-stage">
-            <div class="pad-stage-inner">
-                <div class="pad-root mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-4 px-4 py-4
-                    landscape:grid landscape:h-dvh landscape:max-w-5xl landscape:grid-cols-2
-                    landscape:gap-6 landscape:overflow-hidden landscape:px-6 landscape:py-4">
-                    <div class="flex min-w-0 flex-col gap-4 landscape:min-h-0 landscape:overflow-y-auto">
-                        <div class="flex items-center justify-between gap-3">
-                            <div class="min-w-0">
-                                <h1 class="truncate text-lg font-black text-white">
-                                    {move || if room.get().name.is_empty() { t("Blind test").to_string() } else { room.get().name } }
-                                </h1>
-                                <p class="mt-0.5 flex items-center gap-1.5 text-xs text-white/50">
-                                    <span class=move || format!(
-                                        "h-2 w-2 shrink-0 rounded-full {}",
-                                        if conn_label.get() == "connected" { "bg-brand-accent" } else { "animate-pulse bg-brand-secondary" }
-                                    )></span>
-                                    {move || if conn_label.get() == "connected" { t("Connected") } else { t("Reconnecting") }}
-                                </p>
-                            </div>
-                            <span class="shrink-0 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-bold text-white">
-                                {move || format!(
-                                    "{}/{}",
-                                    round.get().map(|r| r.current).unwrap_or(0),
-                                    room.get().tracks_by_round,
-                                )}
-                            </span>
-                        </div>
-
-                        <div class="rounded-2xl border border-white/10 bg-neutral-900/80 p-6 text-center landscape:p-4">
-                            {move || {
-                                if paused.get() {
-                                    return view! {
-                                        <p class="text-xs font-bold uppercase tracking-[0.3em] text-amber-300">{t("Paused")}</p>
-                                        <p class="mt-3 text-sm text-white/60">{t("The game is paused by the host.")}</p>
-                                    }.into_any();
-                                }
-                                if track.get().is_some() {
-                                    return view! {
-                                        <div>
-                                            <p class="text-2xl">"🎧"</p>
-                                            <p class="mt-2 text-xs font-bold uppercase tracking-[0.3em] text-purple-300">
-                                                {t("Listen on the big screen!")}
-                                            </p>
-                                            <div class="mx-auto mt-5 h-2.5 w-full max-w-xs overflow-hidden rounded-full bg-white/10">
-                                                <div class="h-full rounded-full bg-gradient-to-r from-purple-500 to-teal-400 transition-[width] duration-200"
-                                                    style=move || format!("width:{}%", progress.get())></div>
-                                            </div>
-                                        </div>
-                                    }.into_any();
-                                }
-                                if let Some(last) = played_tracks.get().last().cloned() {
-                                    let answers = last["answers"].as_array().cloned().unwrap_or_default();
-                                    return view! {
-                                        <div>
-                                            <p class="text-xs font-bold uppercase tracking-[0.3em] text-amber-300">{t("It was")}</p>
-                                            <div class="mt-4 flex flex-wrap justify-center gap-2">
-                                                {answers.iter().map(|a| view! {
-                                                    <span class="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm font-semibold text-white">
-                                                        {a["value"].as_str().unwrap_or("").to_string()}
-                                                    </span>
-                                                }).collect::<Vec<_>>()}
-                                            </div>
-                                        </div>
-                                    }.into_any();
-                                }
-                                view! {
-                                    <p class="text-sm text-white/60">{t("Waiting for the next round…")}</p>
-                                }.into_any()
-                            }}
-                        </div>
+        <div class="pad-root mx-auto flex min-h-dvh w-full max-w-md flex-col px-4 py-4 sm:max-w-lg
+            landscape:h-dvh landscape:max-w-2xl landscape:overflow-y-auto landscape:px-5 landscape:py-3">
+            <div class="flex w-full min-w-0 flex-1 flex-col gap-3 sm:gap-4 landscape:flex-none landscape:gap-2">
+                <div class="flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <h1 class="truncate text-lg font-black text-white">
+                            {move || if room.get().name.is_empty() { t("Blind test").to_string() } else { room.get().name } }
+                        </h1>
+                        <p class="mt-0.5 flex items-center gap-1.5 text-xs text-white/50">
+                            <span class=move || format!(
+                                "h-2 w-2 shrink-0 rounded-full {}",
+                                if conn_label.get() == "connected" { "bg-brand-accent" } else { "animate-pulse bg-brand-secondary" }
+                            )></span>
+                            {move || if conn_label.get() == "connected" { t("Connected") } else { t("Reconnecting") }}
+                        </p>
                     </div>
+                    <span class="shrink-0 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-bold text-white">
+                        {move || format!(
+                            "{}/{}",
+                            round.get().map(|r| r.current).unwrap_or(0),
+                            room.get().tracks_by_round,
+                        )}
+                    </span>
+                </div>
 
-                    <div class="flex min-w-0 flex-col gap-4 landscape:min-h-0 landscape:overflow-y-auto">
-                        <AnswerInput round=round track=track current_time=current_time.read_only() volume=volume silent=true/>
-
-                        {move || i_found_all.get().then(|| view! {
-                            <p class="rounded-xl border border-teal-500/30 bg-teal-500/10 px-4 py-3 text-center text-sm font-bold text-teal-300">
-                                "🎉 "{t("You found all the answers!")}
-                            </p>
-                        })}
-
-                        <div class="rounded-2xl border border-white/10 bg-neutral-900/80 p-5 landscape:p-4">
-                            <div class="flex items-center justify-between border-b border-white/10 pb-3">
-                                <span class="text-sm font-bold text-white/70">{t("Your score")}</span>
-                                <span class="text-xl font-black text-teal-300">{move || format!("{:.0}", my_score.get())}</span>
-                            </div>
-                            <ol class="mt-3 space-y-1.5">
-                                {move || top.get().iter().enumerate().map(|(i, (name, sc))| {
-                                    let medal = match i { 0 => "🥇", 1 => "🥈", 2 => "🥉", _ => "" };
-                                    view! {
-                                        <li class="flex items-center gap-2.5 text-sm">
-                                            <span class="w-6 text-center font-black text-white/50">
-                                                {if medal.is_empty() { (i + 1).to_string() } else { medal.to_string() }}
+                <div class="rounded-2xl border border-white/10 bg-neutral-900/80 px-4 py-3 text-center landscape:py-2">
+                    {move || {
+                        if paused.get() {
+                            return view! {
+                                <p class="text-xs font-bold uppercase tracking-[0.3em] text-amber-300">{t("Paused")}</p>
+                                <p class="mt-2 text-sm text-white/60">{t("The game is paused by the host.")}</p>
+                            }.into_any();
+                        }
+                        if track.get().is_some() {
+                            return view! {
+                                <div>
+                                    <p class="text-xl">"🎧"</p>
+                                    <p class="mt-1 text-[11px] font-bold uppercase tracking-[0.3em] text-purple-300">
+                                        {t("Listen on the big screen!")}
+                                    </p>
+                                    <div class="mx-auto mt-3 h-2 w-full max-w-[10rem] overflow-hidden rounded-full bg-white/10">
+                                        <div class="h-full rounded-full bg-gradient-to-r from-purple-500 to-teal-400 transition-[width] duration-200"
+                                            style=move || format!("width:{}%", progress.get())></div>
+                                    </div>
+                                </div>
+                            }.into_any();
+                        }
+                        if let Some(last) = played_tracks.get().last().cloned() {
+                            let answers = last["answers"].as_array().cloned().unwrap_or_default();
+                            return view! {
+                                <div>
+                                    <p class="text-xs font-bold uppercase tracking-[0.3em] text-amber-300">{t("It was")}</p>
+                                    <div class="mt-3 flex flex-wrap justify-center gap-2">
+                                        {answers.iter().map(|a| view! {
+                                            <span class="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm font-semibold text-white">
+                                                {a["value"].as_str().unwrap_or("").to_string()}
                                             </span>
-                                            <span class="flex-1 truncate font-semibold text-white">{name.clone()}</span>
-                                            <span class="font-black text-teal-300/80">{format!("{sc:.0}")}</span>
-                                        </li>
-                                    }
-                                }).collect::<Vec<_>>()}
-                            </ol>
-                        </div>
+                                        }).collect::<Vec<_>>()}
+                                    </div>
+                                </div>
+                            }.into_any();
+                        }
+                        view! {
+                            <p class="text-sm text-white/60">{t("Waiting for the next round…")}</p>
+                        }.into_any()
+                    }}
+                </div>
+
+                <div class="flex flex-1 flex-col justify-center gap-1">
+                    <AnswerInput round=round track=track current_time=current_time.read_only() volume=volume silent=true/>
+
+                    {move || i_found_all.get().then(|| view! {
+                        <p class="rounded-xl border border-teal-500/30 bg-teal-500/10 px-4 py-2.5 text-center text-sm font-bold text-teal-300">
+                            "🎉 "{t("You found all the answers!")}
+                        </p>
+                    })}
+                </div>
+
+                <div class="rounded-2xl border border-white/10 bg-neutral-900/80 p-4 landscape:p-3">
+                    <div class="flex items-center justify-between border-b border-white/10 pb-2">
+                        <span class="text-sm font-bold text-white/70">{t("Your score")}</span>
+                        <span class="text-xl font-black text-teal-300">{move || format!("{:.0}", my_score.get())}</span>
                     </div>
+                    <ol class="mt-2 space-y-1">
+                        {move || top.get().iter().enumerate().map(|(i, (name, sc))| {
+                            let medal = match i { 0 => "🥇", 1 => "🥈", 2 => "🥉", _ => "" };
+                            view! {
+                                <li class="flex items-center gap-2.5 text-sm">
+                                    <span class="w-6 text-center font-black text-white/50">
+                                        {if medal.is_empty() { (i + 1).to_string() } else { medal.to_string() }}
+                                    </span>
+                                    <span class="flex-1 truncate font-semibold text-white">{name.clone()}</span>
+                                    <span class="font-black text-teal-300/80">{format!("{sc:.0}")}</span>
+                                </li>
+                            }
+                        }).collect::<Vec<_>>()}
+                    </ol>
                 </div>
             </div>
         </div>
