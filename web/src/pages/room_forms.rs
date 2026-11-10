@@ -51,7 +51,7 @@ pub fn RoomCreatePage() -> impl IntoView {
     let navigate = StoredValue::new(use_navigate());
     let name = RwSignal::new(String::new());
     let categories = RwSignal::new(Vec::<Category>::new());
-    let category = RwSignal::new(0i64);
+    let category_name = RwSignal::new(String::new());
     let busy = RwSignal::new(false);
     let error = RwSignal::new(Option::<String>::None);
     let billing = RwSignal::new(Value::Null);
@@ -77,11 +77,7 @@ pub fn RoomCreatePage() -> impl IntoView {
     };
 
     leptos::task::spawn_local(async move {
-        let cats = fetch_categories().await;
-        if let Some(first) = cats.first() {
-            category.set(first.id);
-        }
-        categories.set(cats);
+        categories.set(fetch_categories().await);
     });
 
     let submit = move |ev: leptos::ev::SubmitEvent| {
@@ -90,8 +86,10 @@ pub fn RoomCreatePage() -> impl IntoView {
         error.set(None);
         let navigate = navigate.with_value(|n| n.clone());
         leptos::task::spawn_local(async move {
-            let body =
-                json!({"name": name.get_untracked(), "category_id": category.get_untracked()});
+            let body = json!({
+                "name": name.get_untracked(),
+                "category_name": category_name.get_untracked(),
+            });
             match api::post::<Value, _>("/api/v1/rooms", &body).await {
                 Ok(v) => {
                     let slug = v["room"]["slug"].as_str().unwrap_or_default().to_string();
@@ -136,13 +134,18 @@ pub fn RoomCreatePage() -> impl IntoView {
                         prop:value=name on:input=move |ev| name.set(event_target_value(&ev))/>
                 </div>
                 <div>
-                    <label class="mb-1.5 block text-sm text-white/70">{t("Category")}</label>
-                    <select class="w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white"
-                        on:change=move |ev| category.set(event_target_value(&ev).parse().unwrap_or(0))>
+                    <label class="mb-1.5 block text-sm text-white/70">
+                        {t("Category")}{" "}<span class="text-white/40">{format!("({})", t("optional"))}</span>
+                    </label>
+                    <input type="text" maxlength="50" list="room-category-options-create"
+                        class="w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white outline-none focus:border-brand-accent/50"
+                        placeholder={t("e.g. Quiz night, Karaoke...")}
+                        prop:value=category_name on:input=move |ev| category_name.set(event_target_value(&ev))/>
+                    <datalist id="room-category-options-create">
                         <For each=move || categories.get() key=|c| c.id children=|c: Category| {
-                            view! { <option value=c.id>{c.name.clone()}</option> }
+                            view! { <option value=c.name.clone()/> }
                         }/>
-                    </select>
+                    </datalist>
                 </div>
                 <button type="submit" class="btn-primary w-full" disabled=move || busy.get()>
                     {t("Create")}
@@ -172,7 +175,7 @@ pub fn RoomEditPage() -> impl IntoView {
     let room_id = RwSignal::new(0i64);
     let name = RwSignal::new(String::new());
     let description = RwSignal::new(String::new());
-    let category_id = RwSignal::new(0i64);
+    let category_name = RwSignal::new(String::new());
     let playlists = RwSignal::new(Vec::<IdName>::new());
     let mods = RwSignal::new(Vec::<IdName>::new());
     let tracks_by_round = RwSignal::new(10i64);
@@ -208,7 +211,17 @@ pub fn RoomEditPage() -> impl IntoView {
                 room_id.set(r["id"].as_i64().unwrap_or(0));
                 name.set(r["name"].as_str().unwrap_or_default().to_string());
                 description.set(r["description"].as_str().unwrap_or_default().to_string());
-                category_id.set(r["category_id"].as_i64().unwrap_or(0));
+                let cid = r["category_id"].as_i64();
+                category_name.set(
+                    cid.and_then(|id| {
+                        categories
+                            .get_untracked()
+                            .iter()
+                            .find(|c| c.id == id)
+                            .map(|c| c.name.clone())
+                    })
+                    .unwrap_or_default(),
+                );
                 tracks_by_round.set(r["tracks_by_round"].as_i64().unwrap_or(10));
                 track_duration.set(r["track_duration"].as_i64().unwrap_or(30));
                 pause_tracks.set(r["pause_between_tracks"].as_i64().unwrap_or(5));
@@ -264,7 +277,7 @@ pub fn RoomEditPage() -> impl IntoView {
                 json!({
                     "name": name.get_untracked(),
                     "description": description.get_untracked(),
-                    "category_id": category_id.get_untracked(),
+                    "category_name": category_name.get_untracked(),
                 }),
             )
             .await
@@ -411,13 +424,18 @@ pub fn RoomEditPage() -> impl IntoView {
                                     prop:value=name on:input=move |ev| name.set(event_target_value(&ev))/>
                             </div>
                             <div>
-                                <label class="mb-1 block text-sm text-white/70">{t("Category")}</label>
-                                <select class="w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white"
-                                    on:change=move |ev| category_id.set(event_target_value(&ev).parse().unwrap_or(0))>
-                                    <For each=move || categories.get() key=|c| c.id children=move |c: Category| {
-                                        view! { <option value=c.id selected=move || category_id.get() == c.id>{c.name.clone()}</option> }
+                                <label class="mb-1 block text-sm text-white/70">
+                                    {t("Category")}{" "}<span class="text-white/40">{format!("({})", t("optional"))}</span>
+                                </label>
+                                <input type="text" maxlength="50" list="room-category-options-edit"
+                                    class="w-full rounded-lg border border-white/10 bg-surface-base px-3 py-2 text-white outline-none focus:border-brand-accent/50"
+                                    placeholder={t("e.g. Quiz night, Karaoke...")}
+                                    prop:value=category_name on:input=move |ev| category_name.set(event_target_value(&ev))/>
+                                <datalist id="room-category-options-edit">
+                                    <For each=move || categories.get() key=|c| c.id children=|c: Category| {
+                                        view! { <option value=c.name.clone()/> }
                                     }/>
-                                </select>
+                                </datalist>
                             </div>
                         </div>
                         <div>

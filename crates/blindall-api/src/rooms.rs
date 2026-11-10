@@ -934,7 +934,58 @@ pub async fn edit(
 #[derive(Deserialize)]
 pub struct CreateRoom {
     name: String,
-    category_id: i64,
+    category_id: Option<i64>,
+    category_name: Option<String>,
+}
+
+/// Free-form `category_name` wins: matched case-insensitively against
+/// existing categories or created on the fly (custom bar/event labels).
+/// An explicit empty string clears the category; when absent, a numeric
+/// `category_id` is honored for API compatibility. When both are absent,
+/// `fallback` is used so updates can preserve the current category.
+async fn resolve_category(
+    state: &AppState,
+    category_id: Option<i64>,
+    category_name: Option<&str>,
+    fallback: Option<i64>,
+) -> Result<Option<i64>, Response> {
+    if let Some(raw) = category_name {
+        let name = raw.trim();
+        if name.is_empty() {
+            return Ok(None);
+        }
+        if name.chars().count() > 50 {
+            return Err(validation(
+                "category_name",
+                "The category name must not exceed 50 characters.",
+            ));
+        }
+        match state.rooms.category_id_by_name(name).await {
+            Ok(Some(id)) => return Ok(Some(id)),
+            Ok(None) => {}
+            Err(e) => {
+                tracing::error!(error = %e, "category lookup failed");
+                return Err(StatusCode::INTERNAL_SERVER_ERROR.into_response());
+            }
+        }
+        return match state.rooms.create_category(name).await {
+            Ok(id) => Ok(Some(id)),
+            Err(e) => {
+                tracing::error!(error = %e, "category create failed");
+                Err(StatusCode::INTERNAL_SERVER_ERROR.into_response())
+            }
+        };
+    }
+    if let Some(cid) = category_id {
+        if !state.rooms.category_exists(cid).await.unwrap_or(false) {
+            return Err(validation(
+                "category_id",
+                "The selected category id is invalid.",
+            ));
+        }
+        return Ok(Some(cid));
+    }
+    Ok(fallback)
 }
 
 pub async fn store(
@@ -963,14 +1014,17 @@ pub async fn store(
     if state.rooms.name_taken(name, None).await.unwrap_or(false) {
         return validation("name", "The name has already been taken.");
     }
-    if !state
-        .rooms
-        .category_exists(body.category_id)
-        .await
-        .unwrap_or(false)
+    let category_id = match resolve_category(
+        &state,
+        body.category_id,
+        body.category_name.as_deref(),
+        None,
+    )
+    .await
     {
-        return validation("category_id", "The selected category id is invalid.");
-    }
+        Ok(c) => c,
+        Err(r) => return r,
+    };
     if crate::limits::plan_is_free(&state, user.id, user.is_administrator).await {
         let used = state.rooms.owned_active_count(user.id).await.unwrap_or(0);
         if used >= crate::limits::FREE_MAX_ROOMS {
@@ -984,7 +1038,7 @@ pub async fn store(
                 .into_response();
         }
     }
-    match state.rooms.create(user.id, name, body.category_id).await {
+    match state.rooms.create(user.id, name, category_id).await {
         Ok(id) => {
             state
                 .levels
@@ -1007,7 +1061,8 @@ pub async fn store(
 pub struct UpdateRoom {
     name: String,
     description: Option<String>,
-    category_id: i64,
+    category_id: Option<i64>,
+    category_name: Option<String>,
 }
 
 pub async fn update(
@@ -1055,17 +1110,20 @@ pub async fn update(
     {
         return validation("name", "The name has already been taken.");
     }
-    if !state
-        .rooms
-        .category_exists(body.category_id)
-        .await
-        .unwrap_or(false)
+    let category_id = match resolve_category(
+        &state,
+        body.category_id,
+        body.category_name.as_deref(),
+        room.category_id,
+    )
+    .await
     {
-        return validation("category_id", "The selected category id is invalid.");
-    }
+        Ok(c) => c,
+        Err(r) => return r,
+    };
     match state
         .rooms
-        .update_fields(id, name, body.description.as_deref(), body.category_id)
+        .update_fields(id, name, body.description.as_deref(), category_id)
         .await
     {
         Ok(()) => Json(json!({"ok": true})).into_response(),

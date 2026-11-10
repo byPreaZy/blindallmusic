@@ -196,7 +196,7 @@ impl RoomRepo {
         &self,
         user_id: i64,
         name: &str,
-        category_id: i64,
+        category_id: Option<i64>,
     ) -> Result<i64, sqlx::Error> {
         let slug = self.unique_slug(name).await?;
         let now = chrono::Utc::now();
@@ -223,7 +223,7 @@ impl RoomRepo {
         id: i64,
         name: &str,
         description: Option<&str>,
-        category_id: i64,
+        category_id: Option<i64>,
     ) -> Result<(), sqlx::Error> {
         sqlx::query("UPDATE rooms SET name = $1, description = $2, category_id = $3 WHERE id = $4")
             .bind(name)
@@ -563,6 +563,54 @@ impl RoomRepo {
             .bind(category_id)
             .fetch_optional(&self.pool)
             .await
+    }
+
+    /// Lookup by display name through its normalized slug: str_slug strips
+    /// accents/case/punctuation, so "Soirée quiz!" and "soiree quiz" both
+    /// resolve to the same category instead of creating duplicates.
+    pub async fn category_id_by_name(&self, name: &str) -> Result<Option<i64>, sqlx::Error> {
+        let slug = blindall_core::sanitize::str_slug(name, '-');
+        if slug.is_empty() {
+            return Ok(None);
+        }
+        sqlx::query_scalar::<_, i64>("SELECT id FROM categories WHERE slug = $1")
+            .bind(slug)
+            .fetch_optional(&self.pool)
+            .await
+    }
+
+    /// Creates a category from a free-form name, generating a unique slug.
+    /// Used when a room owner types a custom category at creation/edit.
+    pub async fn create_category(&self, name: &str) -> Result<i64, sqlx::Error> {
+        let base = blindall_core::sanitize::str_slug(name, '-');
+        let base = if base.is_empty() {
+            "custom".to_string()
+        } else {
+            base
+        };
+        let mut slug = base.clone();
+        for i in 2..100 {
+            let taken: bool =
+                sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM categories WHERE slug = $1)")
+                    .bind(&slug)
+                    .fetch_one(&self.pool)
+                    .await?;
+            if !taken {
+                break;
+            }
+            slug = format!("{base}-{i}");
+        }
+        let now = chrono::Utc::now();
+        sqlx::query_scalar::<_, i64>(
+            "INSERT INTO categories (name, slug, created_at, updated_at) \
+             VALUES ($1, $2, $3, $4) RETURNING id",
+        )
+        .bind(name)
+        .bind(&slug)
+        .bind(now)
+        .bind(now)
+        .fetch_one(&self.pool)
+        .await
     }
 
     pub async fn official_similar_rooms(
