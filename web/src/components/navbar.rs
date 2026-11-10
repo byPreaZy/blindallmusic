@@ -230,6 +230,21 @@ fn HelpDropdown() -> impl IntoView {
 fn UserDropdown() -> impl IntoView {
     let auth = use_auth();
     let open = RwSignal::new(false);
+    let is_pro = RwSignal::new(false);
+    leptos::task::spawn_local(async move {
+        if auth
+            .user
+            .get()
+            .map(|u| u.is_administrator)
+            .unwrap_or(false)
+        {
+            is_pro.set(true);
+            return;
+        }
+        if let Ok(v) = crate::api::get::<serde_json::Value>("/api/v1/billing/status").await {
+            is_pro.set(v["plan"].as_str() == Some("pro"));
+        }
+    });
 
     let avatar = move || {
         let u = auth.user.get().unwrap_or_default();
@@ -277,6 +292,7 @@ fn UserDropdown() -> impl IntoView {
                     {link("/teams".into(), "Teams")}
                     {link("/rooms".into(), "Rooms")}
                     {link("/playlists".into(), "Playlists")}
+                    {move || is_pro.get().then(|| link("/pro".into(), "Pro Space"))}
                     {move || auth.user.get().map(|u| u.is_administrator).unwrap_or(false).then(|| {
                         link("/admin".into(), "Administration")
                     })}
