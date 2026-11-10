@@ -35,6 +35,22 @@ pub struct RoomRow {
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+/// Owned room plus activity counters, returned by `owned_with_stats`.
+#[derive(Debug, Serialize)]
+pub struct RoomStatRow {
+    pub id: i64,
+    pub name: String,
+    pub slug: Option<String>,
+    pub venue_name: Option<String>,
+    pub is_pro: bool,
+    pub is_active: bool,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub playlists_count: i64,
+    pub rounds_count: i64,
+    pub players_count: i64,
+    pub last_round_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
 #[derive(Debug)]
 pub struct RoomOptions {
     pub password: Option<String>,
@@ -435,6 +451,38 @@ impl RoomRepo {
             .bind(user_id)
             .fetch_one(&self.pool)
             .await
+    }
+
+    /// Owned rooms with per-room activity stats, for the Pro dashboard.
+    pub async fn owned_with_stats(&self, user_id: i64) -> Result<Vec<RoomStatRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT r.id, r.name, r.slug, r.venue_name, r.is_pro, r.is_active, r.created_at, \
+             (SELECT COUNT(*) FROM playlist_room pr WHERE pr.room_id = r.id) AS playlists_count, \
+             (SELECT COUNT(*) FROM rounds rd WHERE rd.room_id = r.id) AS rounds_count, \
+             (SELECT COUNT(DISTINCT rs.user_id) FROM round_standings rs WHERE rs.room_id = r.id) AS players_count, \
+             (SELECT MAX(rd.created_at) FROM rounds rd WHERE rd.room_id = r.id) AS last_round_at \
+             FROM rooms r WHERE r.user_id = $1 AND r.deleted_at IS NULL \
+             ORDER BY r.created_at DESC",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|r| RoomStatRow {
+                id: r.get("id"),
+                name: r.get("name"),
+                slug: r.get("slug"),
+                venue_name: r.get("venue_name"),
+                is_pro: r.get("is_pro"),
+                is_active: r.get("is_active"),
+                created_at: r.get("created_at"),
+                playlists_count: r.get("playlists_count"),
+                rounds_count: r.get("rounds_count"),
+                players_count: r.get("players_count"),
+                last_round_at: r.get("last_round_at"),
+            })
+            .collect())
     }
 
     pub async fn tracks_count(&self, room_id: i64) -> Result<i64, sqlx::Error> {

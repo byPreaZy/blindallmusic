@@ -38,10 +38,18 @@ pub fn PremiumPage() -> impl IntoView {
                 {t("Go further: no ads, daily revive, custom tag, and venue branding for bars & events.")}
             </p>
             {move || {
-                just_subscribed().then(|| view! {
-                    <div class="mb-6 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-                        {t("Subscription activated, welcome aboard!")}
-                    </div>
+                just_subscribed().then(|| {
+                    let plan_q = query.get().get("subscribed").unwrap_or_default();
+                    view! {
+                        <div class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+                            <span>{t("Subscription activated, welcome aboard!")}</span>
+                            {(plan_q == "pro").then(|| view! {
+                                <A href="/pro" attr:class="rounded-lg bg-emerald-400/80 px-3 py-1.5 text-xs font-bold text-emerald-950 transition hover:bg-emerald-300">
+                                    {t("Open my Pro space")}
+                                </A>
+                            })}
+                        </div>
+                    }
                 })
             }}
 
@@ -118,12 +126,18 @@ pub fn PremiumPage() -> impl IntoView {
                                     </p>
                                     <ul class="mt-2 space-y-1 text-sm text-white/70">
                                         <li>"🚫 " {t("No ads, forever")}</li>
+                                        <li>"♾️ " {t("Unlimited rooms, playlists and tracks")}</li>
                                         <li>"💛 " {t("Daily-challenge revive")}</li>
                                         <li>"🏷️ " {t("Custom tag")}</li>
                                         <li>"👑 " {t("All supporter perks")}</li>
                                     </ul>
                                 </div>
-                                <div class="mt-4">
+                                <div class="mt-4 flex flex-wrap gap-2">
+                                    {(plan == "plus").then(|| view! {
+                                        <A href="/pro" attr:class="inline-block rounded-lg border border-purple-400/40 px-4 py-2 text-xs font-semibold text-purple-200 transition hover:bg-purple-400/10">
+                                            {t("Discover Pro")}
+                                        </A>
+                                    })}
                                     {(plan.is_empty()).then(|| sub_btn(plus_url.clone(), "Subscribe"))}
                                 </div>
                             </div>
@@ -141,15 +155,20 @@ pub fn PremiumPage() -> impl IntoView {
                                         {t("29.00 €/month, cancel anytime")}
                                     </p>
                                     <ul class="mt-2 space-y-1 text-sm text-white/70">
+                                        <li>"👑 " {t("Everything in Plus")}</li>
                                         <li>"📍 " {t("Venue branding on the TV screen")}</li>
                                         <li>"📺 " {t("Room photo for your venue")}</li>
-                                        <li>"👑 " {t("All supporter perks")}</li>
+                                        <li>"🧭 " {t("Pro space: setup checklist and room stats")}</li>
+                                        <li>"🎪 " {t("Multiple branded event rooms")}</li>
                                     </ul>
                                     <p class="mt-2 text-xs text-purple-200/60">
                                         {t("For bars & events")}
                                     </p>
                                 </div>
-                                <div class="mt-4">
+                                <div class="mt-4 flex flex-wrap gap-2">
+                                    {(plan == "pro").then(|| view! {
+                                        <A href="/pro" attr:class="btn-primary inline-block !px-5 !py-2">{t("Open my Pro space")}</A>
+                                    })}
                                     {(plan.is_empty()).then(|| sub_btn(pro_url.clone(), "Subscribe"))}
                                 </div>
                             </div>

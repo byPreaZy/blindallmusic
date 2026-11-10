@@ -48,12 +48,33 @@ async fn fetch_categories() -> Vec<Category> {
 pub fn RoomCreatePage() -> impl IntoView {
     crate::i18n::set_title_key("Create Room");
     crate::auth::require_registered(crate::auth::use_auth());
-    let navigate = use_navigate();
+    let navigate = StoredValue::new(use_navigate());
     let name = RwSignal::new(String::new());
     let categories = RwSignal::new(Vec::<Category>::new());
     let category = RwSignal::new(0i64);
     let busy = RwSignal::new(false);
     let error = RwSignal::new(Option::<String>::None);
+    let billing = RwSignal::new(Value::Null);
+
+    leptos::task::spawn_local(async move {
+        if let Ok(v) = api::get::<Value>("/api/v1/billing/status").await {
+            billing.set(v);
+        }
+    });
+
+    let at_limit = move || {
+        billing.get()["limits"]["rooms_max"]
+            .as_i64()
+            .map(|max| billing.get()["limits"]["rooms_used"].as_i64().unwrap_or(0) >= max)
+            .unwrap_or(false)
+    };
+    let usage_label = move || {
+        let l = billing.get()["limits"].clone();
+        match (l["rooms_used"].as_i64(), l["rooms_max"].as_i64()) {
+            (Some(u), Some(m)) => format!("{} / {}", u, m),
+            _ => String::new(),
+        }
+    };
 
     leptos::task::spawn_local(async move {
         let cats = fetch_categories().await;
@@ -67,7 +88,7 @@ pub fn RoomCreatePage() -> impl IntoView {
         ev.prevent_default();
         busy.set(true);
         error.set(None);
-        let navigate = navigate.clone();
+        let navigate = navigate.with_value(|n| n.clone());
         leptos::task::spawn_local(async move {
             let body =
                 json!({"name": name.get_untracked(), "category_id": category.get_untracked()});
@@ -86,8 +107,25 @@ pub fn RoomCreatePage() -> impl IntoView {
 
     view! {
         <div class="mx-auto max-w-md px-4 py-12">
-            <h1 class="retro-title retro-title--white mb-8 text-2xl">{t("Create a room")}</h1>
-            <form on:submit=submit class="space-y-5 rounded-xl border border-white/10 bg-surface-raised/60 p-6">
+            <h1 class="retro-title retro-title--white mb-2 text-2xl">{t("Create a room")}</h1>
+            {move || {
+                let u = usage_label();
+                (!u.is_empty()).then(|| view! {
+                    <p class="mb-6 text-sm text-white/50">
+                        {t("Your rooms")}": "<span class="font-medium text-white/80">{u}</span>
+                    </p>
+                })
+            }}
+            {move || at_limit().then(|| view! {
+                <div class="rounded-xl border border-amber-400/30 bg-amber-500/10 p-6 text-center">
+                    <p class="text-sm text-amber-200">
+                        {t("Free plan allows 2 rooms.")}
+                    </p>
+                    <A href="/premium" attr:class="btn-primary mt-4 inline-block">{t("Upgrade to Plus")}</A>
+                </div>
+            })}
+            <Show when=move || !at_limit()>
+            <form on:submit=submit class="mt-6 space-y-5 rounded-xl border border-white/10 bg-surface-raised/60 p-6">
                 {move || error.get().map(|e| view! {
                     <div class="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{e}</div>
                 })}
@@ -110,6 +148,7 @@ pub fn RoomCreatePage() -> impl IntoView {
                     {t("Create")}
                 </button>
             </form>
+            </Show>
         </div>
     }
 }

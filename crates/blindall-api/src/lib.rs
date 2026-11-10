@@ -11,6 +11,7 @@ pub mod payments;
 pub mod faqs;
 pub mod home;
 pub mod levels;
+pub mod limits;
 pub mod local_tracks;
 pub mod mail;
 pub mod matchmaking;
@@ -20,6 +21,7 @@ pub mod oauth;
 pub mod official_seo;
 pub mod party;
 pub mod playlists;
+pub mod pro;
 pub mod profiles;
 pub mod providers;
 pub mod rankings;
@@ -408,6 +410,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/user/banned", get(content::banned_user))
         .route("/api/v1/contact", post(content::contact))
         .route("/api/v1/billing/status", get(payments::billing_status))
+        .route("/api/v1/pro/overview", get(pro::overview))
         .route("/api/v1/stripe/webhook", post(payments::stripe_webhook))
         .route("/robots.txt", get(seo::robots))
         .route("/ads.txt", get(seo::ads_txt))

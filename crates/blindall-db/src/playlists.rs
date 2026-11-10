@@ -88,6 +88,31 @@ pub struct TrackFilters {
     pub sort_direction: Option<String>,
 }
 
+/// Outcome of `upsert_track`: `Limit` means the playlist owner's plan
+/// cap rejected a genuinely new row (re-imports never hit it).
+#[derive(Debug)]
+pub enum TrackUpsertError {
+    Db(sqlx::Error),
+    Limit,
+}
+
+impl std::fmt::Display for TrackUpsertError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Db(e) => write!(f, "{e}"),
+            Self::Limit => write!(f, "track_limit"),
+        }
+    }
+}
+
+impl std::error::Error for TrackUpsertError {}
+
+impl From<sqlx::Error> for TrackUpsertError {
+    fn from(e: sqlx::Error) -> Self {
+        Self::Db(e)
+    }
+}
+
 impl PlaylistRepo {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
@@ -655,6 +680,10 @@ impl PlaylistRepo {
         Ok(true)
     }
 
+    /// Inserts or refreshes a track. `max_tracks` is the playlist owner's
+    /// plan cap (None = unlimited): enforced inside the transaction under
+    /// a row lock so concurrent imports cannot race past it. Re-adding an
+    /// existing (provider, provider_id) pair is an update and never counts.
     pub async fn upsert_track(
         &self,
         playlist_id: i64,
@@ -666,8 +695,35 @@ impl PlaylistRepo {
         artwork_url: &str,
         artist_name: &str,
         track_name: &str,
-    ) -> Result<i64, sqlx::Error> {
+        max_tracks: Option<i64>,
+    ) -> Result<i64, TrackUpsertError> {
         let mut tx = self.pool.begin().await?;
+        if let Some(cap) = max_tracks {
+            sqlx::query("SELECT id FROM playlists WHERE id = $1 FOR UPDATE")
+                .bind(playlist_id)
+                .execute(&mut *tx)
+                .await?;
+            let is_new = !sqlx::query_scalar::<_, bool>(
+                "SELECT EXISTS(SELECT 1 FROM tracks WHERE playlist_id = $1 \
+                 AND provider = $2 AND provider_id = $3)",
+            )
+            .bind(playlist_id)
+            .bind(provider)
+            .bind(provider_id)
+            .fetch_one(&mut *tx)
+            .await?;
+            if is_new {
+                let count: i64 =
+                    sqlx::query_scalar("SELECT COUNT(*) FROM tracks WHERE playlist_id = $1")
+                        .bind(playlist_id)
+                        .fetch_one(&mut *tx)
+                        .await?;
+                if count >= cap {
+                    tx.rollback().await?;
+                    return Err(TrackUpsertError::Limit);
+                }
+            }
+        }
         let now = Utc::now();
         // Atomic upsert on the (playlist, provider, provider_id) natural key -
         // the old SELECT-then-INSERT raced under concurrent imports.
@@ -918,6 +974,14 @@ impl PlaylistRepo {
             .await
     }
 
+    /// Playlists owned by the user, for the Free-tier creation cap.
+    pub async fn count_owned_by(&self, user_id: i64) -> Result<i64, sqlx::Error> {
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM playlists WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await
+    }
+
     pub async fn track_playlist_id(&self, track_id: i64) -> Result<Option<i64>, sqlx::Error> {
         sqlx::query_scalar::<_, i64>("SELECT playlist_id FROM tracks WHERE id = $1")
             .bind(track_id)
@@ -1008,13 +1072,23 @@ impl PlaylistRepo {
         .await
     }
 
+    /// Duplicates a track into another playlist. `max_tracks` is the
+    /// destination playlist owner's plan cap: when reached the call
+    /// returns `Ok(None)`, same skip semantics as an existing duplicate.
     pub async fn duplicate_track(
         &self,
         playlist_id: i64,
         user_id: i64,
         src_track_id: i64,
+        max_tracks: Option<i64>,
     ) -> Result<Option<i64>, sqlx::Error> {
         let mut tx = self.pool.begin().await?;
+        if max_tracks.is_some() {
+            sqlx::query("SELECT id FROM playlists WHERE id = $1 FOR UPDATE")
+                .bind(playlist_id)
+                .execute(&mut *tx)
+                .await?;
+        }
         let exists = sqlx::query_scalar::<_, i64>(
             "SELECT dst.id FROM tracks dst JOIN tracks src ON src.id = $1 \
              WHERE dst.playlist_id = $2 AND dst.provider = src.provider \
@@ -1027,6 +1101,17 @@ impl PlaylistRepo {
         if exists.is_some() {
             tx.rollback().await?;
             return Ok(None);
+        }
+        if let Some(cap) = max_tracks {
+            let count: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM tracks WHERE playlist_id = $1")
+                    .bind(playlist_id)
+                    .fetch_one(&mut *tx)
+                    .await?;
+            if count >= cap {
+                tx.rollback().await?;
+                return Ok(None);
+            }
         }
         let now = Utc::now();
         let new_id: Option<i64> = sqlx::query_scalar::<_, i64>(

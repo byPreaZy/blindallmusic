@@ -12,6 +12,7 @@ use crate::pages::docs::{
     LanguageSwitch, LocaleRedirect, RankingSortRedirect,
 };
 use crate::pages::premium::PremiumPage;
+use crate::pages::pro::ProPage;
 use crate::pages::duels::{DailyPage, DuelPlayPage, DuelsPage};
 use crate::pages::faq::FaqPage;
 use crate::pages::games::{GamePlayPage, GamesIndexPage};
@@ -239,6 +240,7 @@ fn Shell() -> impl IntoView {
                         <Route path=path!("/games") view=GamesIndexPage/>
                         <Route path=path!("/games/:type") view=|| view! { <ParamRemount><GamePlayPage/></ParamRemount> }/>
                         <Route path=path!("/premium") view=PremiumPage/>
+                        <Route path=path!("/pro") view=ProPage/>
                         <Route path=path!("/bars") view=BarsPage/>
                         <Route path=path!("/faq") view=FaqRedirect/>
                         <Route path=path!("/user/banned") view=BannedPage/>

@@ -445,8 +445,24 @@ pub async fn billing_status(
         Some(u) => state.auth.email_of(u.id).await.ok().flatten(),
         None => None,
     };
+    // Free-tier caps + usage, so create pages can show counters and
+    // upgrade prompts before the user hits a 422.
+    let limits = match &user {
+        Some(u) if !u.is_guest => {
+            let limited = crate::limits::limited_for(plan.as_deref(), u.is_administrator);
+            crate::limits::usage(&state, u.id, limited).await
+        }
+        _ => json!({
+            "rooms_used": Value::Null,
+            "rooms_max": Value::Null,
+            "playlists_used": Value::Null,
+            "playlists_max": Value::Null,
+            "tracks_max": Value::Null,
+        }),
+    };
     Json(json!({
         "plan": plan,
+        "limits": limits,
         "plus_url": plan_payment_url_for_user(
             &state.payments,
             blindall_db::subscriptions::PLAN_PLUS,

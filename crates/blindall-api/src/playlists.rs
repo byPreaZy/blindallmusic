@@ -181,6 +181,23 @@ pub async fn store(
             "The name has already been taken.",
         );
     }
+    if crate::limits::plan_is_free(&state, user.id(), user.0.is_administrator).await {
+        let used = state
+            .playlists
+            .count_owned_by(user.id())
+            .await
+            .unwrap_or(0);
+        if used >= crate::limits::FREE_MAX_PLAYLISTS {
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(json!({
+                    "error": "playlist_limit",
+                    "message": "Free plan allows 3 playlists. Upgrade to Plus for unlimited playlists.",
+                })),
+            )
+                .into_response();
+        }
+    }
     match state.playlists.create(user.id(), name).await {
         Ok(id) => {
             state
@@ -392,9 +409,10 @@ pub async fn store_track(
     if let Some(r) = crate::rooms::require_not_guest(&user.0) {
         return r;
     }
-    if let Err(r) = editable(&state.playlists, id, &user).await {
-        return r;
-    }
+    let p = match editable(&state.playlists, id, &user).await {
+        Ok(p) => p,
+        Err(r) => return r,
+    };
     let ok = !b.provider.is_empty()
         && b.provider.len() <= 50
         && !b.provider_id.is_empty()
@@ -415,6 +433,9 @@ pub async fn store_track(
     if !ok {
         return err(StatusCode::UNPROCESSABLE_ENTITY, "validation_failed");
     }
+    let max_tracks = crate::limits::owner_is_limited(&state, p.user_id)
+        .await
+        .then_some(crate::limits::FREE_MAX_TRACKS_PER_PLAYLIST);
     match state
         .playlists
         .upsert_track(
@@ -427,6 +448,7 @@ pub async fn store_track(
             &b.artwork_url,
             &b.artist_name,
             &b.track_name,
+            max_tracks,
         )
         .await
     {
@@ -441,6 +463,14 @@ pub async fn store_track(
                 .await;
             (StatusCode::CREATED, Json(json!({ "id": track_id }))).into_response()
         }
+        Err(blindall_db::playlists::TrackUpsertError::Limit) => (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(json!({
+                "error": "track_limit",
+                "message": "Free plan allows 50 tracks per playlist. Upgrade to Plus for unlimited tracks.",
+            })),
+        )
+            .into_response(),
         Err(e) => {
             tracing::error!(error = %e, "playlists.store_track failed");
             err(StatusCode::INTERNAL_SERVER_ERROR, "db_error")
@@ -904,9 +934,10 @@ pub async fn import_provider_playlist(
     if let Some(r) = crate::rooms::require_not_guest(&user.0) {
         return r;
     }
-    if let Err(r) = editable(&state.playlists, id, &user).await {
-        return r;
-    }
+    let p = match editable(&state.playlists, id, &user).await {
+        Ok(p) => p,
+        Err(r) => return r,
+    };
     if b.provider != "blindall"
         && (b.playlist_id.trim().is_empty()
             || !b
@@ -917,6 +948,9 @@ pub async fn import_provider_playlist(
     {
         return err(StatusCode::UNPROCESSABLE_ENTITY, "invalid_playlist_id");
     }
+    let max_tracks = crate::limits::owner_is_limited(&state, p.user_id)
+        .await
+        .then_some(crate::limits::FREE_MAX_TRACKS_PER_PLAYLIST);
     let mut imported = 0u64;
     if b.provider == "blindall" {
         let ids = state
@@ -924,8 +958,24 @@ pub async fn import_provider_playlist(
             .upvoted_track_ids(user.id())
             .await
             .unwrap_or_default();
+        let mut added = 0i64;
+        let start_count = if max_tracks.is_some() {
+            state.playlists.track_count(id).await.unwrap_or(0)
+        } else {
+            0
+        };
         for tid in ids {
-            if let Ok(Some(_)) = state.playlists.duplicate_track(id, user.id(), tid).await {
+            if let Some(cap) = max_tracks {
+                if start_count + added >= cap {
+                    break;
+                }
+            }
+            if let Ok(Some(_)) = state
+                .playlists
+                .duplicate_track(id, user.id(), tid, max_tracks)
+                .await
+            {
+                added += 1;
                 imported += 1;
             }
         }
@@ -963,7 +1013,7 @@ pub async fn import_provider_playlist(
             {
                 continue;
             }
-            if state
+            match state
                 .playlists
                 .upsert_track(
                     id,
@@ -975,11 +1025,13 @@ pub async fn import_provider_playlist(
                     &artwork,
                     &artist,
                     &t.track_name,
+                    max_tracks,
                 )
                 .await
-                .is_ok()
             {
-                imported += 1;
+                Ok(_) => imported += 1,
+                Err(blindall_db::playlists::TrackUpsertError::Limit) => break,
+                Err(blindall_db::playlists::TrackUpsertError::Db(_)) => {}
             }
         }
     }

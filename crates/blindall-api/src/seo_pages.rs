@@ -218,7 +218,7 @@ fn render(state: &AppState, shell: &str, head: &Head, landing: Option<&str>) -> 
 
 const MINIGAME_TYPES: [&str; 5] = ["quiz", "who-sang", "anagram", "first-letter", "album-cover"];
 
-const NOINDEX_PREFIXES: [&str; 17] = [
+const NOINDEX_PREFIXES: [&str; 18] = [
     "/login",
     "/register",
     "/forgot-password",
@@ -236,6 +236,7 @@ const NOINDEX_PREFIXES: [&str; 17] = [
     "/user/banned",
     "/language",
     "/rooms/create",
+    "/pro",
 ];
 
 fn noindex_head(state: &AppState, path: &str, title: &str) -> (StatusCode, Head, Option<String>) {

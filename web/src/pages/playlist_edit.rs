@@ -45,6 +45,8 @@ pub fn PlaylistEditPage() -> impl IntoView {
     let loading = RwSignal::new(true);
     let flash = RwSignal::new(Option::<String>::None);
     let err = RwSignal::new(Option::<String>::None);
+    let billing = RwSignal::new(Value::Null);
+    let limit_hit = RwSignal::new(false);
 
     let flash_for = move |msg: &'static str| {
         flash.set(Some(msg.to_string()));
@@ -124,6 +126,11 @@ pub fn PlaylistEditPage() -> impl IntoView {
     load_detail(id);
     load_tracks(id, 1);
     leptos::task::spawn_local(async move {
+        if let Ok(v) = api::get::<Value>("/api/v1/billing/status").await {
+            billing.set(v);
+        }
+    });
+    leptos::task::spawn_local(async move {
         if let Ok(v) = api::get::<Value>("/api/v1/answer-types").await {
             let types: Vec<IdName> = v["answer_types"]
                 .as_array()
@@ -160,7 +167,19 @@ pub fn PlaylistEditPage() -> impl IntoView {
                     view! {
                         <div class="mb-6 flex flex-wrap items-center gap-4">
                             <h1 class="retro-title retro-title--white text-2xl">{pname}</h1>
-                            <span class="text-sm text-white/50">{format!("{} {}", total_tracks, t("Tracks"))}</span>
+                            {move || {
+                                let max = billing.get()["limits"]["tracks_max"].as_i64();
+                                match max {
+                                    Some(m) => view! {
+                                        <span class="text-sm text-white/50">
+                                            {format!("{} / {} {}", total_tracks, m, t("Tracks"))}
+                                        </span>
+                                    }.into_any(),
+                                    None => view! {
+                                        <span class="text-sm text-white/50">{format!("{} {}", total_tracks, t("Tracks"))}</span>
+                                    }.into_any(),
+                                }
+                            }}
                             <div class="ml-auto text-sm text-white/40">
                                 {t("Used by")} ": "
                                 {room_links.into_iter().map(|(url, name)| view! {
@@ -175,6 +194,14 @@ pub fn PlaylistEditPage() -> impl IntoView {
                         })}
                         {move || err.get().map(|e| view! {
                             <div class="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">{e}</div>
+                        })}
+                        {move || limit_hit.get().then(|| view! {
+                            <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+                                <span>{t("Free plan allows 50 tracks per playlist.")}</span>
+                                <A href="/premium" attr:class="rounded-lg bg-amber-400/80 px-3 py-1 text-xs font-bold text-black transition hover:bg-amber-300">
+                                    {t("Upgrade to Plus")}
+                                </A>
+                            </div>
                         })}
 
                         {owned.then(|| view! {
@@ -195,7 +222,8 @@ pub fn PlaylistEditPage() -> impl IntoView {
 
                         <ProviderSearch playlist_id=id answer_types=answer_types
                             on_added=move |_| { load_tracks(id, page.get()); load_detail(id); }
-                            on_err=move |m| err.set(Some(m))/>
+                            on_err=move |m| err.set(Some(m))
+                            on_limit=move || limit_hit.set(true)/>
 
                         <TrackList
                             tracks=tracks total=total page=page per_page=per_page
@@ -805,6 +833,7 @@ fn ProviderSearch(
     answer_types: RwSignal<Vec<IdName>>,
     on_added: impl Fn(()) + 'static + Copy + Send + Sync,
     on_err: impl Fn(String) + 'static + Copy + Send + Sync,
+    on_limit: impl Fn() + 'static + Copy + Send + Sync,
 ) -> impl IntoView {
     let term = RwSignal::new(String::new());
     let providers = RwSignal::new(vec!["deezer".to_string()]);
@@ -876,7 +905,13 @@ fn ProviderSearch(
                 .await
             {
                 Ok(_) => on_added(()),
-                Err(e) => on_err(e.message),
+                Err(e) => {
+                    if e.body["error"].as_str() == Some("track_limit") {
+                        on_limit();
+                    } else {
+                        on_err(e.message);
+                    }
+                }
             }
         });
     };

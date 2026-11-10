@@ -971,6 +971,19 @@ pub async fn store(
     {
         return validation("category_id", "The selected category id is invalid.");
     }
+    if crate::limits::plan_is_free(&state, user.id, user.is_administrator).await {
+        let used = state.rooms.owned_active_count(user.id).await.unwrap_or(0);
+        if used >= crate::limits::FREE_MAX_ROOMS {
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(json!({
+                    "error": "room_limit",
+                    "message": "Free plan allows 2 rooms. Upgrade to Plus for unlimited rooms.",
+                })),
+            )
+                .into_response();
+        }
+    }
     match state.rooms.create(user.id, name, body.category_id).await {
         Ok(id) => {
             state

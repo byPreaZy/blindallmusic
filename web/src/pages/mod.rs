@@ -12,6 +12,7 @@ pub mod moderation;
 pub mod pages;
 pub mod playlist_edit;
 pub mod playlists;
+pub mod pro;
 pub mod profile;
 pub mod rankings;
 pub mod room_forms;

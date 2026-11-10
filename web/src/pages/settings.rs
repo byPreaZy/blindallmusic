@@ -299,6 +299,11 @@ pub fn SettingsPage() -> impl IntoView {
                                 <p class="mt-3 text-xs text-white/40">
                                     {t("To cancel: use the link in your Stripe receipt e-mail, or contact us. Access stays active until the end of the paid period.")}
                                 </p>
+                                {(plan == "pro").then(|| view! {
+                                    <A href="/pro" attr:class="mt-3 inline-block text-sm font-semibold text-purple-300 hover:text-purple-200">
+                                        {t("Open my Pro space")} " →"
+                                    </A>
+                                })}
                             }.into_any()
                         } else {
                             view! {
