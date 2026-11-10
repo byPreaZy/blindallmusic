@@ -46,7 +46,7 @@ fn slug_override(slug: &str, field: &str) -> Option<&'static str> {
         ("genre-musical", "rooms_heading") => "Salles officielles par genre musical",
         ("genre-musical", "schema_name") => "Blind tests par genre musical sur Blind'All Music",
         ("les-decennies", "faq_a1") => {
-            "Tu peux jouer sur les Années 70, 80, 90, 2000, 2010, 2020, ainsi qu'une salle Time Machine pour les titres d'avant les années 70."
+            "Tu peux jouer sur les Années 70, 80, 90, 2000, 2010 et 2020, de la chanson des seventies aux hits actuels."
         }
         ("les-decennies", "faq_a2") => {
             "Oui. Les salles sont multijoueur : plusieurs personnes peuvent rejoindre la même partie et répondre en même temps aux extraits."
@@ -73,7 +73,7 @@ fn slug_override(slug: &str, field: &str) -> Option<&'static str> {
         ("les-decennies", "rooms_heading") => "Salles officielles par décennie",
         ("les-decennies", "schema_name") => "Blind tests par décennie sur Blind'All Music",
         ("les-speciales", "faq_a1") => {
-            "Certaines salles sont permanentes (comme Love), d'autres sont liées à une saison ou une fête : Noël, Halloween, Saint Patrick, Oktoberfest, été, etc."
+            "Certaines salles sont permanentes (comme Love), d'autres suivent le calendrier des fêtes : Nouvel an, Saint Patrick, Halloween, Noël, été, et des événements comme l'Eurovision."
         }
         ("les-speciales", "faq_a2") => {
             "Oui, c'est l'usage principal : lancer une room thématique et jouer à plusieurs sur les mêmes extraits, en direct."
@@ -92,7 +92,7 @@ fn slug_override(slug: &str, field: &str) -> Option<&'static str> {
             "Ces éditions spéciales reviennent selon le calendrier et les événements. Rejoins la communauté Blind'All Music pour profiter de blind tests festifs en multijoueur."
         }
         ("les-speciales", "meta_description") => {
-            "Blind tests thématiques et événementiels sur Blind'All Music : Noël, Halloween, Saint Patrick, Oktoberfest, Love et éditions saisonnières."
+            "Blind tests thématiques et événementiels sur Blind'All Music : Nouvel an, Saint Patrick, Halloween, Noël, Love, Eurovision et éditions saisonnières."
         }
         ("les-speciales", "meta_title") => {
             "Blind test Noël, Halloween, été, éditions spéciales | Blind'All Music"
@@ -100,7 +100,7 @@ fn slug_override(slug: &str, field: &str) -> Option<&'static str> {
         ("les-speciales", "rooms_heading") => "Salles officielles événementielles",
         ("les-speciales", "schema_name") => "Blind tests événementiels sur Blind'All Music",
         ("sur-les-ecrans", "faq_a1") => {
-            "Les salles incluent notamment Disney, les films, les séries TV, l'anime/manga, les dessins animés, les jeux vidéo, l'Eurovision, les pubs TV, TikTok Hits et les youtubeurs."
+            "Les salles incluent notamment Disney, les films, les films d'animation, les séries TV, l'anime/manga, les dessins animés, les jeux vidéo et les youtubeurs."
         }
         ("sur-les-ecrans", "faq_a2") => {
             "Pas forcément. Selon la salle, il faut retrouver le titre, l'artiste, l'œuvre ou parfois un indice lié au morceau. La rapidité compte autant que la justesse."
@@ -119,7 +119,7 @@ fn slug_override(slug: &str, field: &str) -> Option<&'static str> {
             "Parfait pour les fans de Disney, d'anime, de séries cultes ou de jeux vidéo. Rejoins une partie en cours ou lance une manche quand tu veux, sans inscription obligatoire."
         }
         ("sur-les-ecrans", "meta_description") => {
-            "Blind tests sur la culture pop : Disney, films, séries TV, anime, jeux vidéo, Eurovision, pubs TV et plus. Multijoueur sur Blind'All Music."
+            "Blind tests sur la culture pop : Disney, films, séries TV, anime, dessins animés, jeux vidéo et plus. Multijoueur sur Blind'All Music."
         }
         ("sur-les-ecrans", "meta_title") => {
             "Blind test Disney, films, séries, jeux vidéo | Blind'All Music"
