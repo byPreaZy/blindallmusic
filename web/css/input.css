@@ -22,3 +22,8 @@
     @apply bg-brand-primary/40 text-white;
   }
 }
+
+/* Hide unfilled AdSense slots so the house-ad fallback behind them shows. */
+ins.adsbygoogle[data-ad-status='unfilled'] {
+  display: none !important;
+}

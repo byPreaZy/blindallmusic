@@ -35,7 +35,7 @@ pub fn PremiumPage() -> impl IntoView {
         <div class="mx-auto max-w-4xl px-4 py-8">
             <h1 class="retro-title retro-title--white mb-2 text-2xl">"⭐ Blind'All Premium"</h1>
             <p class="mb-8 text-white/60">
-                {t("Go further: no ads, daily revive, custom tag, and venue branding for bars & events.")}
+                {t("Go further: unlimited rooms and playlists, no ads, daily revive, and venue branding for bars & events.")}
             </p>
             {move || {
                 just_subscribed().then(|| {
@@ -125,8 +125,8 @@ pub fn PremiumPage() -> impl IntoView {
                                         {t("4.99 €/month, cancel anytime")}
                                     </p>
                                     <ul class="mt-2 space-y-1 text-sm text-white/70">
-                                        <li>"🚫 " {t("No ads, forever")}</li>
                                         <li>"♾️ " {t("Unlimited rooms, playlists and tracks")}</li>
+                                        <li>"🚫 " {t("No ads, forever")}</li>
                                         <li>"💛 " {t("Daily-challenge revive")}</li>
                                         <li>"🏷️ " {t("Custom tag")}</li>
                                         <li>"👑 " {t("All supporter perks")}</li>

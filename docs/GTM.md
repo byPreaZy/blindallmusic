@@ -271,6 +271,13 @@ visible dans le sitemap.
   mensuelle déçoit, ne pas hésiter à sauter l'étape intermédiaire.
 - **AdSense reste sur le gratuit** : monétisation indirecte des
   non-payants, et argument Plus concret ("zéro pub").
+- **House ads tant qu'AdSense n'est pas approuvé** : le slot pub
+  affiche une bannière auto-promo Plus (le site n'attend pas
+  Google pour rendre "sans pub" tangible : le slot existe, les
+  abonnés ne le voient pas). Les vraies pubs recouvrent la
+  bannière dès que Google sert des impressions. Le lancement
+  ne doit pas attendre l'approbation : le revenu pub à cette
+  échelle est négligeable, et le trafic réel aide la review.
 - Le prix Pro à 29 € est volontairement sous le seuil "un repas"
   pour un commerce : décision facile pour un gérant de bar.
 
@@ -380,8 +387,10 @@ GROUP BY plan;
 
 - [ ] Paiement test réel 4,99 € sur `/premium` + refund Stripe,
       vérifier perks activés puis retirés.
-- [ ] Console AdSense : statut du site (approuvé ? démarrage des
-      impressions ?).
+- [ ] Console AdSense : relancer la review du site (les pages SEO
+      server-rendered sont là depuis) puis vérifier le démarrage
+      des impressions. Non bloquant : les house ads couvrent le
+      slot en attendant.
 - [ ] Stripe dashboard : *Terms of service URL* →
       `/pages/conditions-generales-vente` (cible du checkbox CGV).
 - [ ] Pitch bar type : 1 page PDF/Notion avec screenshots + offre

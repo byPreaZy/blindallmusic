@@ -1,5 +1,7 @@
 use crate::auth::use_auth;
+use crate::i18n::t;
 use leptos::prelude::*;
+use leptos_router::components::A;
 use leptos_router::hooks::use_location;
 use wasm_bindgen::JsCast;
 
@@ -9,6 +11,7 @@ fn excluded(path: &str) -> bool {
         "/login",
         "/register",
         "/user/banned",
+        "/premium",
         "/create/room",
         "/minigames/quiz",
         "/minigames/who-sang",
@@ -185,11 +188,19 @@ pub fn Adsense(
     view! {
         <Show when=visible>
             <div class=format!(
-                "adsense-slot overflow-hidden rounded-xl border border-slate-700/40 bg-slate-800/20 {} {}",
+                "adsense-slot relative overflow-hidden rounded-xl border border-slate-700/40 bg-slate-800/20 {} {}",
                 if compact { "min-h-[60px]" } else { "min-h-[90px]" },
                 wrapper_class,
             )>
-                <ins class="adsbygoogle" style="display: block"
+                <div class="absolute inset-0 z-0 flex flex-col items-center justify-center gap-2 px-4 text-center sm:flex-row sm:gap-3">
+                    <span class="text-sm text-white/60">
+                        {t("Ad-free and unlimited with Blind'All Plus")}
+                    </span>
+                    <A href="/premium" attr:class="shrink-0 rounded-lg bg-amber-400/90 px-3 py-1.5 text-xs font-bold text-amber-950 transition hover:bg-amber-300">
+                        {t("Discover Premium")}
+                    </A>
+                </div>
+                <ins class="adsbygoogle relative z-10 bg-slate-800" style="display: block"
                     attr:data-ad-client=ads_state().1
                     attr:data-ad-slot=ad_slot.map(str::to_string).or_else(|| {
                         let slot = ads_state().2;
