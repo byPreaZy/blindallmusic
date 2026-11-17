@@ -108,7 +108,7 @@ jobs:
           docker save blindall:latest | gzip | $SSH "docker load"
 
           $SSH "cd ~/blindall && \
-            docker compose --env-file .env.production \
+            COMPOSE_PROFILES=rootverify docker compose --env-file .env.production \
               -f docker-compose.yml -f docker-compose.prod.yml \
               -f docker-compose.traefik.yml up -d --remove-orphans && \
             docker image prune -f"
