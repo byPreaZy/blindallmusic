@@ -4,6 +4,13 @@ use axum::extract::ws::{Message, WebSocket};
 use futures::{SinkExt, StreamExt};
 use serde_json::Value;
 use std::sync::Arc;
+use std::time::Duration;
+
+// Healthy clients send an app-level heartbeat every 25 s; a connection that
+// stays silent this long is a zombie (dead phone, killed tab behind a proxy
+// that never delivers the close frame). Dropping it detaches every
+// subscription and frees the presence entries.
+const IDLE_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[async_trait::async_trait]
 pub trait ChannelAuthorizer: Send + Sync {
@@ -32,9 +39,9 @@ pub async fn serve<A: ChannelAuthorizer>(socket: WebSocket, hub: Hub, authz: Arc
         let _ = ws_tx.close().await;
     });
 
-    while let Some(Ok(msg)) = ws_rx.next().await {
-        match msg {
-            Message::Text(text) => {
+    loop {
+        match tokio::time::timeout(IDLE_TIMEOUT, ws_rx.next()).await {
+            Ok(Some(Ok(Message::Text(text)))) => {
                 let Ok(op) = serde_json::from_str::<ClientOp>(&text) else {
                     conn.send(ServerOp::Error {
                         code: "bad_frame",
@@ -44,12 +51,14 @@ pub async fn serve<A: ChannelAuthorizer>(socket: WebSocket, hub: Hub, authz: Arc
                 };
                 handle_op(op, &hub, &authz, &mut conn).await;
             }
-            Message::Close(_) => break,
-            Message::Ping(p) => {
+            Ok(Some(Ok(Message::Close(_)))) => break,
+            Ok(Some(Ok(Message::Ping(p)))) => {
                 let _ = conn.send(ServerOp::Pong { ts: None });
                 let _ = p;
             }
-            _ => {}
+            Ok(Some(Ok(_))) => {}
+            // Timeout, stream end or transport error: drop the connection.
+            _ => break,
         }
     }
 

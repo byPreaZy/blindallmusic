@@ -516,6 +516,26 @@ impl GuestThrottle {
     }
 }
 
+const GUEST_COOKIE: &str = "bam_guest";
+
+fn read_guest_cookie(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get(axum::http::header::COOKIE)?
+        .to_str()
+        .ok()?
+        .split(';')
+        .filter_map(|p| p.trim().split_once('='))
+        .find(|(k, _)| *k == GUEST_COOKIE)
+        .map(|(_, v)| v.to_string())
+}
+
+fn guest_cookie_header(token: &str) -> axum::http::HeaderValue {
+    axum::http::HeaderValue::from_str(&format!(
+        "{GUEST_COOKIE}={token}; Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly"
+    ))
+    .unwrap()
+}
+
 pub async fn guest(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -524,10 +544,17 @@ pub async fn guest(
     if let Some(t) = bearer_token_str(&headers) {
         if let Ok(Some(u)) = state.auth.user_for_token(&t).await {
             let is_mod = state.auth.is_public_moderator(u.id).await;
-            return Json(
+            let mut resp = Json(
                 json!({ "token": t, "user": enriched_user_json(&state, &u, is_mod).await }),
             )
             .into_response();
+            if u.is_guest {
+                if let Ok(Some(gt)) = state.auth.guest_token_of(u.id).await {
+                    resp.headers_mut()
+                        .insert(axum::http::header::SET_COOKIE, guest_cookie_header(&gt));
+                }
+            }
+            return resp;
         }
     }
     let ip = client_ip(&headers, &addr.ip().to_string());
@@ -538,6 +565,24 @@ pub async fn guest(
         )
             .into_response();
     }
+
+    // Re-identification: in-app browsers (QR scanners, private tabs) often
+    // wipe localStorage but keep cookies. A live guest row bearing this
+    // token means "same player", reuse it instead of spawning another row.
+    if let Some(gt) = read_guest_cookie(&headers) {
+        if let Ok(Some(u)) = state.auth.user_by_guest_token(&gt).await {
+            let token = match state.auth.issue_token(u.id, "api").await {
+                Ok(t) => t,
+                Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+            };
+            let mut resp = Json(json!({ "token": token, "user": user_json(&u, false) }))
+                .into_response();
+            resp.headers_mut()
+                .insert(axum::http::header::SET_COOKIE, guest_cookie_header(&gt));
+            return resp;
+        }
+    }
+
     let key = format!("guest|{ip}");
     if let Some(seconds) = state.guest_throttle.retry_after(&key) {
         return (
@@ -584,11 +629,14 @@ pub async fn guest(
         is_administrator: false,
         team_id: None,
     };
-    (
+    let mut resp = (
         StatusCode::CREATED,
         Json(json!({ "token": token, "user": user_json(&user, false) })),
     )
-        .into_response()
+        .into_response();
+    resp.headers_mut()
+        .insert(axum::http::header::SET_COOKIE, guest_cookie_header(&guest_token));
+    resp
 }
 
 pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Response {

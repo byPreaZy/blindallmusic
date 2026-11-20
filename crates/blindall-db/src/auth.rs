@@ -57,6 +57,40 @@ impl AuthRepo {
         }))
     }
 
+    /// Re-identify a guest whose personal token is gone (storage wiped by an
+    /// in-app browser, private mode, device change). The `guest_token` cookie
+    /// echoes the value stored at creation; only live guest rows match.
+    pub async fn user_by_guest_token(&self, guest_token: &str) -> Result<Option<User>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, name, photo_path, elo, is_guest, is_administrator, team_id \
+             FROM users WHERE guest_token = $1 AND is_guest = true AND deleted_at IS NULL \
+             LIMIT 1",
+        )
+        .bind(guest_token)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|r| User {
+            id: r.get("id"),
+            name: r.get("name"),
+            photo_path: r.get("photo_path"),
+            elo: r.get("elo"),
+            is_guest: r.get("is_guest"),
+            is_administrator: r.get("is_administrator"),
+            team_id: r.get("team_id"),
+        }))
+    }
+
+    /// The stored `guest_token` for a user id (guest rows only).
+    pub async fn guest_token_of(&self, user_id: i64) -> Result<Option<String>, sqlx::Error> {
+        sqlx::query_scalar::<_, Option<String>>(
+            "SELECT guest_token::text FROM users WHERE id = $1 AND is_guest = true AND deleted_at IS NULL",
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map(|o| o.flatten())
+    }
+
     pub async fn is_public_moderator(&self, user_id: i64) -> bool {
         sqlx::query_scalar::<_, i64>(
             "SELECT EXISTS(SELECT 1 FROM moderables m \
