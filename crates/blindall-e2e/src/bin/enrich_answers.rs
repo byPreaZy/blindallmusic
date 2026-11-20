@@ -507,6 +507,18 @@ fn has_media_marker(album: &str) -> bool {
         "music from",
         "inspired by",
         "original music",
+        "générique",
+        "generique",
+        "feuilleton",
+        "dessin anim",
+        "série télé",
+        "serie tele",
+        "série tv",
+        "serie tv",
+        "de la série",
+        "de la serie",
+        "television series",
+        "tv series",
     ]
     .iter()
     .any(|k| l.contains(k))
@@ -523,6 +535,10 @@ fn norm(s: &str) -> String {
 async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let dry_run = args.iter().any(|a| a == "--dry-run");
+    // --marked-only: only trust albums that explicitly call themselves a
+    // soundtrack/generique. Compilations ("hit-parade des enfants",
+    // "musiques de films") carry no show name and would insert junk answers.
+    let marked_only = args.iter().any(|a| a == "--marked-only");
     let only_room: Option<i64> = args
         .iter()
         .find_map(|a| a.strip_prefix("--room=").and_then(|v| v.parse().ok()));
@@ -619,7 +635,7 @@ async fn main() -> anyhow::Result<()> {
             let title_norm = title.as_deref().map(norm).unwrap_or_default();
             let is_single = norm(&name) == title_norm && !has_media_marker(album);
             let too_short = name.chars().count() < 3 && !has_media_marker(album);
-            if !generic_name(&name) && !is_single && !too_short {
+            if !generic_name(&name) && !is_single && !too_short && (!marked_only || has_media_marker(album)) {
                 if dry_run {
                     println!("[{tid}] type={type_id} album={album:?} → {name:?}");
                 } else {
